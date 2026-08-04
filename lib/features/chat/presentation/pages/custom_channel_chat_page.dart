@@ -624,22 +624,19 @@ class _CustomChannelChatPageState extends ConsumerState<CustomChannelChatPage> {
   Future<void> _launchGroupZohoCall(List<String> zohoIds, {required bool video}) async {
     if (zohoIds.isEmpty) return;
     final id = zohoIds.first;
-    final uri = Uri.parse('zoho.cliq://call/user/$id');
+    // Official Zoho Cliq deep link: opens DM with this user (by ZUID or email)
+    // https://www.zoho.com/cliq/help/platform/deep-linking.html
+    final uri = Uri.parse('https://cliq.zoho.com/users/$id');
     if (await url_launcher.canLaunchUrl(uri)) {
       await url_launcher.launchUrl(uri, mode: url_launcher.LaunchMode.externalApplication);
     } else {
-      final webUri = Uri.parse('https://cliq.zoho.com/call/user/$id');
-      if (await url_launcher.canLaunchUrl(webUri)) {
-        await url_launcher.launchUrl(webUri, mode: url_launcher.LaunchMode.externalApplication);
-      } else {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Could not open Zoho Cliq. Please make sure it is installed.'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Could not open Zoho Cliq. Please make sure it is installed.'),
+            backgroundColor: Colors.red,
+          ),
+        );
       }
     }
   }
