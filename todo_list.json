@@ -1,0 +1,14 @@
+[
+	{
+		"content": "Fix new ticket detail actions: show Claim button (not Resolve) and expose Assign control for support roles",
+		"id": "8fbb93233fcee1d7",
+		"priority": "medium",
+		"status": "completed"
+	},
+	{
+		"content": "Update My Tickets view: replace \"Remove All\" button with per-ticket delete icon and hide mass delete",
+		"id": "efe3408ce440a123",
+		"priority": "medium",
+		"status": "in_progress"
+	}
+]

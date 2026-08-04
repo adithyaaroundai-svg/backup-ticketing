@@ -1,0 +1,28 @@
+{
+  "rewrites": [
+    {
+      "source": "/assets/(.*)",
+      "destination": "/assets/$1"
+    },
+    {
+      "source": "/canvaskit/(.*)",
+      "destination": "/canvaskit/$1"
+    },
+    {
+      "source": "/manifest.json",
+      "destination": "/manifest.json"
+    },
+    {
+      "source": "/favicon.png",
+      "destination": "/favicon.png"
+    },
+    {
+      "source": "/company_logo.png",
+      "destination": "/company_logo.png"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}

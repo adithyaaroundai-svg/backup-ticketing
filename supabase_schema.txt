@@ -1,0 +1,191 @@
+-- WARNING: This schema is for context only and is not meant to be run.
+-- Table order and constraints may not be valid for execution.
+
+CREATE TABLE public.activities (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  account_id uuid NOT NULL,
+  contact_id uuid,
+  agent_id uuid,
+  type USER-DEFINED NOT NULL,
+  subject text NOT NULL,
+  description text,
+  occurred_at timestamp with time zone NOT NULL DEFAULT now(),
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT activities_pkey PRIMARY KEY (id),
+  CONSTRAINT activities_contact_id_fkey FOREIGN KEY (contact_id) REFERENCES public.contacts(id),
+  CONSTRAINT activities_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.customers(id)
+);
+CREATE TABLE public.agents (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  username text NOT NULL UNIQUE,
+  password text NOT NULL,
+  full_name text,
+  role text DEFAULT 'Agent'::text,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT agents_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.app_settings (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  setting_key character varying NOT NULL UNIQUE,
+  setting_value jsonb NOT NULL,
+  updated_at timestamp with time zone DEFAULT now(),
+  updated_by uuid,
+  CONSTRAINT app_settings_pkey PRIMARY KEY (id),
+  CONSTRAINT app_settings_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES public.agents(id)
+);
+CREATE TABLE public.articles (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  title text NOT NULL,
+  content text NOT NULL,
+  tags ARRAY,
+  created_by uuid,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT articles_pkey PRIMARY KEY (id),
+  CONSTRAINT articles_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.agents(id)
+);
+CREATE TABLE public.audit_log (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  ticket_id uuid,
+  action text NOT NULL,
+  payload jsonb,
+  performed_by text,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT audit_log_pkey PRIMARY KEY (id),
+  CONSTRAINT audit_log_ticket_id_fkey FOREIGN KEY (ticket_id) REFERENCES public.tickets(id)
+);
+CREATE TABLE public.canned_responses (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  title text NOT NULL,
+  content text NOT NULL,
+  category text,
+  created_by uuid,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT canned_responses_pkey PRIMARY KEY (id),
+  CONSTRAINT canned_responses_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.agents(id)
+);
+CREATE TABLE public.contacts (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  account_id uuid NOT NULL,
+  full_name text NOT NULL,
+  email text,
+  phone text,
+  role text,
+  is_primary boolean DEFAULT false,
+  is_billing_contact boolean DEFAULT false,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT contacts_pkey PRIMARY KEY (id),
+  CONSTRAINT contacts_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.customers(id)
+);
+CREATE TABLE public.customer_notes (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  customer_id uuid NOT NULL,
+  agent_id uuid NOT NULL,
+  note text NOT NULL,
+  is_pinned boolean NOT NULL DEFAULT false,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone,
+  CONSTRAINT customer_notes_pkey PRIMARY KEY (id),
+  CONSTRAINT customer_notes_customer_id_fkey FOREIGN KEY (customer_id) REFERENCES public.customers(id),
+  CONSTRAINT customer_notes_agent_id_fkey FOREIGN KEY (agent_id) REFERENCES public.agents(id)
+);
+CREATE TABLE public.customers (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  company_name text NOT NULL,
+  tally_license text,
+  tally_serial_no text,
+  api_key text NOT NULL UNIQUE,
+  amc_expiry_date date,
+  tss_expiry_date date,
+  contact_person text,
+  contact_phone text,
+  contact_email text,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT customers_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.deals (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  customer_id uuid NOT NULL,
+  title text NOT NULL,
+  stage text NOT NULL CHECK (stage = ANY (ARRAY['new'::text, 'qualified'::text, 'proposal'::text, 'negotiation'::text, 'won'::text, 'lost'::text])),
+  value numeric DEFAULT 0,
+  description text,
+  assigned_to uuid,
+  expected_close_date date,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT deals_pkey PRIMARY KEY (id),
+  CONSTRAINT deals_customer_id_fkey FOREIGN KEY (customer_id) REFERENCES public.customers(id),
+  CONSTRAINT deals_assigned_to_fkey FOREIGN KEY (assigned_to) REFERENCES public.agents(id)
+);
+CREATE TABLE public.notifications (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  type text NOT NULL,
+  title text NOT NULL,
+  message text,
+  link text,
+  is_read boolean DEFAULT false,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT notifications_pkey PRIMARY KEY (id),
+  CONSTRAINT notifications_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.agents(id)
+);
+CREATE TABLE public.service_reports (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  ticket_id uuid,
+  agent_id uuid,
+  solution_provided text NOT NULL,
+  time_spent_minutes integer,
+  parts_used text,
+  remarks text,
+  customer_signature_url text,
+  agent_signature_url text,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT service_reports_pkey PRIMARY KEY (id),
+  CONSTRAINT service_reports_ticket_id_fkey FOREIGN KEY (ticket_id) REFERENCES public.tickets(id),
+  CONSTRAINT service_reports_agent_id_fkey FOREIGN KEY (agent_id) REFERENCES public.agents(id)
+);
+CREATE TABLE public.ticket_comments (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  ticket_id uuid,
+  author text NOT NULL,
+  body text NOT NULL,
+  internal boolean DEFAULT false,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT ticket_comments_pkey PRIMARY KEY (id),
+  CONSTRAINT ticket_comments_ticket_id_fkey FOREIGN KEY (ticket_id) REFERENCES public.tickets(id)
+);
+CREATE TABLE public.ticket_remarks (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  ticket_id uuid NOT NULL,
+  agent_id uuid NOT NULL,
+  remark text NOT NULL,
+  stage character varying,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT ticket_remarks_pkey PRIMARY KEY (id),
+  CONSTRAINT ticket_remarks_ticket_id_fkey FOREIGN KEY (ticket_id) REFERENCES public.tickets(id),
+  CONSTRAINT ticket_remarks_agent_id_fkey FOREIGN KEY (agent_id) REFERENCES public.agents(id)
+);
+CREATE TABLE public.tickets (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  customer_id uuid,
+  client_ticket_uuid text,
+  created_by text NOT NULL,
+  title text NOT NULL,
+  description text,
+  category text,
+  priority text CHECK (priority = ANY (ARRAY['Low'::text, 'Normal'::text, 'High'::text, 'Critical'::text])),
+  status text DEFAULT 'New'::text CHECK (status = ANY (ARRAY['New'::text, 'Open'::text, 'In Progress'::text, 'Waiting for Customer'::text, 'Resolved'::text, 'Closed'::text, 'Reopened'::text, 'BillRaised'::text, 'BillProcessed'::text])),
+  assigned_to uuid,
+  sla_due timestamp with time zone,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  billed_at timestamp with time zone,
+  bill_amount numeric,
+  CONSTRAINT tickets_pkey PRIMARY KEY (id),
+  CONSTRAINT tickets_customer_id_fkey FOREIGN KEY (customer_id) REFERENCES public.customers(id),
+  CONSTRAINT tickets_assigned_to_fkey FOREIGN KEY (assigned_to) REFERENCES public.agents(id)
+);

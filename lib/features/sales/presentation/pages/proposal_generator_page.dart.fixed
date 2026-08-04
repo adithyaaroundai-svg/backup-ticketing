@@ -1,0 +1,2323 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lucide_icons/lucide_icons.dart';
+import 'package:printing/printing.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:intl/intl.dart';
+import 'dart:typed_data';
+import 'package:go_router/go_router.dart';
+
+// Tailwind Colors Mapping
+const cGray100 = Color(0xFFF3F4F6);
+const cGray200 = Color(0xFFE5E7EB);
+const cGray300 = Color(0xFFD1D5DB);
+const cGray400 = Color(0xFF9CA3AF);
+const cGray500 = Color(0xFF6B7280);
+const cGray600 = Color(0xFF4B5563);
+const cGray700 = Color(0xFF374151);
+const cGray800 = Color(0xFF1F2937);
+const cGray900 = Color(0xFF111827);
+
+const cBlue50 = Color(0xFFEFF6FF);
+const cBlue100 = Color(0xFFDBEAFE);
+const cBlue200 = Color(0xFFBFDBFE);
+const cBlue400 = Color(0xFF60A5FA);
+const cBlue500 = Color(0xFF3B82F6);
+const cBlue600 = Color(0xFF2563EB);
+const cBlue700 = Color(0xFF1D4ED8);
+
+const cGreen50 = Color(0xFFF0FDF4);
+const cGreen200 = Color(0xFFBBF7D0);
+const cGreen300 = Color(0xFF86EFAC);
+const cGreen400 = Color(0xFF4ADE80);
+const cGreen600 = Color(0xFF16A34A);
+const cGreen700 = Color(0xFF15803D);
+
+const cIndigo50 = Color(0xFFEEF2FF);
+const cEmerald50 = Color(0xFFECFDF5);
+const cYellow50 = Color(0xFFFEFCE8);
+const cYellow300 = Color(0xFFFDE047);
+const cYellow400 = Color(0xFFFACC15);
+
+const cSlate50 = Color(0xFFF8FAFC);
+const cSlate100 = Color(0xFFF1F5F9);
+const cSlate600 = Color(0xFF475569);
+const cSlate700 = Color(0xFF334155);
+const cSlate800 = Color(0xFF1E293B);
+
+const cOrange50 = Color(0xFFFFF7ED);
+const cOrange100 = Color(0xFFFFEDD5);
+const cOrange600 = Color(0xFFEA580C);
+const cOrange700 = Color(0xFFC2410C);
+const cOrange800 = Color(0xFF9A3412);
+
+const cPurple50 = Color(0xFFFAF5FF);
+const cPurple100 = Color(0xFFF3E8FF);
+const cPurple600 = Color(0xFF9333EA);
+const cPurple700 = Color(0xFF7E22CE);
+const cPurple800 = Color(0xFF6B21A8);
+
+enum ProposalLayoutStyle { classic, splitHero, minimal }
+
+class _HeroFeature extends StatelessWidget {
+  final String text;
+
+  const _HeroFeature({required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.check_circle, size: 16, color: cGreen600),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              text,
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: cGray800,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+String layoutStyleLabel(ProposalLayoutStyle style) {
+  switch (style) {
+    case ProposalLayoutStyle.splitHero:
+      return 'Split hero';
+    case ProposalLayoutStyle.minimal:
+      return 'Minimal';
+    case ProposalLayoutStyle.classic:
+    default:
+      return 'Classic';
+  }
+}
+
+const List<String> kDefaultHeroHighlights = <String>[
+  'Streamline GST compliance and filing',
+  'Reduce manual data entry and errors',
+  'Access your business data from anywhere on mobile',
+  'Get dedicated expert support when you need it',
+];
+
+const List<String> kDefaultHeroStats = <String>[
+  'Priority install in 48h',
+  '45-day concierge support',
+  'Mobile app included',
+];
+
+class ProposalTemplate {
+  final String id;
+  final String name;
+  final String tagline;
+  final List<String> tags;
+  final IconData icon;
+  final List<Color> previewGradient;
+  final Map<String, dynamic> theme;
+  final ProposalLayoutStyle layoutStyle;
+  final List<String> heroHighlights;
+  final List<String> heroStats;
+
+  const ProposalTemplate({
+    required this.id,
+    required this.name,
+    required this.tagline,
+    required this.tags,
+    required this.icon,
+    required this.previewGradient,
+    required this.theme,
+    this.layoutStyle = ProposalLayoutStyle.classic,
+    this.heroHighlights = kDefaultHeroHighlights,
+    this.heroStats = kDefaultHeroStats,
+  });
+}
+
+const List<ProposalTemplate> kProposalTemplates = [
+  ProposalTemplate(
+    id: 'modern_blu',
+    name: 'Modern Blu',
+    tagline: 'Crisp corporate gradient',
+    tags: ['Corporate', 'Bold', 'Gradient'],
+    icon: LucideIcons.layers,
+    previewGradient: [Color(0xFF1E3A8A), Color(0xFF60A5FA)],
+    theme: {
+      'primary': cBlue700,
+      'secondary': cBlue600,
+      'accent': cGreen600,
+      'lightBg1': cBlue50,
+      'lightBg2': cIndigo50,
+      'lightBorder': cBlue200,
+      'headerBg': cBlue600,
+      'badgeBg': cGreen600,
+      'heroGradient': <Color>[cBlue50, cIndigo50],
+      'packageGradient': <Color>[cBlue50, Colors.white],
+      'pdfPrimary': PdfColors.blue800,
+      'pdfSecondary': PdfColors.blue600,
+      'pdfAccent': PdfColors.green700,
+    },
+    layoutStyle: ProposalLayoutStyle.splitHero,
+    heroHighlights: [
+      'Give CXOs a live single source of truth',
+      'Keep GST compliance audit-ready',
+      'Unify branch performance into one view',
+      'Share branded insights with stakeholders',
+    ],
+    heroStats: [
+      'Executive-ready decks',
+      'Data guardrails built-in',
+      'Mobile KPIs on tap',
+    ],
+  ),
+  ProposalTemplate(
+    id: 'classic_green',
+    name: 'Classic Green',
+    tagline: 'Trustworthy & organic',
+    tags: ['Trusted', 'Organic', 'Balanced'],
+    icon: LucideIcons.leaf,
+    previewGradient: [Color(0xFF064E3B), Color(0xFF34D399)],
+    theme: {
+      'primary': cGreen700,
+      'secondary': cGreen600,
+      'accent': cBlue600,
+      'lightBg1': cGreen50,
+      'lightBg2': cEmerald50,
+      'lightBorder': cGreen200,
+      'headerBg': cGreen600,
+      'badgeBg': cGreen600,
+      'heroGradient': <Color>[cGreen50, cEmerald50],
+      'packageGradient': <Color>[cGreen50, Colors.white],
+      'pdfPrimary': PdfColors.green800,
+      'pdfSecondary': PdfColors.green600,
+      'pdfAccent': PdfColors.blue700,
+    },
+    heroHighlights: [
+      'Digitize purchase approvals & notes',
+      'Automate bank reconciliation',
+      'Deliver proactive compliance alerts',
+      'Give promoters crystal clear visibility',
+    ],
+  ),
+  ProposalTemplate(
+    id: 'enterprise_slate',
+    name: 'Enterprise Slate',
+    tagline: 'Boardroom-ready neutrals',
+    tags: ['Enterprise', 'Neutral', 'Premium'],
+    icon: LucideIcons.briefcase,
+    previewGradient: [Color(0xFF0F172A), Color(0xFF475569)],
+    theme: {
+      'primary': cSlate800,
+      'secondary': cSlate600,
+      'accent': cBlue600,
+      'lightBg1': cSlate50,
+      'lightBg2': cSlate100,
+      'lightBorder': cSlate600,
+      'headerBg': cSlate700,
+      'badgeBg': cBlue600,
+      'heroGradient': <Color>[Color(0xFFF8FAFC), Color(0xFFE2E8F0)],
+      'packageGradient': <Color>[cSlate50, Colors.white],
+      'pdfPrimary': PdfColors.blueGrey800,
+      'pdfSecondary': PdfColors.blueGrey600,
+      'pdfAccent': PdfColors.blue700,
+    },
+    layoutStyle: ProposalLayoutStyle.splitHero,
+    heroHighlights: [
+      'Consolidate group entities instantly',
+      'Lock-down approvals with audit trails',
+      'Mirror boardroom-ready MI packs',
+      'Surface risks before reviews',
+    ],
+    heroStats: [
+      'Quarter-close in 1 day',
+      'Policy-driven workflows',
+      'CFO cockpit dashboards',
+    ],
+  ),
+  ProposalTemplate(
+    id: 'minimal_black',
+    name: 'Minimalist Black',
+    tagline: 'Editorial monochrome',
+    tags: ['Minimal', 'Editorial', 'Contrast'],
+    icon: LucideIcons.rectangleHorizontal,
+    previewGradient: [Color(0xFF111827), Color(0xFF4B5563)],
+    theme: {
+      'primary': cGray900,
+      'secondary': cGray700,
+      'accent': cGray600,
+      'lightBg1': cGray100,
+      'lightBg2': cGray200,
+      'lightBorder': cGray300,
+      'headerBg': cGray900,
+      'badgeBg': cGray700,
+      'heroGradient': <Color>[cGray100, Colors.white],
+      'packageGradient': <Color>[cGray100, cGray200],
+      'pdfPrimary': PdfColors.black,
+      'pdfSecondary': PdfColors.grey800,
+      'pdfAccent': PdfColors.grey600,
+    },
+    layoutStyle: ProposalLayoutStyle.minimal,
+    heroHighlights: [
+      'Executive-ready black & white layouts',
+      'Minimal noise, max clarity',
+      'Ideal for consulting and design firms',
+      'Pairs with signature typography',
+    ],
+    heroStats: [
+      'Notion-style blocks',
+      'Slides-ready exports',
+      'Dark-mode PDF',
+    ],
+  ),
+  ProposalTemplate(
+    id: 'vibrant_orange',
+    name: 'Vibrant Orange',
+    tagline: 'Energetic sales deck',
+    tags: ['Energetic', 'Warm', 'Sales'],
+    icon: LucideIcons.flame,
+    previewGradient: [Color(0xFFEA580C), Color(0xFFF97316)],
+    theme: {
+      'primary': cOrange700,
+      'secondary': cOrange600,
+      'accent': cYellow400,
+      'lightBg1': cOrange50,
+      'lightBg2': cOrange100,
+      'lightBorder': cOrange600,
+      'headerBg': cOrange700,
+      'badgeBg': cYellow400,
+      'heroGradient': <Color>[cOrange50, Color(0xFFFFFBEB)],
+      'packageGradient': <Color>[cOrange50, Colors.white],
+      'pdfPrimary': PdfColors.deepOrange800,
+      'pdfSecondary': PdfColors.deepOrange600,
+      'pdfAccent': PdfColors.amber700,
+    },
+    heroHighlights: [
+      'Pitch upgrades with high-impact visuals',
+      'Spotlight bundled value adds',
+      'Lead with ROI statements',
+      'Perfect for outbound sales teams',
+    ],
+  ),
+  ProposalTemplate(
+    id: 'creative_purple',
+    name: 'Creative Purple',
+    tagline: 'Bold agency energy',
+    tags: ['Creative', 'Bold', 'Gradient'],
+    icon: LucideIcons.penTool,
+    previewGradient: [Color(0xFF6D28D9), Color(0xFF8B5CF6)],
+    theme: {
+      'primary': cPurple700,
+      'secondary': cPurple600,
+      'accent': cPurple800,
+      'lightBg1': cPurple50,
+      'lightBg2': cPurple100,
+      'lightBorder': cPurple600,
+      'headerBg': cPurple700,
+      'badgeBg': cPurple600,
+      'heroGradient': <Color>[cPurple50, Color(0xFFEDE9FE)],
+      'packageGradient': <Color>[cPurple50, Colors.white],
+      'pdfPrimary': PdfColors.purple800,
+      'pdfSecondary': PdfColors.purple600,
+      'pdfAccent': PdfColors.pink700,
+    },
+    layoutStyle: ProposalLayoutStyle.splitHero,
+    heroHighlights: [
+      'Tell a story with punchy gradients',
+      'Spotlight creative retainers & add-ons',
+      'Bundle design + tech deliverables',
+      'Great for agencies & studios',
+    ],
+  ),
+  ProposalTemplate(
+    id: 'ocean_teal',
+    name: 'Ocean Teal',
+    tagline: 'Calm & data-forward',
+    tags: ['Calm', 'Teal', 'Data'],
+    icon: LucideIcons.waves,
+    previewGradient: [Color(0xFF0F766E), Color(0xFF5EEAD4)],
+    theme: {
+      'primary': Color(0xFF0F766E),
+      'secondary': Color(0xFF0D9488),
+      'accent': Color(0xFF14B8A6),
+      'lightBg1': Color(0xFFE0F2F1),
+      'lightBg2': Color(0xFFCCFBF1),
+      'lightBorder': Color(0xFF99F6E4),
+      'headerBg': Color(0xFF0F766E),
+      'badgeBg': Color(0xFF0D9488),
+      'heroGradient': <Color>[Color(0xFFE0F2F1), Color(0xFFCCFBF1)],
+      'packageGradient': <Color>[Color(0xFFF0FDFA), Colors.white],
+      'pdfPrimary': PdfColors.teal800,
+      'pdfSecondary': PdfColors.teal600,
+      'pdfAccent': PdfColors.cyan700,
+    },
+    layoutStyle: ProposalLayoutStyle.splitHero,
+  ),
+  ProposalTemplate(
+    id: 'royal_gold',
+    name: 'Royal Gold',
+    tagline: 'Luxury consulting vibe',
+    tags: ['Luxury', 'Premium', 'Gold'],
+    icon: LucideIcons.crown,
+    previewGradient: [Color(0xFF78350F), Color(0xFFFBBF24)],
+    theme: {
+      'primary': Color(0xFF78350F),
+      'secondary': Color(0xFF92400E),
+      'accent': Color(0xFFFBBF24),
+      'lightBg1': Color(0xFFFFFBEB),
+      'lightBg2': Color(0xFFFEF3C7),
+      'lightBorder': Color(0xFFFCD34D),
+      'headerBg': Color(0xFF78350F),
+      'badgeBg': Color(0xFFFBBF24),
+      'heroGradient': <Color>[Color(0xFFFFFBEB), Color(0xFFFEF9C3)],
+      'packageGradient': <Color>[Color(0xFFFEF9C3), Colors.white],
+      'pdfPrimary': PdfColors.brown800,
+      'pdfSecondary': PdfColors.brown600,
+      'pdfAccent': PdfColors.amber600,
+    },
+    heroHighlights: [
+      'Premium experience for board-level buyers',
+      'Underline white-glove onboarding',
+      'Blend consulting + implementation',
+      'Ideal for luxury & enterprise deals',
+    ],
+  ),
+  ProposalTemplate(
+    id: 'sunrise_coral',
+    name: 'Sunrise Coral',
+    tagline: 'Lifestyle & retail ready',
+    tags: ['Lifestyle', 'Warm', 'Soft'],
+    icon: LucideIcons.sunrise,
+    previewGradient: [Color(0xFFF97316), Color(0xFFFDA4AF)],
+    theme: {
+      'primary': Color(0xFFEA580C),
+      'secondary': Color(0xFFF97316),
+      'accent': Color(0xFFF472B6),
+      'lightBg1': Color(0xFFFFEDD5),
+      'lightBg2': Color(0xFFFCE7F3),
+      'lightBorder': Color(0xFFF9A8D4),
+      'headerBg': Color(0xFFEA580C),
+      'badgeBg': Color(0xFFF472B6),
+      'heroGradient': <Color>[Color(0xFFFFEDD5), Color(0xFFFCE7F3)],
+      'packageGradient': <Color>[Color(0xFFFFFBEB), Colors.white],
+      'pdfPrimary': PdfColors.deepOrange600,
+      'pdfSecondary': PdfColors.pink300,
+      'pdfAccent': PdfColors.pink500,
+    },
+    layoutStyle: ProposalLayoutStyle.minimal,
+  ),
+  ProposalTemplate(
+    id: 'midnight_neon',
+    name: 'Midnight Neon',
+    tagline: 'Futuristic SaaS pitch',
+    tags: ['Futuristic', 'Neon', 'SaaS'],
+    icon: LucideIcons.sparkles,
+    previewGradient: [Color(0xFF0B1120), Color(0xFF22D3EE)],
+    theme: {
+      'primary': Color(0xFF0F172A),
+      'secondary': Color(0xFF1E293B),
+      'accent': Color(0xFF22D3EE),
+      'lightBg1': Color(0xFFE0F2FE),
+      'lightBg2': Color(0xFFEFF6FF),
+      'lightBorder': Color(0xFFBAE6FD),
+      'headerBg': Color(0xFF0F172A),
+      'badgeBg': Color(0xFF22D3EE),
+      'heroGradient': <Color>[Color(0xFF0F172A), Color(0xFF1E3A8A)],
+      'packageGradient': <Color>[Color(0xFFE0F2FE), Colors.white],
+      'pdfPrimary': PdfColors.blueGrey900,
+      'pdfSecondary': PdfColors.cyan500,
+      'pdfAccent': PdfColors.cyan700,
+    },
+    layoutStyle: ProposalLayoutStyle.splitHero,
+    heroHighlights: [
+      'Perfect for SaaS and product pitches',
+      'Neon cues for metrics + milestones',
+      'Modular blocks align with decks',
+      'Pairs with motion-inspired imagery',
+    ],
+  ),
+  ProposalTemplate(
+    id: 'pastel_muse',
+    name: 'Pastel Muse',
+    tagline: 'Soft creative storytelling',
+    tags: ['Soft', 'Playful', 'Pastel'],
+    icon: LucideIcons.palette,
+    previewGradient: [Color(0xFFE0E7FF), Color(0xFFF9A8D4)],
+    theme: {
+      'primary': Color(0xFF7C3AED),
+      'secondary': Color(0xFFFB7185),
+      'accent': Color(0xFFEC4899),
+      'lightBg1': Color(0xFFE0E7FF),
+      'lightBg2': Color(0xFFFFE4E6),
+      'lightBorder': Color(0xFFFBCFE8),
+      'headerBg': Color(0xFF7C3AED),
+      'badgeBg': Color(0xFFEC4899),
+      'heroGradient': <Color>[Color(0xFFE0E7FF), Color(0xFFFFE4E6)],
+      'packageGradient': <Color>[Color(0xFFEDE9FE), Colors.white],
+      'pdfPrimary': PdfColors.purple600,
+      'pdfSecondary': PdfColors.pink300,
+      'pdfAccent': PdfColors.pink600,
+    },
+    layoutStyle: ProposalLayoutStyle.minimal,
+    heroHighlights: [
+      'Moodboard-inspired storytelling',
+      'Great for lifestyle, fashion & retail',
+      'Supports playlists of visuals',
+      'Let colors do the selling',
+    ],
+  ),
+  ProposalTemplate(
+    id: 'earthy_clay',
+    name: 'Earthy Clay',
+    tagline: 'Grounded & artisanal',
+    tags: ['Earthy', 'Calm', 'Handmade'],
+    icon: LucideIcons.mountain,
+    previewGradient: [Color(0xFF78350F), Color(0xFFD97706)],
+    theme: {
+      'primary': Color(0xFF7C2D12),
+      'secondary': Color(0xFF9A3412),
+      'accent': Color(0xFFEA580C),
+      'lightBg1': Color(0xFFFDE68A),
+      'lightBg2': Color(0xFFFCD34D),
+      'lightBorder': Color(0xFFFBBF24),
+      'headerBg': Color(0xFF7C2D12),
+      'badgeBg': Color(0xFFEA580C),
+      'heroGradient': <Color>[Color(0xFFFDE68A), Color(0xFFFCD34D)],
+      'packageGradient': <Color>[Color(0xFFFFFBEB), Colors.white],
+      'pdfPrimary': PdfColors.orange900,
+      'pdfSecondary': PdfColors.orange600,
+      'pdfAccent': PdfColors.brown600,
+    },
+    heroHighlights: [
+      'Celebrates artisan brands & D2C founders',
+      'Highlight supply-chain craftsmanship',
+      'Story-first narration style',
+      'Great for boutique proposals',
+    ],
+  ),
+];
+
+class LogoPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final sx = size.width / 100;
+    final sy = size.height / 100;
+    canvas.scale(sx, sy);
+
+    final p1 = Path()
+      ..moveTo(50, 5)
+      ..lineTo(90, 35)
+      ..lineTo(75, 80)
+      ..lineTo(25, 80)
+      ..lineTo(10, 35)
+      ..close();
+    canvas.drawPath(
+      p1,
+      Paint()
+        ..color = const Color(0xFF6BBE44)
+        ..style = PaintingStyle.fill,
+    );
+
+    final p2 = Path()
+      ..moveTo(5, 50)
+      ..lineTo(35, 35)
+      ..lineTo(45, 75)
+      ..lineTo(15, 90)
+      ..lineTo(0, 65)
+      ..close();
+    canvas.drawPath(
+      p2,
+      Paint()
+        ..color = const Color(0xFF2E7DAE)
+        ..style = PaintingStyle.fill,
+    );
+
+    final p3 = Path()
+      ..moveTo(95, 50)
+      ..lineTo(100, 65)
+      ..lineTo(85, 90)
+      ..lineTo(55, 75)
+      ..lineTo(65, 35)
+      ..close();
+    canvas.drawPath(
+      p3,
+      Paint()
+        ..color = const Color(0xFF2E7DAE)
+        ..style = PaintingStyle.fill,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class ProposalGeneratorPage extends ConsumerStatefulWidget {
+  const ProposalGeneratorPage({super.key});
+
+  @override
+  ConsumerState<ProposalGeneratorPage> createState() =>
+      _ProposalGeneratorPageState();
+}
+
+class _ProposalGeneratorPageState extends ConsumerState<ProposalGeneratorPage> {
+  bool isEditing = true;
+
+  final clientNameCtrl = TextEditingController(text: 'ABZ BUILDERS');
+  final clientPhoneCtrl = TextEditingController(text: '90374 73301');
+  final docNumberCtrl = TextEditingController(text: '183/25-26');
+  final licensePriceCtrl = TextEditingController(text: '22500');
+  final discountPercentCtrl = TextEditingController(text: '5');
+  final installationPriceCtrl = TextEditingController(text: '1000');
+  final mobileAppPriceCtrl = TextEditingController(text: '4500');
+  final supportDaysCtrl = TextEditingController(text: '45');
+  final supportPriceCtrl = TextEditingController(text: '3000');
+  String industry = 'Manufacturing';
+
+  final List<String> industries = [
+    'Manufacturing',
+    'Retail',
+    'Services',
+    'Trading',
+    'Healthcare',
+    'Education',
+    'Hospitality',
+    'Real Estate',
+  ];
+
+  late ProposalTemplate selectedTemplate;
+
+  @override
+  void initState() {
+    super.initState();
+    selectedTemplate = kProposalTemplates.firstWhere(
+      (template) => template.id == 'modern_blu',
+      orElse: () => kProposalTemplates.first,
+    );
+  }
+
+  Map<String, dynamic> _getThemeColors() {
+    return selectedTemplate.theme;
+  }
+  Widget _buildHeroSection(
+    ProposalTemplate template,
+    Map<String, double> pricing,
+    List<Color> heroGradient,
+    Color accentColor,
+    Color badgeBg,
+    Color lightBorder,
+    List<String> heroStats,
+  ) {
+    switch (template.layoutStyle) {
+      case ProposalLayoutStyle.splitHero:
+        return _buildSplitHeroSection(
+          pricing,
+          heroGradient,
+          accentColor,
+          badgeBg,
+          lightBorder,
+          heroStats,
+        );
+      case ProposalLayoutStyle.minimal:
+        return _buildMinimalHeroSection(
+          pricing,
+          accentColor,
+          lightBorder,
+          heroStats,
+        );
+      case ProposalLayoutStyle.classic:
+      default:
+        return _buildClassicHeroSection(
+          pricing,
+          heroGradient,
+          accentColor,
+          badgeBg,
+          lightBorder,
+        );
+    }
+  }
+
+  Widget _buildClassicHeroSection(
+    Map<String, double> pricing,
+    List<Color> heroGradient,
+    Color accentColor,
+    Color badgeBg,
+    Color lightBorder,
+  ) {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      margin: const EdgeInsets.only(bottom: 32),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: heroGradient,
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        border: Border.all(color: accentColor, width: 2),
+        borderRadius: BorderRadius.circular(8),
+        boxShadow: [
+          BoxShadow(
+            color: accentColor.withOpacity(0.2),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Text(
+                '📱 FREE Mobile App Included',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: cGray900,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 8,
+                  vertical: 4,
+                ),
+                decoration: BoxDecoration(
+                  color: badgeBg,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Text(
+                  '₹${pricing['mPrice']!.toStringAsFixed(0)} VALUE',
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Run your business from your phone - FREE as long as you renew with Sidharth IT Solutions',
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+              color: cGray700,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: const [
+              Expanded(
+                child: Column(
+                  children: [
+                    _HeroFeature(text: 'Check stock summary anytime, anywhere'),
+                    _HeroFeature(text: 'View real-time business reports on your phone'),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: Column(
+                  children: [
+                    _HeroFeature(text: 'Track outstanding receivables & payables'),
+                    _HeroFeature(text: 'Make informed decisions on-the-go'),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.all(12),
+            width: double.infinity,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              border: Border.all(color: lightBorder),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: RichText(
+              text: const TextSpan(
+                style: TextStyle(fontSize: 14, color: cGray900),
+                children: [
+                  TextSpan(
+                    text: 'Perfect for: ',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  TextSpan(
+                    text:
+                        'Business owners who travel, visit sites, or need to check business status while away from the office',
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSplitHeroSection(
+    Map<String, double> pricing,
+    List<Color> heroGradient,
+    Color accentColor,
+    Color badgeBg,
+    Color lightBorder,
+    List<String> heroStats,
+  ) {
+    return Container(
+      padding: const EdgeInsets.all(28),
+      margin: const EdgeInsets.only(bottom: 32),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: heroGradient,
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: accentColor, width: 2),
+        boxShadow: [
+          BoxShadow(
+            color: accentColor.withOpacity(0.15),
+            blurRadius: 20,
+            offset: const Offset(0, 12),
+          ),
+        ],
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final isStacked = constraints.maxWidth < 700;
+          final heroContent = <Widget>[
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Text(
+                        'Mobile-first intelligence',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: cGray900,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: badgeBg,
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: const Text(
+                          'Live demo ready',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'Hand your leadership team curated dashboards, approvals, and business health signals without opening the desktop.',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: cGray800,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: const [
+                      Expanded(
+                        child: Column(
+                          children: [
+                            _HeroFeature(text: 'Scenario-based alerts'),
+                            _HeroFeature(text: 'Branch drill-down comfort'),
+                          ],
+                        ),
+                      ),
+                      SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          children: [
+                            _HeroFeature(text: 'Role-based access & approvals'),
+                            _HeroFeature(text: 'Offline insights pack'),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 28),
+            SizedBox(
+              width: isStacked ? double.infinity : 230,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children:
+                        heroStats.map((stat) => _buildStatChip(stat, accentColor)).toList(),
+                  ),
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: lightBorder),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Investment highlight',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: cGray600,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          '₹${pricing['packagePrice']!.toStringAsFixed(0)}',
+                          style: TextStyle(
+                            fontSize: 26,
+                            fontWeight: FontWeight.bold,
+                            color: accentColor,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        const Text(
+                          'Before GST • Includes mobile intelligence suite',
+                          style: TextStyle(fontSize: 12, color: cGray600),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ];
+
+          if (isStacked) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                heroContent[0],
+                const SizedBox(height: 24),
+                heroContent[2],
+              ],
+            );
+          }
+
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: heroContent,
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildMinimalHeroSection(
+    Map<String, double> pricing,
+    Color accentColor,
+    Color lightBorder,
+    List<String> heroStats,
+  ) {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      margin: const EdgeInsets.only(bottom: 32),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: lightBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Implementation snapshot',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: cGray900,
+                ),
+              ),
+              Text(
+                'Layout: ${layoutStyleLabel(ProposalLayoutStyle.minimal)}',
+                style: const TextStyle(fontSize: 12, color: cGray500),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children:
+                heroStats.map((stat) => _buildStatChip(stat, accentColor, outlined: true)).toList(),
+          ),
+          const SizedBox(height: 16),
+          const Divider(),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Bundle value',
+                      style: TextStyle(fontSize: 13, color: cGray600),
+                    ),
+                    Text(
+                      '₹${pricing['serviceValue']!.toStringAsFixed(0)}',
+                      style: const TextStyle(
+                        fontSize: 26,
+                        fontWeight: FontWeight.bold,
+                        color: cGray900,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    const Text(
+                      'Your investment (pre-GST)',
+                      style: TextStyle(fontSize: 13, color: cGray600),
+                    ),
+                    Text(
+                      '₹${pricing['packagePrice']!.toStringAsFixed(0)}',
+                      style: TextStyle(
+                        fontSize: 28,
+                        fontWeight: FontWeight.bold,
+                        color: accentColor,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatChip(String text, Color accentColor, {bool outlined = false}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: outlined ? Colors.transparent : accentColor.withOpacity(0.1),
+        border: Border.all(color: accentColor.withOpacity(outlined ? 0.4 : 0.2)),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          color: outlined ? cGray700 : accentColor,
+        ),
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    clientNameCtrl.dispose();
+    clientPhoneCtrl.dispose();
+    docNumberCtrl.dispose();
+    licensePriceCtrl.dispose();
+    discountPercentCtrl.dispose();
+    installationPriceCtrl.dispose();
+    mobileAppPriceCtrl.dispose();
+    supportDaysCtrl.dispose();
+    supportPriceCtrl.dispose();
+    super.dispose();
+  }
+
+  Map<String, double> calculatePricing() {
+    double lPrice = double.tryParse(licensePriceCtrl.text) ?? 0;
+    double dPercent = double.tryParse(discountPercentCtrl.text) ?? 0;
+    double iPrice = double.tryParse(installationPriceCtrl.text) ?? 0;
+    double mPrice = double.tryParse(mobileAppPriceCtrl.text) ?? 0;
+    double sPrice = double.tryParse(supportPriceCtrl.text) ?? 0;
+
+    double discount = lPrice * (dPercent / 100);
+    double packagePrice = lPrice - discount;
+    double gst = packagePrice * 0.18;
+    double total = packagePrice + gst;
+    double serviceValue = lPrice + iPrice + mPrice + sPrice;
+    double savings = serviceValue - packagePrice;
+
+    return {
+      'discount': discount,
+      'packagePrice': packagePrice,
+      'gst': gst,
+      'total': total,
+      'serviceValue': serviceValue,
+      'savings': savings,
+      'lPrice': lPrice,
+      'iPrice': iPrice,
+      'mPrice': mPrice,
+      'sPrice': sPrice,
+    };
+  }
+
+  Future<Uint8List> generatePdfData() async {
+    final pdf = pw.Document();
+    final pricing = calculatePricing();
+    final today = DateFormat('dd/MM/yyyy').format(DateTime.now());
+    final bonusDate = DateFormat(
+      'dd/MM/yyyy',
+    ).format(DateTime.now().add(const Duration(days: 5)));
+
+    final theme = _getThemeColors();
+    PdfColor primaryColor = theme['pdfPrimary'];
+    PdfColor secondaryColor = theme['pdfSecondary'];
+    PdfColor accentColor = theme['pdfAccent'];
+
+    pdf.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.all(32),
+        build: (context) => [
+          // Basic PDF mirroring
+          pw.Container(
+            padding: const pw.EdgeInsets.only(bottom: 20),
+            decoration: pw.BoxDecoration(
+              border: pw.Border(
+                bottom: pw.BorderSide(color: primaryColor, width: 3),
+              ),
+            ),
+            child: pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    pw.Text(
+                      'SIDHARTH IT SOLUTIONS',
+                      style: pw.TextStyle(
+                        fontSize: 24,
+                        fontWeight: pw.FontWeight.bold,
+                        color: primaryColor,
+                      ),
+                    ),
+                    pw.Text(
+                      'Tally Certified Five Star Partner',
+                      style: const pw.TextStyle(
+                        fontSize: 12,
+                        color: PdfColors.grey700,
+                      ),
+                    ),
+                    pw.Text(
+                      'AroundTally.com',
+                      style: pw.TextStyle(
+                        fontSize: 12,
+                        color: secondaryColor,
+                        fontWeight: pw.FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+                pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.end,
+                  children: [
+                    pw.Text(
+                      'Proposal Date',
+                      style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                    ),
+                    pw.Text(today),
+                    pw.SizedBox(height: 5),
+                    pw.Text(
+                      'Doc No: ${docNumberCtrl.text}',
+                      style: const pw.TextStyle(
+                        fontSize: 10,
+                        color: PdfColors.grey700,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          pw.SizedBox(height: 20),
+          pw.Text(
+            'Dear ${clientNameCtrl.text},',
+            style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold),
+          ),
+          pw.SizedBox(height: 10),
+          pw.Text(
+            'Thank you for considering Sidharth IT Solutions for your TallyPrime implementation. We understand that managing accounting operations in the $industry sector comes with unique challenges.',
+          ),
+          pw.SizedBox(height: 10),
+          pw.Text(
+            'Based on our conversation, we have prepared a complete solution that will help you:',
+          ),
+          pw.SizedBox(height: 10),
+          ...[
+            'Streamline GST compliance and filing',
+            'Reduce manual data entry and errors',
+            'Access your business data from anywhere on mobile',
+            'Get dedicated expert support when you need it',
+          ].map(
+            (item) => pw.Row(
+              children: [
+                pw.Text(
+                  '✓ ',
+                  style: pw.TextStyle(
+                    color: accentColor,
+                    fontWeight: pw.FontWeight.bold,
+                  ),
+                ),
+                pw.Text(item),
+              ],
+            ),
+          ),
+          pw.SizedBox(height: 20),
+          pw.Container(
+            padding: const pw.EdgeInsets.all(16),
+            decoration: pw.BoxDecoration(
+              color: PdfColors.grey100,
+              borderRadius: const pw.BorderRadius.all(pw.Radius.circular(8)),
+            ),
+            child: pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Text(
+                  'Your Complete TallyPrime Solution',
+                  style: pw.TextStyle(
+                    fontSize: 18,
+                    fontWeight: pw.FontWeight.bold,
+                    color: primaryColor,
+                  ),
+                ),
+                pw.SizedBox(height: 10),
+                pw.Row(
+                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                  children: [
+                    pw.Text('TallyPrime 7 License (Single User)'),
+                    pw.Text(
+                      pricing['lPrice']!.toStringAsFixed(0),
+                      style: const pw.TextStyle(color: PdfColors.grey600),
+                    ),
+                  ],
+                ),
+                pw.SizedBox(height: 4),
+                pw.Row(
+                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                  children: [
+                    pw.Text('Professional Installation & Setup'),
+                    pw.Text(
+                      pricing['iPrice']!.toStringAsFixed(0),
+                      style: const pw.TextStyle(color: PdfColors.grey600),
+                    ),
+                  ],
+                ),
+                pw.SizedBox(height: 4),
+                pw.Row(
+                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                  children: [
+                    pw.Text('FREE Mobile App (Android)'),
+                    pw.Text(
+                      pricing['mPrice']!.toStringAsFixed(0),
+                      style: const pw.TextStyle(color: PdfColors.grey600),
+                    ),
+                  ],
+                ),
+                pw.SizedBox(height: 4),
+                pw.Row(
+                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                  children: [
+                    pw.Text('${supportDaysCtrl.text} Days Expert Support'),
+                    pw.Text(
+                      pricing['sPrice']!.toStringAsFixed(0),
+                      style: const pw.TextStyle(color: PdfColors.grey600),
+                    ),
+                  ],
+                ),
+                pw.Divider(color: secondaryColor),
+                pw.Row(
+                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                  children: [
+                    pw.Text('Total Service Value'),
+                    pw.Text(
+                      pricing['serviceValue']!.toStringAsFixed(0),
+                      style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                    ),
+                  ],
+                ),
+                pw.SizedBox(height: 5),
+                pw.Row(
+                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                  children: [
+                    pw.Text(
+                      'Your Investment (Before GST)',
+                      style: pw.TextStyle(
+                        fontSize: 16,
+                        fontWeight: pw.FontWeight.bold,
+                        color: primaryColor,
+                      ),
+                    ),
+                    pw.Text(
+                      pricing['packagePrice']!.toStringAsFixed(0),
+                      style: pw.TextStyle(
+                        fontSize: 18,
+                        fontWeight: pw.FontWeight.bold,
+                        color: primaryColor,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          pw.SizedBox(height: 20),
+          pw.Text(
+            'Investment Details',
+            style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold),
+          ),
+          pw.SizedBox(height: 10),
+          pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+            children: [
+              pw.Text('Package Price'),
+              pw.Text(
+                pricing['packagePrice']!.toStringAsFixed(2),
+                style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+              ),
+            ],
+          ),
+          pw.SizedBox(height: 4),
+          pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+            children: [
+              pw.Text('GST (18%)'),
+              pw.Text(
+                pricing['gst']!.toStringAsFixed(2),
+                style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+              ),
+            ],
+          ),
+          pw.Divider(),
+          pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+            children: [
+              pw.Text(
+                'Total Investment',
+                style: pw.TextStyle(
+                  fontSize: 16,
+                  fontWeight: pw.FontWeight.bold,
+                ),
+              ),
+              pw.Text(
+                pricing['total']!.toStringAsFixed(2),
+                style: pw.TextStyle(
+                  fontSize: 18,
+                  fontWeight: pw.FontWeight.bold,
+                  color: primaryColor,
+                ),
+              ),
+            ],
+          ),
+          pw.SizedBox(height: 20),
+          pw.Container(
+            padding: const pw.EdgeInsets.all(12),
+            decoration: pw.BoxDecoration(
+              border: pw.Border.all(color: PdfColors.yellow700),
+            ),
+            child: pw.Text(
+              'Confirm by $bonusDate to get priority installation and extended support!',
+              style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+            ),
+          ),
+        ],
+      ),
+    );
+    return pdf.save();
+  }
+
+  void _shareOrDownloadPdf() async {
+    try {
+      final pdfData = await generatePdfData();
+      final filename = 'Proposal_${clientNameCtrl.text}.pdf';
+      await Printing.sharePdf(bytes: pdfData, filename: filename);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error: $e')));
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final pricing = calculatePricing();
+    final today = DateFormat('d/M/yyyy').format(DateTime.now());
+    final bonusDate = DateFormat(
+      'd/M/yyyy',
+    ).format(DateTime.now().add(const Duration(days: 5)));
+    final theme = _getThemeColors();
+    final ProposalTemplate template = selectedTemplate;
+    final Color secondaryColor = theme['secondary'] as Color? ?? cBlue600;
+    final Color lightBg1 = theme['lightBg1'] as Color? ?? cBlue50;
+    final Color lightBorder = theme['lightBorder'] as Color? ?? cBlue200;
+
+    return Scaffold(
+      backgroundColor: cGray100,
+      body: Column(
+        children: [
+          // HEADER (Matches sticky top-0 border-b-2 border-blue-600)
+          Container(
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              border: Border(bottom: BorderSide(color: cBlue600, width: 2)),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black12,
+                  blurRadius: 4,
+                  offset: Offset(0, 2),
+                ),
+              ],
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+            child: SafeArea(
+              bottom: false,
+              child: Row(
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.arrow_back, color: cGray900),
+                    onPressed: () {
+                      if (Navigator.of(context).canPop()) {
+                        Navigator.of(context).pop();
+                      } else {
+                        // If accessed directly or deep-linked, default somewhere safe
+                        context.go('/');
+                      }
+                    },
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: const [
+                        Text(
+                          'Sidharth IT Solutions - Proposal Generator',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: cGray900,
+                          ),
+                        ),
+                        Text(
+                          'Create customized TallyPrime proposals',
+                          style: TextStyle(fontSize: 13, color: cGray600),
+                        ),
+                      ],
+                    ),
+                  ),
+                  // Preview / Edit Button
+                  ElevatedButton.icon(
+                    icon: Icon(
+                      isEditing ? LucideIcons.eye : LucideIcons.edit2,
+                      size: 16,
+                    ),
+                    label: Text(isEditing ? 'Preview' : 'Edit'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: isEditing ? cGray200 : cBlue600,
+                      foregroundColor: isEditing ? cGray700 : Colors.white,
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    onPressed: () => setState(() => isEditing = !isEditing),
+                  ),
+                  const SizedBox(width: 12),
+                  // Download PDF Button
+                  ElevatedButton.icon(
+                    icon: const Icon(LucideIcons.download, size: 16),
+                    label: const Text('Download PDF'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: cGreen600,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    onPressed: _shareOrDownloadPdf,
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          // MAIN CONTENT ROW
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 1200),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // LEFT SIDE: EDIT FORM
+                      if (isEditing)
+                        Container(
+                          width: 380,
+                          margin: const EdgeInsets.only(right: 24),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(8),
+                            boxShadow: const [
+                              BoxShadow(
+                                color: Colors.black12,
+                                blurRadius: 4,
+                                offset: Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          padding: const EdgeInsets.all(24),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: const [
+                                  Icon(
+                                    LucideIcons.edit2,
+                                    size: 20,
+                                    color: cGray900,
+                                  ),
+                                  SizedBox(width: 8),
+                                  Text(
+                                    'Edit Proposal Details',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                      color: cGray900,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 24),
+                              _buildInput('Client Name', clientNameCtrl),
+                              _buildInput('Client Phone', clientPhoneCtrl),
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 16),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text(
+                                      'Industry',
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
+                                        color: cGray700,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 12,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        border: Border.all(color: cGray300),
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: DropdownButtonHideUnderline(
+                                        child: DropdownButton<String>(
+                                          value: industry,
+                                          isExpanded: true,
+                                          items: industries.map((String value) {
+                                            return DropdownMenuItem<String>(
+                                              value: value,
+                                              child: Text(
+                                                value,
+                                                style: const TextStyle(
+                                                  fontSize: 14,
+                                                ),
+                                              ),
+                                            );
+                                          }).toList(),
+                                          onChanged: (String? newValue) {
+                                            setState(() {
+                                              if (newValue != null) {
+                                                industry = newValue;
+                                              }
+                                            });
+                                          },
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 24),
+                                child: _buildTemplateGallery(),
+                              ),
+                              _buildInput('Doc Number', docNumberCtrl),
+
+                              const Padding(
+                                padding: EdgeInsets.symmetric(vertical: 8),
+                                child: Divider(color: cGray200),
+                              ),
+                              const Text(
+                                'Pricing',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: cGray900,
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+
+                              _buildInput(
+                                'License Price (₹)',
+                                licensePriceCtrl,
+                                isNumber: true,
+                              ),
+                              _buildInput(
+                                'Discount (%)',
+                                discountPercentCtrl,
+                                isNumber: true,
+                              ),
+                              _buildInput(
+                                'Installation Price (₹)',
+                                installationPriceCtrl,
+                                isNumber: true,
+                              ),
+                              _buildInput(
+                                'Mobile App Price (₹)',
+                                mobileAppPriceCtrl,
+                                isNumber: true,
+                              ),
+                              _buildInput(
+                                'Support Days',
+                                supportDaysCtrl,
+                                isNumber: true,
+                              ),
+                              _buildInput(
+                                'Support Price (₹)',
+                                supportPriceCtrl,
+                                isNumber: true,
+                              ),
+
+                              // Calculated Total Box
+                              Container(
+                                margin: const EdgeInsets.only(top: 8),
+                                padding: const EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  color: lightBg1,
+                                  border: Border.all(color: lightBorder),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text(
+                                      'Calculated Total:',
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
+                                        color: cGray700,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      '₹${pricing['total']!.toStringAsFixed(0)}',
+                                      style: TextStyle(
+                                        fontSize: 24,
+                                        fontWeight: FontWeight.bold,
+                                        color: secondaryColor,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    const Text(
+                                      'Including GST',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: cGray600,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+
+                      // RIGHT SIDE: REALTIME PREVIEW UI
+                      Expanded(
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(8),
+                            boxShadow: const [
+                              BoxShadow(
+                                color: Colors.black12,
+                                blurRadius: 10,
+                                offset: Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: _buildProposalPreview(
+                            pricing,
+                            today,
+                            bonusDate,
+                            theme,
+                            template,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTemplateGallery() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: const [
+                Text(
+                  'Template styles',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: cGray700,
+                  ),
+                ),
+                SizedBox(height: 4),
+                Text(
+                  'Pick a Canva-like layout to instantly restyle the proposal',
+                  style: TextStyle(fontSize: 12, color: cGray600),
+                ),
+              ],
+            ),
+            Text(
+              '${kProposalTemplates.length} options',
+              style: const TextStyle(fontSize: 12, color: cGray500),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        SizedBox(
+          height: 205,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            physics: const BouncingScrollPhysics(),
+            itemCount: kProposalTemplates.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 12),
+            itemBuilder: (context, index) {
+              final template = kProposalTemplates[index];
+              return _TemplatePreviewCard(
+                template: template,
+                isSelected: template.id == selectedTemplate.id,
+                onTap: () {
+                  setState(() {
+                    selectedTemplate = template;
+                  });
+                },
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildInput(
+    String label,
+    TextEditingController controller, {
+    bool isNumber = false,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: cGray700,
+            ),
+          ),
+          const SizedBox(height: 4),
+          TextField(
+            controller: controller,
+            keyboardType: isNumber ? TextInputType.number : TextInputType.text,
+            style: const TextStyle(fontSize: 14),
+            decoration: InputDecoration(
+              isDense: true,
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 12,
+              ),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(4),
+                borderSide: const BorderSide(color: cGray300),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(4),
+                borderSide: const BorderSide(color: cGray300),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(4),
+                borderSide: const BorderSide(color: cBlue500),
+              ),
+            ),
+            onChanged: (_) => setState(() {}),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCheckListTile(String text, {Color? customColor}) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '✓',
+            style: TextStyle(
+              color: customColor ?? cGreen600,
+              fontWeight: FontWeight.bold,
+              fontSize: 16,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              text,
+              style: const TextStyle(
+                color: cGray700,
+                fontSize: 15,
+                height: 1.4,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProposalPreview(
+    Map<String, double> pricing,
+    String today,
+    String bonusDate,
+    Map<String, dynamic> theme,
+    ProposalTemplate template,
+  ) {
+    final Color primaryColor = theme['primary'] as Color? ?? cBlue700;
+    final Color secondaryColor = theme['secondary'] as Color? ?? cBlue600;
+    final Color accentColor = theme['accent'] as Color? ?? cGreen600;
+    final Color lightBg1 = theme['lightBg1'] as Color? ?? cBlue50;
+    final Color lightBg2 = theme['lightBg2'] as Color? ?? cIndigo50;
+    final Color lightBorder = theme['lightBorder'] as Color? ?? cBlue200;
+    final List<Color> heroGradient =
+        (theme['heroGradient'] as List<Color>?) ??
+            const <Color>[cGreen50, cEmerald50];
+    final List<Color> packageGradient =
+        (theme['packageGradient'] as List<Color>?) ??
+            <Color>[lightBg1, lightBg2];
+    final Color badgeBg = theme['badgeBg'] as Color? ?? accentColor;
+    final List<String> heroHighlights = template.heroHighlights;
+    final List<String> heroStats = template.heroStats;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 48),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header
+          Container(
+            padding: const EdgeInsets.only(bottom: 24),
+            margin: const EdgeInsets.only(bottom: 32),
+            decoration: BoxDecoration(
+              border: Border(
+                bottom: BorderSide(color: secondaryColor, width: 4),
+              ),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                CustomPaint(size: const Size(64, 64), painter: LogoPainter()),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: const [
+                      Text(
+                        'SIDHARTH IT SOLUTIONS',
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                          color: cGray900,
+                        ),
+                      ),
+                      Text(
+                        'Tally Certified Five Star Partner',
+                        style: TextStyle(fontSize: 14, color: cGray600),
+                      ),
+                      Text(
+                        'AroundTally.com',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: cBlue600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    const Text(
+                      'Proposal Date',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: cGray900,
+                      ),
+                    ),
+                    Text(
+                      today,
+                      style: const TextStyle(fontSize: 14, color: cGray600),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Doc No: ${docNumberCtrl.text}',
+                      style: const TextStyle(fontSize: 14, color: cGray600),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+
+          // Opening
+          Text(
+            'Dear ${clientNameCtrl.text},',
+            style: const TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: cGray900,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'Thank you for considering Sidharth IT Solutions for your TallyPrime implementation. We understand that managing accounting operations in the ${industry.toLowerCase()} sector comes with unique challenges.',
+            style: const TextStyle(fontSize: 15, color: cGray700, height: 1.5),
+          ),
+          const SizedBox(height: 12),
+          const Text(
+            "Based on our conversation, we've prepared a complete solution that will help you:",
+            style: TextStyle(fontSize: 15, color: cGray700),
+          ),
+          const SizedBox(height: 16),
+          ...heroHighlights.map(
+            (text) => _buildCheckListTile(text, customColor: accentColor),
+          ),
+          const SizedBox(height: 32),
+
+          _buildHeroSection(
+            template,
+            pricing,
+            heroGradient,
+            accentColor,
+            badgeBg,
+            lightBorder,
+            heroStats,
+          ),
+
+          // Investment Breakdown
+          Container(
+            padding: const EdgeInsets.all(24),
+            margin: const EdgeInsets.only(bottom: 32),
+            decoration: BoxDecoration(
+              color: cGray100,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Investment Details',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: cGray900,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                _buildInvestmentRow(
+                  'TallyPrime License (MRP ₹${pricing['lPrice']!.toStringAsFixed(0)})',
+                  '₹${pricing['lPrice']!.toStringAsFixed(0)}',
+                  isStrikeThrough: true,
+                ),
+                _buildInvestmentRow(
+                  'Special Discount (${discountPercentCtrl.text}%)',
+                  '- ₹${pricing['discount']!.toStringAsFixed(0)}',
+                  isGreen: true,
+                ),
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 8),
+                  child: Divider(),
+                ),
+                _buildInvestmentRow(
+                  'Package Price',
+                  '₹${pricing['packagePrice']!.toStringAsFixed(0)}',
+                  isBold: true,
+                ),
+                _buildInvestmentRow(
+                  'GST (18%)',
+                  '₹${pricing['gst']!.toStringAsFixed(0)}',
+                  isBold: true,
+                ),
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 8),
+                  child: Divider(thickness: 2),
+                ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Total Investment',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: cGray900,
+                      ),
+                    ),
+                    Text(
+                      '₹${pricing['total']!.toStringAsFixed(0)}',
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: cBlue600,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: cYellow50,
+                    border: Border.all(color: cYellow300),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '🎁 Confirm by $bonusDate and get:',
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                          color: cGray900,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      _buildCheckListTile(
+                        'Priority installation within 48 hours',
+                      ),
+                      _buildCheckListTile(
+                        'Extended support (${int.parse(supportDaysCtrl.text) + 15} days instead of ${supportDaysCtrl.text})',
+                      ),
+                      _buildCheckListTile(
+                        'Mobile app setup and training included',
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPackageItem(
+    String title,
+    String subtitle,
+    String priceText, {
+    bool isLast = false,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      margin: EdgeInsets.only(bottom: isLast ? 0 : 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: cGray900,
+                ),
+              ),
+              Text(
+                subtitle,
+                style: const TextStyle(fontSize: 13, color: cGray600),
+              ),
+            ],
+          ),
+          Text(
+            '₹$priceText',
+            style: const TextStyle(
+              fontSize: 14,
+              color: cGray400,
+              decoration: TextDecoration.lineThrough,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInvestmentRow(
+    String title,
+    String value, {
+    bool isStrikeThrough = false,
+    bool isGreen = false,
+    bool isBold = false,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: (isBold || isGreen)
+                  ? FontWeight.w600
+                  : FontWeight.normal,
+              color: isGreen ? cGreen700 : cGray700,
+            ),
+          ),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: (isBold || isGreen)
+                  ? FontWeight.bold
+                  : FontWeight.normal,
+              color: isGreen
+                  ? cGreen700
+                  : (isStrikeThrough ? cGray400 : cGray900),
+              decoration: isStrikeThrough
+                  ? TextDecoration.lineThrough
+                  : TextDecoration.none,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TemplatePreviewCard extends StatelessWidget {
+  final ProposalTemplate template;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  const _TemplatePreviewCard({
+    required this.template,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = template.theme;
+    final Color indicatorColor = theme['secondary'] as Color? ?? Colors.white;
+    final String layoutLabel = layoutStyleLabel(template.layoutStyle);
+
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        width: 210,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: template.previewGradient,
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: isSelected ? indicatorColor : Colors.transparent,
+            width: 2,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: indicatorColor.withOpacity(0.25),
+              blurRadius: 18,
+              offset: const Offset(0, 10),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  template.icon,
+                  color: Colors.white,
+                  size: 20,
+                ),
+                const Spacer(),
+                AnimatedOpacity(
+                  opacity: isSelected ? 1 : 0,
+                  duration: const Duration(milliseconds: 200),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: const Text(
+                      'Selected',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const Spacer(),
+            Text(
+              template.name,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              template.tagline,
+              style: const TextStyle(
+                color: Colors.white70,
+                fontSize: 12,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.22),
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text(
+                layoutLabel,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: template.tags.take(3).map((tag) {
+                return Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.18),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    tag,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

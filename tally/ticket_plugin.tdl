@@ -1,0 +1,198 @@
+[System: Formula]
+  ;; Configuration - Replace with your actual values
+  SupabaseUrl : "https://payqnnptpyuxibjepmjn.supabase.co/rest/v1"
+  ApiKey : "TEST_API_KEY_001" ;; Unique key per customer (matches seed.sql)
+  SupabaseAnonKey : "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBheXFubnB0cHl1eGliamVwbWpuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM5MTgyNTQsImV4cCI6MjA3OTQ5NDI1NH0.CzlV_ygyckVFc2F2fB8hBSpqeuOq3wHBFSpQdkjPphQ"
+
+[#Menu: Gateway of Tally]
+  Add : Item : "Support Tickets" : Display : Support Dashboard
+
+[Report: Support Dashboard]
+  Form : Support Dashboard Form
+  Title : "Support Dashboard"
+
+[Form: Support Dashboard Form]
+  Parts : Support Dashboard Part
+  Bottom Toolbar Buttons : Raise Ticket Button, Sync Tickets Button
+
+[Part: Support Dashboard Part]
+  Lines : Support Dashboard Title, Support Ticket List Title, Support Ticket List
+
+[Line: Support Dashboard Title]
+  Field : Name Field
+  Local : Field : Name Field : Set as : "Support Dashboard"
+  Local : Field : Name Field : Style : Large Bold
+
+[Line: Support Ticket List Title]
+  Field : Ticket ID Title, Ticket Subject Title, Ticket Status Title
+  Local : Field : Ticket ID Title : Info : "Ticket ID" : Width : 20
+  Local : Field : Ticket Subject Title : Info : "Subject" : Width : 40
+  Local : Field : Ticket Status Title : Info : "Status" : Width : 15
+
+[Line: Support Ticket List]
+  ;; This would iterate over a collection in a real implementation
+  Field : Ticket ID Field, Ticket Subject Field, Ticket Status Field
+  Repeat : Ticket ID Field : MyTicketsCollection
+
+[Field: Ticket ID Field]
+  Use : Name Field
+  Set as : $TicketUUID
+  Width : 20
+
+[Field: Ticket Subject Field]
+  Use : Name Field
+  Set as : $Subject
+  Width : 40
+
+[Field: Ticket Status Field]
+  Use : Name Field
+  Set as : $Status
+  Width : 15
+
+;; --- Raise Ticket Form ---
+
+[Button: Raise Ticket Button]
+  Title : "Raise Ticket"
+  Key : Alt+R
+  Action : Display : Raise Ticket Report
+
+[Report: Raise Ticket Report]
+  Form : Raise Ticket Form
+  Title : "Raise New Ticket"
+
+[Form: Raise Ticket Form]
+  Parts : Raise Ticket Body
+  Bottom Toolbar Buttons : Submit Ticket Button
+
+[Part: Raise Ticket Body]
+  Lines : RT Title, RT Subject, RT Description, RT Priority
+
+[Line: RT Title]
+  Field : Simple Field
+  Local : Field : Simple Field : Set as : "New Support Ticket"
+  Local : Field : Simple Field : Style : Large Bold
+
+[Line: RT Subject]
+  Field : RT Label, RT Subject Input
+  Local : Field : RT Label : Set as : "Subject: "
+  Local : Field : RT Label : Width : 15
+
+[Field: RT Subject Input]
+  Use : Name Field
+  Storage : TicketSubject
+  Width : 50
+  Border : Thin Box
+
+[Line: RT Description]
+  Field : RT Label, RT Desc Input
+  Local : Field : RT Label : Set as : "Description: "
+
+[Field: RT Desc Input]
+  Use : Name Field
+  Storage : TicketDescription
+  Width : 50
+  Height : 5
+  Border : Thin Box
+
+[Line: RT Priority]
+  Field : RT Label, RT Priority Input
+  Local : Field : RT Label : Set as : "Priority: "
+
+[Field: RT Priority Input]
+  Use : Name Field
+  Storage : TicketPriority
+  Table : TicketPriorityTable
+  Show Table : Always
+  Width : 20
+
+[Collection: TicketPriorityTable]
+  Title : "Select Priority"
+  List Name : "Normal", "High", "Critical", "Low"
+
+;; --- Submission Logic ---
+
+[Button: Submit Ticket Button]
+  Title : "Submit"
+  Key : Alt+S
+  Action : Call : SubmitTicketFunction
+
+[Function: SubmitTicketFunction]
+  Variable : JsonPayload : String
+  Variable : HTTPHeaders : String
+  00 : Msg Box : "Status" : "Submitting Ticket..."
+  
+  ;; 1. Construct JSON Payload
+  ;; Matches arguments of the 'create_ticket' RPC function
+  10 : Set : JsonPayload : "{" + +
+       "\"title\": \"" + ##TicketSubject + "\"," + +
+       "\"description\": \"" + ##TicketDescription + "\"," + +
+       "\"priority\": \"" + ##TicketPriority + "\"," + +
+       "\"created_by\": \"" + $$Username + "\"," + +
+       "\"client_ticket_uuid\": \"" + $$MakeUUID + "\"" + +
+       "}"
+
+  ;; 2. Prepare Headers
+  ;; apikey: Supabase Anon Key (for routing)
+  ;; x-tally-api-key: Our custom key for RLS/Auth
+  20 : Set : HTTPHeaders : "Content-Type: application/json" + $$vn + +
+                           "apikey: " + @@SupabaseAnonKey + $$vn + +
+                           "Authorization: Bearer " + @@SupabaseAnonKey + $$vn + +
+                           "x-tally-api-key: " + @@ApiKey
+
+  ;; 3. Perform HTTP POST to RPC
+  30 : Walk Collection : SendTicketRequest
+
+  40 : Msg Box : "Success" : "Ticket Submitted!"
+  50 : Form Accept
+
+[Collection: SendTicketRequest]
+  Data Source : HTTP : @@SupabaseUrl + "/rpc/create_ticket"
+  HTTP Method : POST
+  HTTP Headers : ##HTTPHeaders
+  HTTP Body : ##JsonPayload
+
+;; --- Sync/Poll Logic ---
+
+[Button: Sync Tickets Button]
+  Title : "Sync Tickets"
+  Key : Alt+U
+  Action : Call : SyncTicketsFunction
+
+[Function: SyncTicketsFunction]
+  Variable : HTTPHeaders : String
+  00 : Msg Box : "Status" : "Checking for updates..."
+  
+  ;; 1. Prepare Headers
+  10 : Set : HTTPHeaders : "apikey: " + @@SupabaseAnonKey + $$vn + +
+                           "Authorization: Bearer " + @@SupabaseAnonKey + $$vn + +
+                           "x-tally-api-key: " + @@ApiKey
+
+  ;; 2. Perform HTTP GET
+  ;; The collection 'MyTicketsCollection' is linked to the HTTP source.
+  ;; Triggering it will refresh the data.
+  20 : Trigger Collection : MyTicketsCollection
+
+  30 : Msg Box : "Success" : "Tickets Synced!"
+  40 : Return
+
+[Collection: MyTicketsCollection]
+  ;; Fetch tickets where customer_id matches (handled by RLS/API Key on server)
+  ;; Select fields we need.
+  Data Source : HTTP JSON : @@SupabaseUrl + "/tickets?select=client_ticket_uuid,title,status,priority"
+  HTTP Headers : ##HTTPHeaders
+  
+  ;; Map JSON fields to TDL variables (Method varies by Tally version, assuming basic JSON support)
+  ;; In Tally Prime, JSON collections are natively supported.
+  JSON Object Path : "" ;; Root array
+  
+  ;; Define fields available in the JSON object
+  Fetch : TicketUUID : "client_ticket_uuid"
+  Fetch : Subject : "title"
+  Fetch : Status : "status"
+  Fetch : Priority : "priority"
+
+[System: Variables]
+  TicketSubject : String : ""
+  TicketDescription : String : ""
+  TicketPriority : String : "Normal"
+

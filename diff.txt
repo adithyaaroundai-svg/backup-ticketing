@@ -1,0 +1,505 @@
+﻿diff --git a/temp_chat_provider.dart "b/lib\\features\\chat\\presentation\\providers\\chat_provider.dart"
+index 5b9fb3d..8ec564b 100644
+--- a/temp_chat_provider.dart
++++ "b/lib\\features\\chat\\presentation\\providers\\chat_provider.dart"
+@@ -1,9 +1,10 @@
+-´╗┐import 'dart:async';
++import 'dart:async';
+ import 'package:riverpod_annotation/riverpod_annotation.dart';
+ import 'package:shared_preferences/shared_preferences.dart';
+ import 'package:flutter_riverpod/flutter_riverpod.dart';
+ import 'package:flutter/foundation.dart';
+ import 'dart:convert';
++import 'package:uuid/uuid.dart';
+ import 'package:supabase_flutter/supabase_flutter.dart';
+ import '../../domain/entities/chat_message.dart';
+ import '../../data/repositories/chat_repository.dart';
+@@ -12,29 +13,74 @@ import '../../../tickets/presentation/providers/ticket_provider.dart';
+ 
+ part 'chat_provider.g.dart';
+ 
++final _chatCache = <String, List<ChatMessage>>{};
++final _chatHasMoreCache = <String, bool>{};
++
+ // ÔöÇÔöÇ Chat stream ÔÇö keepAlive so it never resets on navigation ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+ @Riverpod(keepAlive: true)
+ class ChatStream extends _$ChatStream {
+   RealtimeChannel? _channelSub;
++  RealtimeChannel? _receiptsSub;
+   bool _hasMore = true;
+   bool get hasMore => _hasMore;
+   
+   @override
+   FutureOr<List<ChatMessage>> build(String channel) async {
+     final repository = ref.watch(chatRepositoryProvider);
++    
+     final messages = await repository.getPaginatedMessages(channelName: channel, limit: 30);
+     _hasMore = messages.length == 30;
+     
++    final currentCache = _chatCache[channel] ?? [];
++    final optimisticMessages = currentCache.where((c) => !messages.any((m) => m.id == c.id)).toList();
++    final finalMessages = [...messages, ...optimisticMessages];
++    finalMessages.sort((a, b) {
++      final t = a.createdAt.toUtc().compareTo(b.createdAt.toUtc());
++      return t != 0 ? t : a.id.compareTo(b.id);
++    });
++    
++    final messageIds = finalMessages.map((m) => m.id).toList();
++    if (messageIds.isNotEmpty) {
++      final receipts = await repository.fetchReceiptsForMessages(messageIds);
++      ReadReceiptsTracker.injectReceipts(receipts);
++    }
++    
++    _chatCache[channel] = finalMessages;
++    _chatHasMoreCache[channel] = _hasMore;
++    
+     _channelSub = repository.subscribeToMessages(
+       channelName: channel,
+       onEvent: _handlePostgresEvent,
+     );
++
++    _receiptsSub = repository.subscribeToReadReceipts(
++      channelName: channel,
++      onEvent: _handleReadReceiptEvent,
++    );
+     
+     ref.onDispose(() {
+       _channelSub?.unsubscribe();
++      _receiptsSub?.unsubscribe();
+     });
+     
+-    return messages;
++    return finalMessages;
++  }
++
++  void _updateState(List<ChatMessage> newList) {
++    state = AsyncData(newList);
++    print('Riverpod state assigned successfully');
++    _chatCache[channel] = newList;
++  }
++
++  void _handleReadReceiptEvent(PostgresChangePayload payload) {
++    if (payload.eventType == PostgresChangeEvent.insert || payload.eventType == PostgresChangeEvent.update) {
++      final record = payload.newRecord;
++      final msgId = record['message_id']?.toString();
++      final userId = record['user_id']?.toString();
++      if (msgId != null && userId != null) {
++        ReadReceiptsTracker.injectReceipt(msgId, userId);
++      }
++    }
+   }
+ 
+   void _handlePostgresEvent(PostgresChangePayload payload) {
+@@ -42,9 +88,8 @@ class ChatStream extends _$ChatStream {
+       final newMsg = ChatMessage.fromJson(payload.newRecord);
+       if (newMsg.channel != channel || newMsg.receiverId != null) return;
+       final currentList = state.value ?? [];
+-      // Make sure we don't add duplicates (sometimes realtime events and manual inserts race)
+       if (!currentList.any((m) => m.id == newMsg.id)) {
+-        state = AsyncData([...currentList, newMsg]);
++        _updateState([...currentList, newMsg]);
+       }
+     } else if (payload.eventType == PostgresChangeEvent.update) {
+       final updatedMsg = ChatMessage.fromJson(payload.newRecord);
+@@ -54,19 +99,37 @@ class ChatStream extends _$ChatStream {
+       if (index != -1) {
+         final newList = List<ChatMessage>.from(currentList);
+         newList[index] = updatedMsg;
+-        state = AsyncData(newList);
++        _updateState(newList);
+       }
+     } else if (payload.eventType == PostgresChangeEvent.delete) {
+       final deletedId = payload.oldRecord['id'] as String?;
+       if (deletedId != null) {
+         final currentList = state.value ?? [];
+         if (currentList.any((m) => m.id == deletedId)) {
+-          state = AsyncData(currentList.where((m) => m.id != deletedId).toList());
++          _updateState(currentList.where((m) => m.id != deletedId).toList());
+         }
+       }
+     }
+   }
+ 
++  void injectOptimisticMessage(ChatMessage message) {
++    final currentList = state.value ?? [];
++    if (!currentList.any((m) => m.id == message.id)) {
++      _updateState([...currentList, message]);
++    }
++  }
++
++  void optimisticDelete(String messageId) {
++    final currentList = state.value ?? [];
++    final index = currentList.indexWhere((m) => m.id == messageId);
++    if (index != -1) {
++      final newList = List<ChatMessage>.from(currentList);
++      final oldMsg = newList[index];
++      newList[index] = oldMsg.copyWith(isDeleted: true, content: '');
++      _updateState(newList);
++    }
++  }
++
+   Future<void> loadMore() async {
+     if (!_hasMore) return;
+     final currentList = state.value ?? [];
+@@ -82,9 +145,16 @@ class ChatStream extends _$ChatStream {
+ 
+     if (olderMessages.length < 30) {
+       _hasMore = false;
++      _chatHasMoreCache[channel] = false;
+     }
+     
+-    state = AsyncData([...olderMessages, ...currentList]);
++    final messageIds = olderMessages.map((m) => m.id).toList();
++    if (messageIds.isNotEmpty) {
++      final receipts = await repository.fetchReceiptsForMessages(messageIds);
++      ReadReceiptsTracker.injectReceipts(receipts);
++    }
++    
++    _updateState([...olderMessages, ...currentList]);
+   }
+ 
+   void refresh() {
+@@ -92,10 +162,14 @@ class ChatStream extends _$ChatStream {
+   }
+ }
+ 
++final _dmCache = <String, List<ChatMessage>>{};
++final _dmHasMoreCache = <String, bool>{};
++
+ // ÔöÇÔöÇ DM Chat stream ÔÇö keepAlive so it never resets on navigation ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+ @Riverpod(keepAlive: true)
+ class DmStream extends _$DmStream {
+   RealtimeChannel? _channelSub;
++  RealtimeChannel? _receiptsSub;
+   bool _hasMore = true;
+   bool get hasMore => _hasMore;
+   
+@@ -103,7 +177,6 @@ class DmStream extends _$DmStream {
+   FutureOr<List<ChatMessage>> build(String chatPartnerId) async {
+     final repository = ref.watch(chatRepositoryProvider);
+     final myId = ref.watch(authProvider)?.id;
+-    
+     final messages = await repository.getPaginatedMessages(
+       currentUserId: myId,
+       chatPartnerId: chatPartnerId,
+@@ -111,18 +184,67 @@ class DmStream extends _$DmStream {
+     );
+     _hasMore = messages.length == 30;
+     
++    final cacheKey = '${myId}_$chatPartnerId';
++    final currentCache = _dmCache[cacheKey] ?? [];
++    final optimisticMessages = currentCache.where((c) => !messages.any((m) => m.id == c.id)).toList();
++    final finalMessages = [...messages, ...optimisticMessages];
++    finalMessages.sort((a, b) {
++      final t = a.createdAt.toUtc().compareTo(b.createdAt.toUtc());
++      return t != 0 ? t : a.id.compareTo(b.id);
++    });
++    
++    final messageIds = finalMessages.map((m) => m.id).toList();
++    if (messageIds.isNotEmpty) {
++      final receipts = await repository.fetchReceiptsForMessages(messageIds);
++      ReadReceiptsTracker.injectReceipts(receipts);
++    }
++    
++    if (myId != null) {
++      _dmCache[cacheKey] = finalMessages;
++      _dmHasMoreCache[cacheKey] = _hasMore;
++    }
++    
+     _channelSub = repository.subscribeToMessages(
+       channelName: 'dm',
+       currentUserId: myId,
+       chatPartnerId: chatPartnerId,
+       onEvent: _handlePostgresEvent,
+     );
++
++    _receiptsSub = repository.subscribeToReadReceipts(
++      channelName: 'dm',
++      currentUserId: myId,
++      chatPartnerId: chatPartnerId,
++      onEvent: _handleReadReceiptEvent,
++    );
+     
+     ref.onDispose(() {
+       _channelSub?.unsubscribe();
++      _receiptsSub?.unsubscribe();
+     });
+     
+-    return messages;
++    return finalMessages;
++  }
++
++  void _updateState(List<ChatMessage> newList) {
++    state = AsyncData(newList);
++    print('Riverpod state assigned successfully');
++    final myId = ref.read(authProvider)?.id;
++    if (myId != null) {
++      final cacheKey = '${myId}_$chatPartnerId';
++      _dmCache[cacheKey] = newList;
++    }
++  }
++
++  void _handleReadReceiptEvent(PostgresChangePayload payload) {
++    if (payload.eventType == PostgresChangeEvent.insert || payload.eventType == PostgresChangeEvent.update) {
++      final record = payload.newRecord;
++      final msgId = record['message_id']?.toString();
++      final userId = record['user_id']?.toString();
++      if (msgId != null && userId != null) {
++        ReadReceiptsTracker.injectReceipt(msgId, userId);
++      }
++    }
+   }
+ 
+   void _handlePostgresEvent(PostgresChangePayload payload) {
+@@ -136,7 +258,7 @@ class DmStream extends _$DmStream {
+       if (!isRelevant) return;
+       final currentList = state.value ?? [];
+       if (!currentList.any((m) => m.id == newMsg.id)) {
+-        state = AsyncData([...currentList, newMsg]);
++        _updateState([...currentList, newMsg]);
+       }
+     } else if (payload.eventType == PostgresChangeEvent.update) {
+       final updatedMsg = ChatMessage.fromJson(payload.newRecord);
+@@ -148,19 +270,37 @@ class DmStream extends _$DmStream {
+       if (index != -1) {
+         final newList = List<ChatMessage>.from(currentList);
+         newList[index] = updatedMsg;
+-        state = AsyncData(newList);
++        _updateState(newList);
+       }
+     } else if (payload.eventType == PostgresChangeEvent.delete) {
+       final deletedId = payload.oldRecord['id'] as String?;
+       if (deletedId != null) {
+         final currentList = state.value ?? [];
+         if (currentList.any((m) => m.id == deletedId)) {
+-          state = AsyncData(currentList.where((m) => m.id != deletedId).toList());
++          _updateState(currentList.where((m) => m.id != deletedId).toList());
+         }
+       }
+     }
+   }
+ 
++  void injectOptimisticMessage(ChatMessage message) {
++    final currentList = state.value ?? [];
++    if (!currentList.any((m) => m.id == message.id)) {
++      _updateState([...currentList, message]);
++    }
++  }
++
++  void optimisticDelete(String messageId) {
++    final currentList = state.value ?? [];
++    final index = currentList.indexWhere((m) => m.id == messageId);
++    if (index != -1) {
++      final newList = List<ChatMessage>.from(currentList);
++      final oldMsg = newList[index];
++      newList[index] = oldMsg.copyWith(isDeleted: true, content: '');
++      _updateState(newList);
++    }
++  }
++
+   Future<void> loadMore() async {
+     if (!_hasMore) return;
+     final currentList = state.value ?? [];
+@@ -179,9 +319,19 @@ class DmStream extends _$DmStream {
+ 
+     if (olderMessages.length < 30) {
+       _hasMore = false;
++      if (myId != null) {
++        final cacheKey = '${myId}_$chatPartnerId';
++        _dmHasMoreCache[cacheKey] = false;
++      }
++    }
++    
++    final messageIds = olderMessages.map((m) => m.id).toList();
++    if (messageIds.isNotEmpty) {
++      final receipts = await repository.fetchReceiptsForMessages(messageIds);
++      ReadReceiptsTracker.injectReceipts(receipts);
+     }
+     
+-    state = AsyncData([...olderMessages, ...currentList]);
++    _updateState([...olderMessages, ...currentList]);
+   }
+ 
+   void refresh() {
+@@ -587,14 +737,6 @@ class ReadReceiptsTracker {
+         );
+       }
+ 
+-      final remoteReceipts = await _loadRemoteReadReceipts();
+-      if (remoteReceipts.isNotEmpty) {
+-        for (final entry in remoteReceipts.entries) {
+-          _cache.putIfAbsent(entry.key, () => <String>{}).addAll(entry.value);
+-        }
+-        await _saveReadReceipts();
+-      }
+-
+       // Load user last seen timestamps
+       final keys = prefs.getKeys();
+       for (final key in keys) {
+@@ -714,26 +856,33 @@ class ReadReceiptsTracker {
+     await _initialize();
+   }
+ 
+-  static Future<Map<String, Set<String>>> _loadRemoteReadReceipts() async {
+-    try {
+-      final rows = await Supabase.instance.client
+-          .from('chat_read_receipts')
+-          .select('message_id, user_id');
+-
+-      final receipts = <String, Set<String>>{};
+-      for (final row in rows) {
+-        final messageId = row['message_id']?.toString();
+-        final userId = row['user_id']?.toString();
+-        if (messageId == null || userId == null) continue;
+-
+-        receipts
+-            .putIfAbsent(messageId, () => <String>{})
+-            .add(userId.trim().toLowerCase());
++  static void injectReceipts(Map<String, Set<String>> receipts) {
++    bool changed = false;
++    for (final entry in receipts.entries) {
++      if (!_cache.containsKey(entry.key)) {
++        _cache[entry.key] = {};
+       }
+-      return receipts;
+-    } catch (e) {
+-      debugPrint('Unable to load remote chat read receipts: $e');
+-      return {};
++      final beforeCount = _cache[entry.key]!.length;
++      _cache[entry.key]!.addAll(entry.value);
++      if (_cache[entry.key]!.length != beforeCount) {
++        changed = true;
++      }
++    }
++    if (changed) {
++      _saveReadReceipts();
++      _onChange?.call();
++    }
++  }
++
++  static void injectReceipt(String messageId, String userId) {
++    if (!_cache.containsKey(messageId)) {
++      _cache[messageId] = {};
++    }
++    final normalizedUser = userId.trim().toLowerCase();
++    if (!_cache[messageId]!.contains(normalizedUser)) {
++      _cache[messageId]!.add(normalizedUser);
++      _saveReadReceipts();
++      _onChange?.call();
+     }
+   }
+ 
+@@ -776,34 +925,77 @@ class ChatController extends _$ChatController {
+     List<dynamic>? richTextDelta,
+   }) async {
+     state = const AsyncLoading();
+-    String newId = '';
++    final messageId = const Uuid().v4();
++    
++    // Create optimistic message
++    final optimisticMessage = ChatMessage(
++      id: messageId,
++      senderId: senderId,
++      senderName: senderName,
++      senderRole: senderRole,
++      content: content,
++      receiverId: receiverId,
++      senderAvatarUrl: senderAvatarUrl,
++      createdAt: DateTime.now().toUtc(),
++      replyToMessageId: replyToMessageId,
++      replyToSenderName: replyToSenderName,
++      replyToContent: replyToContent,
++      fileUrl: fileUrl,
++      fileName: fileName,
++      fileType: fileType,
++      channel: channel,
++      richTextDelta: richTextDelta,
++    );
++
++    // Inject optimistic message immediately
++    if (receiverId != null) {
++      ref.read(dmStreamProvider(receiverId).notifier).injectOptimisticMessage(optimisticMessage);
++    } else {
++      ref.read(chatStreamProvider(channel).notifier).injectOptimisticMessage(optimisticMessage);
++    }
++
+     state = await AsyncValue.guard(
+       () async {
+-        newId = await ref
+-            .read(chatRepositoryProvider)
+-            .sendMessage(
+-              senderId: senderId,
+-              senderName: senderName,
+-              senderRole: senderRole,
+-              content: content,
+-              receiverId: receiverId,
+-              senderAvatarUrl: senderAvatarUrl,
+-              replyToMessageId: replyToMessageId,
+-              replyToSenderName: replyToSenderName,
+-              richTextDelta: richTextDelta,
+-              replyToContent: replyToContent,
+-              fileUrl: fileUrl,
+-              fileName: fileName,
+-              fileType: fileType,
+-              channel: channel,
+-            );
++        try {
++          await ref
++              .read(chatRepositoryProvider)
++              .sendMessage(
++                id: messageId,
++                senderId: senderId,
++                senderName: senderName,
++                senderRole: senderRole,
++                content: content,
++                receiverId: receiverId,
++                senderAvatarUrl: senderAvatarUrl,
++                replyToMessageId: replyToMessageId,
++                replyToSenderName: replyToSenderName,
++                richTextDelta: richTextDelta,
++                replyToContent: replyToContent,
++                fileUrl: fileUrl,
++                fileName: fileName,
++                fileType: fileType,
++                channel: channel,
++              );
++        } catch (e, st) {
++          print('SEND MESSAGE ERROR: $e');
++          print('SEND MESSAGE STACKTRACE: $st');
++          rethrow;
++        }
+       },
+     );
+-    return newId;
++    return messageId;
+   }
+ 
+-  Future<void> deleteMessage(String messageId) async {
++  Future<void> deleteMessage(String messageId, {String? receiverId, String channel = 'support-chat'}) async {
+     state = const AsyncLoading();
++
++    // Optimistic delete
++    if (receiverId != null) {
++      ref.read(dmStreamProvider(receiverId).notifier).optimisticDelete(messageId);
++    } else {
++      ref.read(chatStreamProvider(channel).notifier).optimisticDelete(messageId);
++    }
++
+     state = await AsyncValue.guard(
+       () => ref.read(chatRepositoryProvider).deleteMessage(messageId),
+     );
+@@ -903,12 +1095,14 @@ final messageStatusProvider =
+ 
+ // ÔöÇÔöÇ Starred messages stream ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+ final starredMessagesStreamProvider = StreamProvider.family<List<ChatMessage>, String>((ref, userId) {
++  ref.keepAlive();
+   final repository = ref.watch(chatRepositoryProvider);
+   return repository.getStarredMessages(userId);
+ });
+ 
+ // ÔöÇÔöÇ DM conversations provider ÔÇö real-time updates for left pane ÔöÇÔöÇ
+ final dmConversationsProvider = StreamProvider<Map<String, Map<String, dynamic>>>((ref) {
++  ref.keepAlive();
+   final currentUser = ref.watch(authProvider);
+   if (currentUser == null) return Stream.value({});
+ 
