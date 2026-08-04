@@ -12,6 +12,7 @@ import '../../../sales/presentation/providers/lead_provider.dart';
 import '../widgets/sales_team_chat_view.dart';
 import '../../../sales/presentation/widgets/lead_search_dialog.dart';
 import '../widgets/add_members_page.dart';
+import '../../../../core/services/zoho_launcher.dart';
 
 class SalesChatPage extends ConsumerStatefulWidget {
   final int initialTab;
@@ -114,21 +115,8 @@ class _SalesChatPageState extends ConsumerState<SalesChatPage> {
         return;
       }
       final id = zohoIds.first;
-      // Official Zoho Cliq deep link: opens DM with this user (by ZUID or email)
-      // https://www.zoho.com/cliq/help/platform/deep-linking.html
-      final uri = Uri.parse('https://cliq.zoho.com/users/$id');
-      if (await url_launcher.canLaunchUrl(uri)) {
-        await url_launcher.launchUrl(uri, mode: url_launcher.LaunchMode.externalApplication);
-      } else {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Could not open Zoho Cliq. Please make sure it is installed.'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-      }
+      // Uses window.location.href via JS — bypasses Chrome's localhost protocol block
+      launchZohoCliqUser(id);
     }
   }
 

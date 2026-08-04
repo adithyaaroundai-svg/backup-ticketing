@@ -22,6 +22,7 @@ import '../../domain/entities/chat_message.dart';
 import '../../domain/entities/custom_channel.dart';
 import '../../data/repositories/chat_repository.dart';
 import '../widgets/markdown_text_editing_controller.dart';
+import '../../../../core/services/zoho_launcher.dart';
 
 IconData _getFileIcon(String? fileType) {
   if (fileType == null) return Icons.insert_drive_file;
@@ -623,22 +624,8 @@ class _CustomChannelChatPageState extends ConsumerState<CustomChannelChatPage> {
 
   Future<void> _launchGroupZohoCall(List<String> zohoIds, {required bool video}) async {
     if (zohoIds.isEmpty) return;
-    final id = zohoIds.first;
-    // Official Zoho Cliq deep link: opens DM with this user (by ZUID or email)
-    // https://www.zoho.com/cliq/help/platform/deep-linking.html
-    final uri = Uri.parse('https://cliq.zoho.com/users/$id');
-    if (await url_launcher.canLaunchUrl(uri)) {
-      await url_launcher.launchUrl(uri, mode: url_launcher.LaunchMode.externalApplication);
-    } else {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Could not open Zoho Cliq. Please make sure it is installed.'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
+    // Uses window.location.href via JS — bypasses Chrome's localhost protocol block
+    launchZohoCliqUser(zohoIds.first);
   }
 
   void _showChannelDetailsDialog(CustomChannel channel, List<ChatMessage>? messages) {

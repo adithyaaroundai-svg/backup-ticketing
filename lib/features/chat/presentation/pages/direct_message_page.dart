@@ -37,6 +37,7 @@ import '../../../dashboard/presentation/widgets/create_ticket_dialog.dart';
 
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../widgets/markdown_text_editing_controller.dart';
+import '../../../../core/services/zoho_launcher.dart';
 
 IconData _getFileIcon(String? fileType) {
   if (fileType == null) return Icons.insert_drive_file;
@@ -636,24 +637,8 @@ class _DirectMessagePageState extends ConsumerState<DirectMessagePage> {
       }
       return;
     }
-
-    final id = zohoCliqId.trim();
-    // Official Zoho Cliq deep link: opens DM with this user (by ZUID or email)
-    // https://www.zoho.com/cliq/help/platform/deep-linking.html
-    final uri = Uri.parse('https://cliq.zoho.com/users/$id');
-    if (await url_launcher.canLaunchUrl(uri)) {
-      await url_launcher.launchUrl(uri, mode: url_launcher.LaunchMode.externalApplication);
-    } else {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Could not open Zoho Cliq. Please make sure it is installed.'),
-            backgroundColor: Colors.red,
-            duration: Duration(seconds: 3),
-          ),
-        );
-      }
-    }
+    // Uses window.location.href via JS — bypasses Chrome's localhost protocol block
+    launchZohoCliqUser(zohoCliqId.trim());
   }
 
   @override
