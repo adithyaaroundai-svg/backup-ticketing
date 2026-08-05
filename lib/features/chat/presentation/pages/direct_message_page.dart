@@ -505,11 +505,11 @@ class _DirectMessagePageState extends ConsumerState<DirectMessagePage> {
   /// Shows a dialog to pick between Teams and Zoho Cliq, then launches the call.
   Future<void> _launchCall({
     required String? teamsUserId,
-    required String? zohoCliqId,
+    required String? zohoMailId,
     required bool video,
   }) async {
     final hasTeams = teamsUserId != null && teamsUserId.trim().isNotEmpty;
-    final hasZoho = zohoCliqId != null && zohoCliqId.trim().isNotEmpty;
+    final hasZoho = zohoMailId != null && zohoMailId.trim().isNotEmpty;
 
     // Always show the picker with both options
     if (!mounted) return;
@@ -562,7 +562,7 @@ class _DirectMessagePageState extends ConsumerState<DirectMessagePage> {
         }
         return;
       }
-      await _launchZohoCliqCall(zohoCliqId, video: video);
+      await _launchZohoCliqCall(zohoMailId, video: video);
     }
   }
 
@@ -622,10 +622,10 @@ class _DirectMessagePageState extends ConsumerState<DirectMessagePage> {
   }
 
   Future<void> _launchZohoCliqCall(
-    String? zohoCliqId, {
+    String? zohoMailId, {
     required bool video,
   }) async {
-    if (zohoCliqId == null || zohoCliqId.trim().isEmpty) {
+    if (zohoMailId == null || zohoMailId.trim().isEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -638,7 +638,7 @@ class _DirectMessagePageState extends ConsumerState<DirectMessagePage> {
       return;
     }
     // Uses window.location.href via JS — bypasses Chrome's localhost protocol block
-    launchZohoCliqUser(zohoCliqId.trim());
+    launchZohoCliqUser(zohoMailId.trim());
   }
 
   @override
@@ -674,7 +674,7 @@ class _DirectMessagePageState extends ConsumerState<DirectMessagePage> {
         (partnerData['full_name'] ?? partnerData['username'] ?? '').toString();
     final partnerAvatarUrl = partnerData['avatar_url'] as String?;
     final partnerTeamsId = partnerData['teams_user_id'] as String?;
-    final partnerZohoId = partnerData['zoho_cliq_id'] as String?;
+    final partnerZohoId = partnerData['zoho_mail_id'] as String?;
 
     ref.listen(dmStreamProvider(widget.partnerId), (previous, next) {
       if (next is AsyncData<List<ChatMessage>> && next.value.isNotEmpty) {
@@ -799,7 +799,7 @@ class _DirectMessagePageState extends ConsumerState<DirectMessagePage> {
               tooltip: 'Audio Call',
               onTap: () => _launchCall(
                 teamsUserId: partnerTeamsId,
-                zohoCliqId: partnerZohoId,
+                zohoMailId: partnerZohoId,
                 video: false,
               ),
             ),
@@ -810,7 +810,7 @@ class _DirectMessagePageState extends ConsumerState<DirectMessagePage> {
               tooltip: 'Video Call',
               onTap: () => _launchCall(
                 teamsUserId: partnerTeamsId,
-                zohoCliqId: partnerZohoId,
+                zohoMailId: partnerZohoId,
                 video: true,
               ),
             ),

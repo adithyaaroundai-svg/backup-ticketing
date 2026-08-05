@@ -542,7 +542,7 @@ class _CustomChannelChatPageState extends ConsumerState<CustomChannelChatPage> {
       );
       final teamsId = agentData['teams_user_id'] as String?;
       if (teamsId != null && teamsId.trim().isNotEmpty) teamsIds.add(teamsId.trim());
-      final zohoId = agentData['zoho_cliq_id'] as String?;
+      final zohoId = agentData['zoho_mail_id'] as String?;
       if (zohoId != null && zohoId.trim().isNotEmpty) zohoIds.add(zohoId.trim());
     }
 

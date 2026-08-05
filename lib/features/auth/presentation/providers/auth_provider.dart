@@ -21,7 +21,7 @@ class Agent {
   final String? displayColor;
   final String? avatarUrl;
   final String? teamsUserId;
-  final String? zohoCliqId;
+  final String? zohoMailId;
 
   Agent({
     required this.id,
@@ -31,7 +31,7 @@ class Agent {
     this.displayColor,
     this.avatarUrl,
     this.teamsUserId,
-    this.zohoCliqId,
+    this.zohoMailId,
   });
 
   factory Agent.fromJson(Map<String, dynamic> json) {
@@ -43,7 +43,7 @@ class Agent {
       displayColor: json['display_color'],
       avatarUrl: json['avatar_url'],
       teamsUserId: json['teams_user_id'],
-      zohoCliqId: json['zoho_cliq_id'],
+      zohoMailId: json['zoho_mail_id'],
     );
   }
 
@@ -56,7 +56,7 @@ class Agent {
       'display_color': displayColor,
       'avatar_url': avatarUrl,
       'teams_user_id': teamsUserId,
-      'zoho_cliq_id': zohoCliqId,
+      'zoho_mail_id': zohoMailId,
     };
   }
   String get _roleLower => role.trim().toLowerCase();
@@ -136,7 +136,7 @@ class AuthNotifier extends _$AuthNotifier {
     try {
       agentRow = await client
           .from('agents')
-          .select('id, username, full_name, role, display_color, avatar_url, teams_user_id, zoho_cliq_id')
+          .select('id, username, full_name, role, display_color, avatar_url, teams_user_id, zoho_mail_id')
           .eq('username', username)
           .eq('password', password)
           .limit(1)
@@ -291,7 +291,7 @@ class AuthNotifier extends _$AuthNotifier {
         displayColor: colorHex,
         avatarUrl: currentAgent.avatarUrl,
         teamsUserId: currentAgent.teamsUserId,
-        zohoCliqId: currentAgent.zohoCliqId,
+        zohoMailId: currentAgent.zohoMailId,
       );
       state = updatedAgent;
       await _persistAgent(updatedAgent);
@@ -325,7 +325,7 @@ class AuthNotifier extends _$AuthNotifier {
         displayColor: currentAgent.displayColor,
         avatarUrl: avatarUrl,
         teamsUserId: currentAgent.teamsUserId,
-        zohoCliqId: currentAgent.zohoCliqId,
+        zohoMailId: currentAgent.zohoMailId,
       );
       state = updatedAgent;
       await _persistAgent(updatedAgent);
@@ -359,7 +359,7 @@ class AuthNotifier extends _$AuthNotifier {
         displayColor: currentAgent.displayColor,
         avatarUrl: currentAgent.avatarUrl,
         teamsUserId: currentAgent.teamsUserId,
-        zohoCliqId: currentAgent.zohoCliqId,
+        zohoMailId: currentAgent.zohoMailId,
       );
       state = updatedAgent;
       await _persistAgent(updatedAgent);
@@ -393,7 +393,7 @@ class AuthNotifier extends _$AuthNotifier {
         displayColor: currentAgent.displayColor,
         avatarUrl: currentAgent.avatarUrl,
         teamsUserId: currentAgent.teamsUserId,
-        zohoCliqId: currentAgent.zohoCliqId,
+        zohoMailId: currentAgent.zohoMailId,
       );
       state = updatedAgent;
       await _persistAgent(updatedAgent);
@@ -427,7 +427,7 @@ class AuthNotifier extends _$AuthNotifier {
         displayColor: currentAgent.displayColor,
         avatarUrl: currentAgent.avatarUrl,
         teamsUserId: teamsUserId.trim(),
-        zohoCliqId: currentAgent.zohoCliqId,
+        zohoMailId: currentAgent.zohoMailId,
       );
       state = updatedAgent;
       await _persistAgent(updatedAgent);
@@ -442,7 +442,7 @@ class AuthNotifier extends _$AuthNotifier {
     }
   }
 
-  Future<bool> updateZohoCliqId(String zohoCliqId) async {
+  Future<bool> updateZohoMailId(String zohoMailId) async {
     final currentAgent = state;
     if (currentAgent == null) return false;
 
@@ -450,7 +450,7 @@ class AuthNotifier extends _$AuthNotifier {
       final client = Supabase.instance.client;
       await client
           .from('agents')
-          .update({'zoho_cliq_id': zohoCliqId.trim()})
+          .update({'zoho_mail_id': zohoMailId.trim()})
           .eq('id', currentAgent.id);
 
       final updatedAgent = Agent(
@@ -461,14 +461,14 @@ class AuthNotifier extends _$AuthNotifier {
         displayColor: currentAgent.displayColor,
         avatarUrl: currentAgent.avatarUrl,
         teamsUserId: currentAgent.teamsUserId,
-        zohoCliqId: zohoCliqId.trim(),
+        zohoMailId: zohoMailId.trim(),
       );
       state = updatedAgent;
       await _persistAgent(updatedAgent);
       return true;
     } catch (e, stackTrace) {
       appLogger.error(
-        'Failed to update Zoho Cliq ID',
+        'Failed to update Zoho Mail ID',
         error: e,
         stackTrace: stackTrace,
       );

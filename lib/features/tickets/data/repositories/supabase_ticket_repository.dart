@@ -518,7 +518,7 @@ class SupabaseTicketRepository implements TicketRepository {
     try {
       final response = await _supabase
           .from('agents')
-          .select('id, username, full_name, role, display_color, last_seen, avatar_url, teams_user_id, zoho_cliq_id')
+          .select('id, username, full_name, role, display_color, last_seen, avatar_url, teams_user_id, zoho_mail_id')
           .order('username');
       return List<Map<String, dynamic>>.from(response);
     } catch (e) {

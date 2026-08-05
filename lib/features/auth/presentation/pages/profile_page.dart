@@ -134,7 +134,7 @@ class ProfilePage extends ConsumerWidget {
                     const Divider(height: 32),
                     _TeamsUserIdEditor(currentTeamsUserId: user?.teamsUserId),
                     const Divider(height: 32),
-                    _ZohoCliqIdEditor(currentZohoCliqId: user?.zohoCliqId),
+                    _ZohoMailIdEditor(currentZohoMailId: user?.zohoMailId),
                     const Divider(height: 32),
                     _ColorSelector(currentHex: user?.displayColor),
                     const Divider(height: 32),
@@ -1092,15 +1092,15 @@ class _TeamsUserIdEditorState extends ConsumerState<_TeamsUserIdEditor> {
   }
 }
 
-class _ZohoCliqIdEditor extends ConsumerStatefulWidget {
-  final String? currentZohoCliqId;
-  const _ZohoCliqIdEditor({this.currentZohoCliqId});
+class _ZohoMailIdEditor extends ConsumerStatefulWidget {
+  final String? currentZohoMailId;
+  const _ZohoMailIdEditor({this.currentZohoMailId});
 
   @override
-  ConsumerState<_ZohoCliqIdEditor> createState() => _ZohoCliqIdEditorState();
+  ConsumerState<_ZohoMailIdEditor> createState() => _ZohoMailIdEditorState();
 }
 
-class _ZohoCliqIdEditorState extends ConsumerState<_ZohoCliqIdEditor> {
+class _ZohoMailIdEditorState extends ConsumerState<_ZohoMailIdEditor> {
   late final TextEditingController _ctrl;
   bool _editing = false;
   bool _saving = false;
@@ -1109,15 +1109,15 @@ class _ZohoCliqIdEditorState extends ConsumerState<_ZohoCliqIdEditor> {
   @override
   void initState() {
     super.initState();
-    _displayValue = widget.currentZohoCliqId ?? '';
+    _displayValue = widget.currentZohoMailId ?? '';
     _ctrl = TextEditingController(text: _displayValue);
   }
 
   @override
-  void didUpdateWidget(_ZohoCliqIdEditor oldWidget) {
+  void didUpdateWidget(_ZohoMailIdEditor oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.currentZohoCliqId != widget.currentZohoCliqId) {
-      _displayValue = widget.currentZohoCliqId ?? '';
+    if (oldWidget.currentZohoMailId != widget.currentZohoMailId) {
+      _displayValue = widget.currentZohoMailId ?? '';
       if (!_editing) {
         _ctrl.text = _displayValue;
       }
@@ -1135,14 +1135,14 @@ class _ZohoCliqIdEditorState extends ConsumerState<_ZohoCliqIdEditor> {
     if (value.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Please enter a Zoho Cliq User ID'),
+          content: Text('Please enter a Zoho Mail ID'),
           backgroundColor: AppColors.error,
         ),
       );
       return;
     }
     setState(() => _saving = true);
-    final success = await ref.read(authProvider.notifier).updateZohoCliqId(value);
+    final success = await ref.read(authProvider.notifier).updateZohoMailId(value);
     if (!mounted) return;
     setState(() {
       _saving = false;
@@ -1153,7 +1153,7 @@ class _ZohoCliqIdEditorState extends ConsumerState<_ZohoCliqIdEditor> {
     });
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(success ? 'Zoho Cliq ID updated' : 'Failed to update Zoho Cliq ID'),
+        content: Text(success ? 'Zoho Mail ID updated' : 'Failed to update Zoho Mail ID'),
         backgroundColor: success ? AppColors.success : AppColors.error,
       ),
     );
@@ -1165,7 +1165,7 @@ class _ZohoCliqIdEditorState extends ConsumerState<_ZohoCliqIdEditor> {
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Text(
-          'Zoho Cliq ID',
+          'Zoho Mail ID',
           style: TextStyle(fontSize: 14, color: context.adaptiveSlate500),
         ),
         const SizedBox(width: 16),
@@ -1177,13 +1177,13 @@ class _ZohoCliqIdEditorState extends ConsumerState<_ZohoCliqIdEditor> {
                       child: TextField(
                         controller: _ctrl,
                         autofocus: true,
-                        keyboardType: TextInputType.number,
+                        keyboardType: TextInputType.emailAddress,
                         style: TextStyle(fontSize: 14, color: context.adaptiveSlate900),
                         decoration: const InputDecoration(
                           isDense: true,
                           contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                           border: OutlineInputBorder(),
-                          hintText: 'e.g. 60081425050',
+                          hintText: 'e.g. adithyaaroundai@gmail.com',
                         ),
                         onSubmitted: (_) => _save(),
                       ),
@@ -1233,7 +1233,7 @@ class _ZohoCliqIdEditorState extends ConsumerState<_ZohoCliqIdEditor> {
                     IconButton(
                       icon: Icon(LucideIcons.pencil, size: 14, color: context.adaptiveSlate400),
                       onPressed: () => setState(() => _editing = true),
-                      tooltip: 'Edit Zoho Cliq ID',
+                      tooltip: 'Edit Zoho Mail ID',
                       padding: EdgeInsets.zero,
                       constraints: const BoxConstraints(),
                     ),

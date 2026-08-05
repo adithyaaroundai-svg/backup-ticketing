@@ -1,13 +1,9 @@
 import 'web_eval_stub.dart' if (dart.library.js) 'web_eval_web.dart';
 
-/// Launches Zoho Cliq desktop app by navigating to the zohocliqapp:// protocol.
-/// Uses window.location.href via JS eval — the only reliable way to trigger
-/// a custom protocol handler from a Flutter web app running on localhost
-/// without getting blocked by Chrome's security prompt.
+/// Opens Zoho Cliq (India data center) to a specific user's DM in a new tab.
+/// Uses cliq.zoho.in — confirmed from browser URL bar (India DC).
+/// The zohoUserId MUST be the user's Zoho email (e.g. adithyaaroundai@gmail.com).
 void launchZohoCliqUser(String zohoUserId) {
-  final url = 'zohocliqapp://users/$zohoUserId';
-  // Setting window.location.href triggers the OS protocol handler directly.
-  // This avoids the "This site is trying to open..." Chrome security dialog
-  // that blocks url_launcher from working on localhost origins.
-  evalJs("window.location.href = '$url';");
+  final url = 'https://cliq.zoho.in/users/$zohoUserId';
+  evalJs("window.open('$url', '_blank');");
 }
