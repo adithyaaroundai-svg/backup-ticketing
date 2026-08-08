@@ -40,7 +40,7 @@ class AppTheme {
   ];
 
   static ThemeData get lightTheme {
-    return FlexThemeData.light(
+    final theme = FlexThemeData.light(
       colors: const FlexSchemeColor(
         primary: AppColors.primary,
         primaryContainer: AppColors.primarySurface,
@@ -85,7 +85,10 @@ class AppTheme {
       useMaterial3: true,
       swapLegacyOnMaterial3: true,
       fontFamily: GoogleFonts.inter().fontFamily,
-    ).copyWith(
+    );
+    
+    return theme.copyWith(
+      textTheme: theme.textTheme.apply(fontFamilyFallback: const ['FallbackFont']),
       scaffoldBackgroundColor: AppColors.background,
       appBarTheme: AppBarTheme(
         backgroundColor: Colors.white,
@@ -99,6 +102,7 @@ class AppTheme {
           fontSize: 18,
           fontWeight: FontWeight.w600,
           fontFamily: GoogleFonts.inter().fontFamily,
+          fontFamilyFallback: const ['FallbackFont'],
         ),
       ),
       dividerTheme: const DividerThemeData(
@@ -151,7 +155,7 @@ class AppTheme {
   }
 
   static ThemeData get darkTheme {
-    return FlexThemeData.dark(
+    final theme = FlexThemeData.dark(
       colors: const FlexSchemeColor(
         primary: AppColors.primaryLight,
         primaryContainer: AppColors.slate700,
@@ -189,7 +193,10 @@ class AppTheme {
       useMaterial3: true,
       swapLegacyOnMaterial3: true,
       fontFamily: GoogleFonts.inter().fontFamily,
-    ).copyWith(
+    );
+    
+    return theme.copyWith(
+      textTheme: theme.textTheme.apply(fontFamilyFallback: const ['FallbackFont']),
       scaffoldBackgroundColor: Colors.transparent,
       cardTheme: CardThemeData(
         color: Colors.white.withValues(alpha: 0.05),

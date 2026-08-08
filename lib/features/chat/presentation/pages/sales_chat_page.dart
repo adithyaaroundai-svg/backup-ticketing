@@ -44,7 +44,21 @@ class _SalesChatPageState extends ConsumerState<SalesChatPage> {
       if (zohoId != null && zohoId.trim().isNotEmpty) zohoIds.add(zohoId.trim());
     }
 
-    // Always show both options
+    if (zohoIds.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('None of the sales team members have a Zoho Cliq ID set.'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+      return;
+    }
+    final id = zohoIds.first;
+    launchZohoCliqUser(id);
+
+    /* KEEPING FOR FUTURE REFERENCE:
     if (!mounted) return;
     final choice = await showDialog<String>(
       context: context,
@@ -115,9 +129,9 @@ class _SalesChatPageState extends ConsumerState<SalesChatPage> {
         return;
       }
       final id = zohoIds.first;
-      // Uses window.location.href via JS — bypasses Chrome's localhost protocol block
       launchZohoCliqUser(id);
     }
+    */
   }
 
   void _showMembersDialog(BuildContext context, List<dynamic> agentsList) {
@@ -363,8 +377,9 @@ class _SalesChatPageState extends ConsumerState<SalesChatPage> {
       return MainLayout(
         currentPath: currentPath,
         child: DefaultTabController(
+          key: ValueKey(tab),
           length: 2,
-          initialIndex: tab,
+          initialIndex: tab == 2 ? 1 : 0,
           child: Builder(
             builder: (tabContext) {
               return Scaffold(

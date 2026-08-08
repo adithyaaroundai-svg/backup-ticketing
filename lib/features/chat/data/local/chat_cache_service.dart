@@ -31,6 +31,23 @@ class ChatCacheService {
     return matches.map((m) => m.toMessage()).toList();
   }
 
+  Future<List<ChatMessage>> readAllDmMessages(String currentUserId) async {
+    final List<HiveChatMessage> matches = [];
+    for (final dynamic k in _messagesBox.keys) {
+      final msg = _messagesBox.get(k);
+      if (msg != null && msg.receiverId != null) {
+        if (msg.senderId == currentUserId || msg.receiverId == currentUserId) {
+          matches.add(msg);
+        }
+      }
+    }
+    matches.sort((a, b) {
+      final t = a.createdAt.compareTo(b.createdAt);
+      return t != 0 ? t : a.id.compareTo(b.id);
+    });
+    return matches.map((m) => m.toMessage()).toList();
+  }
+
   Future<DateTime?> readLastSyncedAt(String key) async {
     final val = _metaBox.get('$key|lastSyncedAt');
     if (val == null) return null;

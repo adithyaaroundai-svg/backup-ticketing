@@ -22,6 +22,7 @@ import '../../domain/entities/chat_message.dart';
 import '../../domain/entities/custom_channel.dart';
 import '../../data/repositories/chat_repository.dart';
 import '../widgets/markdown_text_editing_controller.dart';
+import '../widgets/chat_voice_recorder.dart';
 import '../../../../core/services/zoho_launcher.dart';
 
 IconData _getFileIcon(String? fileType) {
@@ -74,6 +75,9 @@ class _CustomChannelChatPageState extends ConsumerState<CustomChannelChatPage> {
   String _mentionQuery = '';
   int _mentionStartIndex = 0;
 
+  bool _isRecordingVoice = false;
+  bool _isTextEmpty = true;
+
   @override
   void initState() {
     super.initState();
@@ -82,6 +86,10 @@ class _CustomChannelChatPageState extends ConsumerState<CustomChannelChatPage> {
 
     _messageCtrl.addListener(() {
       final text = _messageCtrl.text;
+      final isEmpty = text.trim().isEmpty;
+      if (isEmpty != _isTextEmpty) {
+        setState(() => _isTextEmpty = isEmpty);
+      }
       final selection = _messageCtrl.selection;
       
       if (!selection.isValid || selection.baseOffset == -1) return;
@@ -415,6 +423,27 @@ class _CustomChannelChatPageState extends ConsumerState<CustomChannelChatPage> {
     _focusNode.requestFocus();
   }
 
+  Future<void> _sendVoiceNote(String localPath, int durationSeconds) async {
+    final currentUser = ref.read(authProvider);
+    if (currentUser == null) return;
+
+    final controller = ref.read(chatControllerProvider.notifier);
+    
+    await controller.sendVoiceMessage(
+      senderId: currentUser.id,
+      senderName: currentUser.fullName.isNotEmpty ? currentUser.fullName : currentUser.username,
+      senderRole: currentUser.role,
+      localAudioPath: localPath,
+      durationSeconds: durationSeconds,
+      channel: widget.channelId,
+      replyToMessageId: _replyingTo,
+      replyToSenderName: _replyToName,
+      replyToContent: _replyToContent,
+    );
+    _scrollToBottom();
+    _cancelReply();
+  }
+
   Future<void> _sendMessage() async {
     final text = _messageCtrl.text.trim();
     if (text.isEmpty && _selectedFile == null) return;
@@ -546,7 +575,20 @@ class _CustomChannelChatPageState extends ConsumerState<CustomChannelChatPage> {
       if (zohoId != null && zohoId.trim().isNotEmpty) zohoIds.add(zohoId.trim());
     }
 
-    // Always show both options
+    if (zohoIds.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('None of the channel members have a Zoho Cliq ID set.'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+      return;
+    }
+    await _launchGroupZohoCall(zohoIds, video: video);
+
+    /* KEEPING FOR FUTURE REFERENCE:
     if (!mounted) return;
     final choice = await showDialog<String>(
       context: context,
@@ -600,6 +642,7 @@ class _CustomChannelChatPageState extends ConsumerState<CustomChannelChatPage> {
       }
       await _launchGroupZohoCall(zohoIds, video: video);
     }
+    */
   }
 
   Future<void> _launchGroupTeamsCall(List<String> teamsIds, {required bool video}) async {
@@ -1016,8 +1059,9 @@ class _CustomChannelChatPageState extends ConsumerState<CustomChannelChatPage> {
 
                   return Stack(
                     children: [
-                      ListView.builder(
-                        controller: _scrollCtrl,
+                      SelectionArea(
+                        child: ListView.builder(
+                          controller: _scrollCtrl,
                         padding: const EdgeInsets.all(16),
                         reverse: true,
                         itemCount: messages.length,
@@ -1037,6 +1081,7 @@ class _CustomChannelChatPageState extends ConsumerState<CustomChannelChatPage> {
                             onReply: () => _setReply(msg),
                           );
                         },
+                      ),
                       ),
                       if (_showScrollToBottom)
                         Positioned(
@@ -1399,16 +1444,26 @@ class _CustomChannelChatPageState extends ConsumerState<CustomChannelChatPage> {
                     ),
                     const SizedBox(width: 8),
                     // Send button
-                    CircleAvatar(
-                      backgroundColor: AppColors.primary,
-                      radius: 20,
-                      child: IconButton(
-                        icon: const Icon(LucideIcons.send, color: Colors.white, size: 18),
-                        onPressed: _sendMessage,
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(),
+                    if (_isRecordingVoice || (_isTextEmpty && _selectedFile == null && !_isUploading))
+                      ChatVoiceRecorder(
+                        key: const ValueKey('custom_channel_chat_voice_recorder'),
+                        disabled: _selectedFile != null || _isUploading,
+                        onRecordComplete: (path, duration) => _sendVoiceNote(path, duration),
+                        onRecordingStateChanged: (isRecording) {
+                          setState(() => _isRecordingVoice = isRecording);
+                        },
+                      )
+                    else
+                      CircleAvatar(
+                        backgroundColor: AppColors.primary,
+                        radius: 20,
+                        child: IconButton(
+                          icon: const Icon(LucideIcons.send, color: Colors.white, size: 18),
+                          onPressed: _sendMessage,
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                        ),
                       ),
-                    ),
                   ],
                 ),
               ),

@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -110,8 +111,20 @@ class NotificationsPage extends ConsumerWidget {
                                     )
                                     .markAsRead(notification.id);
                               }
-                              if (notification.link != null) {
-                                context.push(notification.link!);
+                              if (notification.link != null && notification.link!.isNotEmpty) {
+                                final linkStr = notification.link!;
+                                if (linkStr.startsWith('{')) {
+                                  try {
+                                    final meta = jsonDecode(linkStr);
+                                    if (meta['entity'] == 'ticket' && meta['entity_id'] != null) {
+                                      context.push('/ticket/${meta['entity_id']}');
+                                    }
+                                  } catch (_) {
+                                    context.push(linkStr);
+                                  }
+                                } else {
+                                  context.push(linkStr);
+                                }
                               }
                             },
                             borderRadius: BorderRadius.circular(12),

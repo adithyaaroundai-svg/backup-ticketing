@@ -20,6 +20,7 @@ import '../../../auth/presentation/providers/auth_provider.dart';
 import '../providers/chat_provider.dart';
 import '../../domain/entities/chat_message.dart';
 import '../../../tickets/presentation/providers/ticket_provider.dart';
+import '../widgets/chat_voice_recorder.dart';
 
 IconData _getFileIcon(String? fileType) {
   if (fileType == null) return Icons.insert_drive_file;
@@ -83,6 +84,9 @@ class _AllAroundTallyChatPageState extends ConsumerState<AllAroundTallyChatPage>
   String _mentionQuery = '';
   int _mentionStartIndex = 0;
 
+  bool _isRecordingVoice = false;
+  bool _isTextEmpty = true;
+
   @override
   void initState() {
     super.initState();
@@ -91,6 +95,10 @@ class _AllAroundTallyChatPageState extends ConsumerState<AllAroundTallyChatPage>
 
     _ctrl.addListener(() {
       final text = _ctrl.text;
+      final isEmpty = text.trim().isEmpty;
+      if (isEmpty != _isTextEmpty) {
+        setState(() => _isTextEmpty = isEmpty);
+      }
       final selection = _ctrl.selection;
       
       if (!selection.isValid || selection.baseOffset == -1) return;
@@ -181,6 +189,27 @@ class _AllAroundTallyChatPageState extends ConsumerState<AllAroundTallyChatPage>
         if (mounted) _scrollToBottom();
       });
     }
+  }
+
+  Future<void> _sendVoiceNote(String localPath, int durationSeconds) async {
+    final currentUser = ref.read(authProvider);
+    if (currentUser == null) return;
+
+    final controller = ref.read(chatControllerProvider.notifier);
+    
+    await controller.sendVoiceMessage(
+      senderId: currentUser.id,
+      senderName: currentUser.fullName.isNotEmpty ? currentUser.fullName : currentUser.username,
+      senderRole: currentUser.role,
+      localAudioPath: localPath,
+      durationSeconds: durationSeconds,
+      channel: 'all-aroundtally',
+      replyToMessageId: _replyingTo,
+      replyToSenderName: _replyToName,
+      replyToContent: _replyToContent,
+    );
+    _scrollToBottom();
+    _cancelReply();
   }
 
   bool _isSameDay(DateTime d1, DateTime d2) {
@@ -624,8 +653,9 @@ class _AllAroundTallyChatPageState extends ConsumerState<AllAroundTallyChatPage>
                       Builder(
                         builder: (context) {
                           _markVisibleMessagesRead(messages);
-                          return ListView.builder(
-                            controller: _scrollCtrl,
+                          return SelectionArea(
+                            child: ListView.builder(
+                              controller: _scrollCtrl,
                             padding: const EdgeInsets.all(16),
                         reverse: true,
                         itemCount: messages.length,
@@ -668,6 +698,7 @@ class _AllAroundTallyChatPageState extends ConsumerState<AllAroundTallyChatPage>
                             ],
                           );
                         },
+                      ),
                       );
                     },
                   ),
@@ -982,16 +1013,26 @@ class _AllAroundTallyChatPageState extends ConsumerState<AllAroundTallyChatPage>
                     ),
                     const SizedBox(width: 8),
                     // Send button
-                    CircleAvatar(
-                      backgroundColor: AppColors.primary,
-                      radius: 20,
-                      child: IconButton(
-                        icon: const Icon(LucideIcons.send, color: Colors.white, size: 18),
-                        onPressed: _sendMessage,
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(),
+                    if (_isRecordingVoice || (_isTextEmpty && _selectedFile == null && !_isUploading))
+                      ChatVoiceRecorder(
+                        key: const ValueKey('all_aroundtally_chat_voice_recorder'),
+                        disabled: _selectedFile != null || _isUploading,
+                        onRecordComplete: (path, duration) => _sendVoiceNote(path, duration),
+                        onRecordingStateChanged: (isRecording) {
+                          setState(() => _isRecordingVoice = isRecording);
+                        },
+                      )
+                    else
+                      CircleAvatar(
+                        backgroundColor: AppColors.primary,
+                        radius: 20,
+                        child: IconButton(
+                          icon: const Icon(LucideIcons.send, color: Colors.white, size: 18),
+                          onPressed: _sendMessage,
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                        ),
                       ),
-                    ),
                   ],
                 ),
               ),

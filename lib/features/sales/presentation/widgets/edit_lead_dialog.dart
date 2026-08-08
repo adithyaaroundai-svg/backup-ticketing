@@ -47,7 +47,8 @@ class _EditLeadDialogState extends ConsumerState<EditLeadDialog> {
   ];
 
   final List<String> _statusOptions = [
-    'New',
+    'New Lead',
+    'Contacted',
     'Qualified',
     'Proposal',
     'Negotiation',
@@ -79,8 +80,8 @@ class _EditLeadDialogState extends ConsumerState<EditLeadDialog> {
 
     // Normalize initial status for UI dropdown
     final rawStatus = widget.lead.status;
-    if (rawStatus == 'pending' || rawStatus == 'New') {
-      _selectedStatus = 'New';
+    if (rawStatus == 'pending' || rawStatus == 'New' || rawStatus == 'New Lead') {
+      _selectedStatus = 'New Lead';
     } else if (rawStatus == 'win' || rawStatus == 'Won') {
       _selectedStatus = 'Won';
     } else if (rawStatus == 'loss' || rawStatus == 'Lost') {
@@ -88,7 +89,7 @@ class _EditLeadDialogState extends ConsumerState<EditLeadDialog> {
     } else if (_statusOptions.contains(rawStatus)) {
       _selectedStatus = rawStatus;
     } else {
-      _selectedStatus = 'New';
+      _selectedStatus = 'New Lead';
     }
 
     final rawSource = widget.lead.source;
@@ -208,7 +209,7 @@ class _EditLeadDialogState extends ConsumerState<EditLeadDialog> {
       'description': _descriptionController.text.trim().isNotEmpty
           ? _descriptionController.text.trim()
           : null,
-      'status': _selectedStatus ?? 'New',
+      'status': _selectedStatus ?? 'New Lead',
       'owner': _selectedOwner,
       'source': sourceValue,
       'product': _selectedProduct,

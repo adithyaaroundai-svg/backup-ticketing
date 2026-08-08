@@ -76,7 +76,9 @@ class _VoiceNoteWidgetState extends State<VoiceNoteWidget> {
         await _audioPlayer.pause();
       } else {
         setState(() => _isLoading = true);
-        await _audioPlayer.play(UrlSource(widget.voiceUrl));
+        final isHttp = widget.voiceUrl.startsWith('http://') || widget.voiceUrl.startsWith('https://') || widget.voiceUrl.startsWith('blob:');
+        final source = isHttp ? UrlSource(widget.voiceUrl) : DeviceFileSource(widget.voiceUrl);
+        await _audioPlayer.play(source);
       }
     } catch (e) {
       if (!mounted) return;
@@ -89,89 +91,98 @@ class _VoiceNoteWidgetState extends State<VoiceNoteWidget> {
 
   @override
   Widget build(BuildContext context) {
+    final effectiveDuration = _totalDuration > Duration.zero
+        ? _totalDuration
+        : (widget.duration > 0 ? Duration(seconds: widget.duration) : Duration.zero);
+    final durationLabel = _formatDuration(effectiveDuration);
+    final positionLabel = _formatDuration(_position);
+    final displayLabel = _isPlaying || _position > Duration.zero
+        ? '$positionLabel / $durationLabel'
+        : durationLabel;
+
+    final colorScheme = Theme.of(context).colorScheme;
+    final primaryTextColor = widget.isMe ? Colors.white : colorScheme.onSurface;
+    final buttonBg = widget.isMe ? Colors.white : colorScheme.primary;
+    final iconColor = widget.isMe ? colorScheme.primary : Colors.white;
+    final totalMs = effectiveDuration.inMilliseconds;
+    final val = totalMs > 0 ? (_position.inMilliseconds / totalMs).clamp(0.0, 1.0) : 0.0;
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      constraints: const BoxConstraints(maxWidth: 240, minWidth: 180),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
         color: widget.isMe
-            ? Theme.of(context).colorScheme.primaryContainer
-            : Theme.of(context).colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(20),
+            ? colorScheme.primary.withValues(alpha: 0.95)
+            : colorScheme.surfaceContainerHighest.withValues(alpha: 0.8),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: widget.isMe ? Colors.white24 : colorScheme.outlineVariant.withValues(alpha: 0.5),
+          width: 1,
+        ),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              IconButton(
-                icon: _isLoading
-                    ? SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: widget.isMe
-                              ? Theme.of(context).colorScheme.onPrimaryContainer
-                              : Theme.of(context).colorScheme.primary,
-                        ),
-                      )
-                    : Icon(
-                        _isPlaying ? Icons.pause : Icons.play_arrow,
-                        color: widget.isMe
-                            ? Theme.of(context).colorScheme.onPrimaryContainer
-                            : Theme.of(context).colorScheme.primary,
+          Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              color: buttonBg,
+              shape: BoxShape.circle,
+            ),
+            child: IconButton(
+              padding: EdgeInsets.zero,
+              icon: _isLoading
+                  ? SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: iconColor,
                       ),
-                onPressed: _isLoading ? null : _togglePlayPause,
-              ),
-              const SizedBox(width: 8),
-              Text(
-                _formatDuration(_position),
-                style: TextStyle(
-                  color: widget.isMe
-                      ? Theme.of(context).colorScheme.onPrimaryContainer
-                      : Theme.of(context).colorScheme.onSurface,
-                ),
-              ),
-              const SizedBox(width: 4),
-              Text(
-                '/ ${_formatDuration(_totalDuration)}',
-                style: TextStyle(
-                  color:
-                      (widget.isMe
-                              ? Theme.of(context).colorScheme.onPrimaryContainer
-                              : Theme.of(context).colorScheme.onSurface)
-                          .withValues(alpha: 0.7),
-                ),
-              ),
-            ],
+                    )
+                  : Icon(
+                      _isPlaying ? Icons.pause : Icons.play_arrow,
+                      color: iconColor,
+                      size: 18,
+                    ),
+              onPressed: _isLoading ? null : _togglePlayPause,
+            ),
           ),
-          if (_totalDuration > Duration.zero)
-            SliderTheme(
+          const SizedBox(width: 8),
+          Expanded(
+            child: SliderTheme(
               data: SliderTheme.of(context).copyWith(
-                trackHeight: 2,
-                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+                trackHeight: 3,
+                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 5),
                 overlayShape: const RoundSliderOverlayShape(overlayRadius: 10),
+                trackShape: const RectangularSliderTrackShape(),
               ),
               child: Slider(
-                value: _position.inMilliseconds
-                    .clamp(0, _totalDuration.inMilliseconds)
-                    .toDouble(),
-                max: _totalDuration.inMilliseconds.toDouble(),
-                onChanged: (value) async {
-                  await _audioPlayer.seek(
-                    Duration(milliseconds: value.round()),
-                  );
+                value: val,
+                onChanged: (v) async {
+                  if (totalMs > 0) {
+                    await _audioPlayer.seek(
+                      Duration(milliseconds: (v * totalMs).round()),
+                    );
+                  }
                 },
-                activeColor: widget.isMe
-                    ? Theme.of(context).colorScheme.onPrimaryContainer
-                    : Theme.of(context).colorScheme.primary,
-                inactiveColor:
-                    (widget.isMe
-                            ? Theme.of(context).colorScheme.onPrimaryContainer
-                            : Theme.of(context).colorScheme.onSurface)
-                        .withValues(alpha: 0.7),
+                activeColor: widget.isMe ? Colors.white : colorScheme.primary,
+                inactiveColor: widget.isMe
+                    ? Colors.white.withValues(alpha: 0.3)
+                    : colorScheme.primary.withValues(alpha: 0.2),
               ),
             ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            displayLabel,
+            style: TextStyle(
+              color: primaryTextColor.withValues(alpha: 0.9),
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
         ],
       ),
     );

@@ -3,11 +3,12 @@ import 'package:dartz/dartz.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../core/error/failures.dart';
 import '../../../../core/logging/app_logger.dart';
+import '../../../../core/services/mention_service.dart';
 import '../../domain/entities/ticket.dart';
 import '../../domain/entities/comment.dart';
 import '../../domain/repositories/ticket_repository.dart';
 
-const _ticketBaseColumns = 'id, customer_id, client_ticket_uuid, title, description, contact_phone, screenshot_url, category, status, priority, created_by, assigned_to, created_at, updated_at, sla_due, bill_amount, assignment_history, payment_collected, has_amc, completed_at';
+const _ticketBaseColumns = 'id, customer_id, client_ticket_uuid, title, description, contact_phone, screenshot_url, category, status, priority, created_by, assigned_to, created_at, updated_at, sla_due, bill_amount, bill_description, assignment_history, payment_collected, has_amc, completed_at';
 const _ticketFullColumns = _ticketBaseColumns;
 const _ticketAlertColumns = 'id, customer_id, status, assigned_to, created_at, updated_at, assignment_history';
 
@@ -281,6 +282,7 @@ class SupabaseTicketRepository implements TicketRepository {
 
       // Remove UI-only fields that might not be in the database yet
       data.remove('bill_amount');
+      data.remove('bill_description');
       data.remove('billing_procedure');
       data.remove('payment_collected');
       data.remove('has_amc');
@@ -419,6 +421,16 @@ class SupabaseTicketRepository implements TicketRepository {
   @override
   Future<Either<Failure, Unit>> updateTicket(Ticket ticket) async {
     try {
+      String? oldBillDesc;
+      try {
+        final res = await _supabase
+            .from('tickets')
+            .select('bill_description')
+            .eq('id', ticket.ticketId)
+            .maybeSingle();
+        oldBillDesc = res?['bill_description'] as String?;
+      } catch (_) {}
+
       final data = {
         'title': ticket.title,
         'description': ticket.description,
@@ -428,6 +440,7 @@ class SupabaseTicketRepository implements TicketRepository {
         'contact_phone': ticket.contactPhone,
         'payment_collected': ticket.paymentCollected,
         'bill_amount': ticket.billAmount,
+        'bill_description': ticket.billDescription,
         'has_amc': ticket.hasAmc,
         'updated_at': DateTime.now().toIso8601String(),
       };
@@ -440,6 +453,18 @@ class SupabaseTicketRepository implements TicketRepository {
       }
 
       await _supabase.from('tickets').update(data).eq('id', ticket.ticketId);
+
+      if (ticket.billDescription != null && ticket.billDescription != oldBillDesc) {
+        await MentionService.processMentions(
+          oldText: oldBillDesc,
+          newText: ticket.billDescription,
+          entity: 'ticket',
+          entityId: ticket.ticketId,
+          title: 'Mentioned in Bill Description',
+          subtitle: 'You were mentioned in ticket #${ticket.clientTicketUuid ?? ticket.ticketId}',
+          highlight: 'bill_description',
+        );
+      }
 
       appLogger.info(
         'Ticket updated successfully',

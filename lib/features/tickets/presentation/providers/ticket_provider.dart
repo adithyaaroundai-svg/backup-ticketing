@@ -217,6 +217,7 @@ Future<String> debouncedTicketSearchQuery(Ref ref) async {
 class PaginatedTickets extends _$PaginatedTickets {
   StreamSubscription? _eventSub;
   bool _hasMore = true;
+  bool _isLoadingMore = false;
   bool get hasMore => _hasMore;
   
   @override
@@ -295,34 +296,43 @@ class PaginatedTickets extends _$PaginatedTickets {
   }
 
   Future<void> loadMore() async {
-    if (!_hasMore) return;
+    if (!_hasMore || _isLoadingMore) return;
     final currentList = state.value ?? [];
     if (currentList.isEmpty) return;
 
-    final oldestTicket = currentList.last; // Since it's sorted newest first
-    final repository = ref.read(ticketRepositoryProvider);
-    final statusFilter = ref.read(ticketFilterProvider);
-    final priorityFilter = ref.read(ticketPriorityFilterProvider);
-    final assigneeFilter = ref.read(ticketAssigneeFilterProvider);
-    final searchQuery = ref.read(ticketSearchQueryProvider);
-    final currentUser = ref.read(authProvider);
+    _isLoadingMore = true;
+    try {
+      final oldestTicket = currentList.last; // Since it's sorted newest first
+      final repository = ref.read(ticketRepositoryProvider);
+      final statusFilter = ref.read(ticketFilterProvider);
+      final priorityFilter = ref.read(ticketPriorityFilterProvider);
+      final assigneeFilter = ref.read(ticketAssigneeFilterProvider);
+      final searchQuery = ref.read(ticketSearchQueryProvider);
+      final currentUser = ref.read(authProvider);
 
-    final limit = 50;
-    final olderTickets = await repository.getPaginatedTickets(
-      statusFilter: statusFilter,
-      priorityFilter: priorityFilter,
-      assigneeFilter: assigneeFilter,
-      searchQuery: searchQuery,
-      currentUserId: currentUser?.id,
-      before: oldestTicket.createdAt,
-      limit: limit,
-    );
+      final limit = 50;
+      final olderTickets = await repository.getPaginatedTickets(
+        statusFilter: statusFilter,
+        priorityFilter: priorityFilter,
+        assigneeFilter: assigneeFilter,
+        searchQuery: searchQuery,
+        currentUserId: currentUser?.id,
+        before: oldestTicket.createdAt,
+        limit: limit,
+      );
 
-    if (olderTickets.length < limit) {
-      _hasMore = false;
+      if (olderTickets.length < limit) {
+        _hasMore = false;
+      }
+      
+      // Prevent duplicating tickets just in case
+      final existingIds = currentList.map((t) => t.ticketId).toSet();
+      final uniqueOlder = olderTickets.where((t) => !existingIds.contains(t.ticketId)).toList();
+      
+      state = AsyncData([...currentList, ...uniqueOlder]);
+    } finally {
+      _isLoadingMore = false;
     }
-    
-    state = AsyncData([...currentList, ...olderTickets]);
   }
 }
 
@@ -352,6 +362,10 @@ class TicketAssigneeFilter extends _$TicketAssigneeFilter {
 
   void setMe() {
     state = 'me';
+  }
+
+  void setCustom(String agentId) {
+    state = 'agent:$agentId';
   }
 
   void setAgent(String agentId) {
@@ -534,7 +548,14 @@ Stream<Map<String, int>> ticketStats(Ref ref) {
 @riverpod
 Future<List<Map<String, dynamic>>> agentsList(Ref ref) async {
   final repository = ref.watch(ticketRepositoryProvider);
-  return repository.getAgents();
+  final agents = await repository.getAgents();
+  
+  final hiddenNames = ['Vishnu', 'Abhirami', 'Rainu'];
+  
+  return agents.where((agent) {
+    final name = (agent['full_name'] ?? agent['username'] ?? '').toString();
+    return !hiddenNames.any((hidden) => name.toLowerCase().contains(hidden.toLowerCase()));
+  }).toList();
 }
 
 // Get assigned agent for a ticket
@@ -895,7 +916,7 @@ final billsTicketsProvider = fr.StreamProvider<List<Ticket>>((ref) async* {
   
   final rows = await supabase
       .from('tickets')
-      .select('id, customer_id, client_ticket_uuid, title, description, contact_phone, screenshot_url, category, status, priority, created_by, assigned_to, created_at, updated_at, sla_due, bill_amount, payment_collected, has_amc, completed_at')
+      .select('id, customer_id, client_ticket_uuid, title, description, contact_phone, screenshot_url, category, status, priority, created_by, assigned_to, created_at, updated_at, sla_due, bill_amount, bill_description, payment_collected, has_amc, completed_at')
       .or('status.eq.BillRaised,status.eq.BillProcessed,and(status.eq.Closed,bill_amount.gt.0)')
       .order('updated_at', ascending: false)
       .limit(200);

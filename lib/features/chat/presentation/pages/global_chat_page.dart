@@ -31,6 +31,8 @@ import '../../data/repositories/chat_repository.dart';
 import '../../../tickets/domain/entities/ticket.dart';
 
 import '../../../tickets/presentation/providers/ticket_provider.dart';
+import '../widgets/chat_attachment_renderer.dart';
+import '../widgets/chat_voice_recorder.dart';
 
 import '../../../dashboard/presentation/widgets/create_ticket_dialog.dart';
 
@@ -109,6 +111,8 @@ class _GlobalChatPageState extends ConsumerState<GlobalChatPage>
   ChatMessage? _replyingToMessage;
   PlatformFile? _selectedFile;
   bool _isUploadingFile = false;
+  bool _isRecordingVoice = false;
+  bool _isTextEmpty = true;
 
   void _insertFormatting(String prefix, String suffix) {
     final text = _messageCtrl.text;
@@ -309,6 +313,12 @@ class _GlobalChatPageState extends ConsumerState<GlobalChatPage>
 
   void _onTextChanged() {
     final text = _messageCtrl.text;
+    final currentlyEmpty = text.trim().isEmpty;
+    if (_isTextEmpty != currentlyEmpty) {
+      setState(() {
+        _isTextEmpty = currentlyEmpty;
+      });
+    }
 
     final selection = _messageCtrl.selection;
 
@@ -439,7 +449,7 @@ class _GlobalChatPageState extends ConsumerState<GlobalChatPage>
     for (final a in agents) {
       final String fullName = a['full_name'] ?? a['username'] ?? '';
 
-      if (fullName.isNotEmpty && content.contains('@$fullName')) {
+      if (fullName.isNotEmpty && content.contains('@$fullName') && a['id'] != agent.id) {
         try {
           await ref
               .read(chatRepositoryProvider)
@@ -472,6 +482,29 @@ class _GlobalChatPageState extends ConsumerState<GlobalChatPage>
     setState(() {
       _showMentions = false;
     });
+  }
+
+  void _sendVoiceNote(String path, int duration) {
+    final agent = ref.read(authProvider);
+    if (agent == null) return;
+
+    ref.read(chatControllerProvider.notifier).sendVoiceMessage(
+          senderId: agent.id,
+          senderName: agent.fullName,
+          senderRole: agent.role,
+          localAudioPath: path,
+          durationSeconds: duration,
+          senderAvatarUrl: agent.avatarUrl,
+          replyToMessageId: _replyingToMessage?.id,
+          replyToSenderName: _replyingToMessage?.senderName,
+          replyToContent: _replyingToMessage?.content,
+        );
+
+    if (_replyingToMessage != null) {
+      setState(() {
+        _replyingToMessage = null;
+      });
+    }
   }
 
   bool _parseAndCreateReminder(String content, Agent agent) {
@@ -832,8 +865,9 @@ class _GlobalChatPageState extends ConsumerState<GlobalChatPage>
 
                         final hasMore = ref.watch(chatStreamProvider('support-chat').notifier).hasMore;
                         
-                        return ListView.builder(
-                          controller: _scrollCtrl,
+                        return SelectionArea(
+                          child: ListView.builder(
+                            controller: _scrollCtrl,
                           padding: EdgeInsets.symmetric(
                             horizontal: 16,
                             vertical: 20,
@@ -919,6 +953,7 @@ class _GlobalChatPageState extends ConsumerState<GlobalChatPage>
                               ],
                             );
                           },
+                        ),
                         );
                       },
                       loading: () => Center(child: CircularProgressIndicator()),
@@ -1337,13 +1372,14 @@ class _GlobalChatPageState extends ConsumerState<GlobalChatPage>
               ),
             Row(
               children: [
-                IconButton(
-                  icon: Icon(
-                    Icons.add,
-                    color: context.isDarkMode
-                        ? Colors.white70
-                        : context.adaptiveSlate500,
-                  ),
+                if (!_isRecordingVoice) ...[
+                  IconButton(
+                    icon: Icon(
+                      Icons.add,
+                      color: context.isDarkMode
+                          ? Colors.white70
+                          : context.adaptiveSlate500,
+                    ),
                   onPressed: _pickFile,
                   padding: EdgeInsets.all(12),
                 ),
@@ -1515,31 +1551,34 @@ class _GlobalChatPageState extends ConsumerState<GlobalChatPage>
                   ),
                 ),
 
-                SizedBox(width: 8),
-
+                SizedBox(width: 4),
+                ],
+                if (_isRecordingVoice || (_isTextEmpty && _selectedFile == null && !_isUploadingFile))
+                  ChatVoiceRecorder(
+                    key: const ValueKey('global_chat_voice_recorder'),
+                    disabled: _selectedFile != null || _isUploadingFile,
+                    onRecordComplete: (path, duration) => _sendVoiceNote(path, duration),
+                    onRecordingStateChanged: (isRecording) {
+                      setState(() => _isRecordingVoice = isRecording);
+                    },
+                  )
+                else ...[
                 Container(
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
                       colors: [AppColors.primary, AppColors.primaryDark],
-
                       begin: Alignment.topLeft,
-
                       end: Alignment.bottomRight,
                     ),
-
                     shape: BoxShape.circle,
-
                     boxShadow: [
                       BoxShadow(
                         color: AppColors.primary.withValues(alpha: 0.3),
-
                         blurRadius: 8,
-
                         offset: Offset(0, 2),
                       ),
                     ],
                   ),
-
                   child: _isUploadingFile
                       ? SizedBox(
                           width: 36,
@@ -1571,8 +1610,9 @@ class _GlobalChatPageState extends ConsumerState<GlobalChatPage>
                           ),
                         ),
                 ),
-              ],
-            ),
+                ],
+            ],
+          ),
           ],
         ),
       ),
@@ -2727,110 +2767,10 @@ class _ChatBubble extends ConsumerWidget {
                       _buildSlackStyleMessageContent(context, ref),
 
                       // File attachment display
-                      if (message.fileUrl != null &&
-                          message.fileUrl!.isNotEmpty)
-                        if (message.fileType?.toLowerCase() == 'gif')
-                          // Render GIF as animated inline image
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(8),
-                            child: Image.network(
-                              message.fileUrl!,
-                              width: 200,
-                              fit: BoxFit.cover,
-                              loadingBuilder: (_, child, progress) =>
-                                  progress == null
-                                  ? child
-                                  : SizedBox(
-                                      width: 200,
-                                      height: 120,
-                                      child: Center(
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                          value:
-                                              progress.expectedTotalBytes !=
-                                                  null
-                                              ? progress.cumulativeBytesLoaded /
-                                                    progress.expectedTotalBytes!
-                                              : null,
-                                        ),
-                                      ),
-                                    ),
-                              errorBuilder: (_, __, ___) => Container(
-                                width: 200,
-                                height: 80,
-                                decoration: BoxDecoration(
-                                  color: context.isDarkMode
-                                      ? context.adaptiveSlate800
-                                      : Colors.white,
-                                  borderRadius: BorderRadius.circular(6),
-                                  border: Border.all(
-                                    color: context.isDarkMode
-                                        ? context.adaptiveSlate700
-                                        : Colors.grey.shade300,
-                                  ),
-                                ),
-                                child: Center(
-                                  child: Icon(
-                                    Icons.gif,
-                                    size: 32,
-                                    color: context.adaptiveSlate400,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          )
-                        else
-                          GestureDetector(
-                            onTap: () => _downloadFile(
-                              message.fileUrl!,
-                              message.fileName ?? 'file',
-                            ),
-                            child: Container(
-                              margin: EdgeInsets.only(top: 4, bottom: 8),
-                              padding: EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                color: context.isDarkMode
-                                    ? context.adaptiveSlate800
-                                    : Colors.white,
-                                borderRadius: BorderRadius.circular(6),
-                                border: Border.all(
-                                  color: context.isDarkMode
-                                      ? context.adaptiveSlate700
-                                      : Colors.grey.shade300,
-                                ),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    _getFileIcon(message.fileType),
-                                    size: 16,
-                                    color: context.adaptiveSlate400,
-                                  ),
-                                  SizedBox(width: 6),
-                                  Flexible(
-                                    child: Text(
-                                      message.fileName ?? 'File',
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        color: context.isDarkMode
-                                            ? Colors.white
-                                            : Colors.black87,
-                                      ),
-                                    ),
-                                  ),
-                                  SizedBox(width: 6),
-                                  Icon(
-                                    LucideIcons.download,
-                                    size: 14,
-                                    color: context.adaptiveSlate400,
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
+                      ChatAttachmentRenderer(
+                        message: message,
+                        isMe: isMe,
+                      ),
 
                       SizedBox(height: 6),
 
@@ -2850,6 +2790,7 @@ class _ChatBubble extends ConsumerWidget {
   }
 
   Widget _buildSlackStyleMessageContent(BuildContext context, WidgetRef ref) {
+    if (message.content.isEmpty) return const SizedBox.shrink();
     final isTicketMessage =
         message.content.startsWith('Company: ') &&
         message.content.contains('\nIssue: ');

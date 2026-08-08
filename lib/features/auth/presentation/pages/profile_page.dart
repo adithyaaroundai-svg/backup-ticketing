@@ -135,10 +135,6 @@ class ProfilePage extends ConsumerWidget {
                     _TeamsUserIdEditor(currentTeamsUserId: user?.teamsUserId),
                     const Divider(height: 32),
                     _ZohoMailIdEditor(currentZohoMailId: user?.zohoMailId),
-                    const Divider(height: 32),
-                    _ColorSelector(currentHex: user?.displayColor),
-                    const Divider(height: 32),
-                    const _ThemeSelector(),
                   ],
                 ),
               ),
@@ -313,51 +309,7 @@ class ProfilePage extends ConsumerWidget {
                 _BackupCard(),
               ],
               const SizedBox(height: 24),
-              Text(
-                'Display Settings',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: context.adaptiveSlate900,
-                ),
-              ),
-              const SizedBox(height: 16),
-              AppCard(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Ticket Table Font Size',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: context.adaptiveSlate800,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Text('A', style: TextStyle(fontSize: 12, color: context.adaptiveSlate500)),
-                        Expanded(
-                          child: Slider(
-                            value: ref.watch(tableFontSizeProvider),
-                            min: 0.8,
-                            max: 1.5,
-                            divisions: 7,
-                            label: '${(ref.watch(tableFontSizeProvider) * 100).toInt()}%',
-                            activeColor: context.isDarkMode ? Colors.white : AppColors.primary,
-                            inactiveColor: context.isDarkMode ? Colors.white.withValues(alpha: 0.2) : context.adaptiveSlate200,
-                            onChanged: (val) {
-                               ref.read(tableFontSizeProvider.notifier).setScale(val);
-                            },
-                          ),
-                        ),
-                        Text('A', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: context.adaptiveSlate500)),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
+              _DisplaySettingsSection(user: user),
               const SizedBox(height: 24),
               Text(
                 'Security',
@@ -1715,6 +1667,94 @@ class _ThemeSelector extends ConsumerWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _DisplaySettingsSection extends ConsumerStatefulWidget {
+  final dynamic user;
+  const _DisplaySettingsSection({required this.user});
+  
+  @override
+  ConsumerState<_DisplaySettingsSection> createState() => _DisplaySettingsSectionState();
+}
+
+class _DisplaySettingsSectionState extends ConsumerState<_DisplaySettingsSection> {
+  bool _expanded = false;
+  
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        InkWell(
+          onTap: () => setState(() => _expanded = !_expanded),
+          borderRadius: BorderRadius.circular(8),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8.0),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Display Settings',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: context.adaptiveSlate900,
+                  ),
+                ),
+                Icon(
+                  _expanded ? LucideIcons.chevronUp : LucideIcons.chevronDown,
+                  color: context.adaptiveSlate500,
+                ),
+              ],
+            ),
+          ),
+        ),
+        if (_expanded) ...[
+          const SizedBox(height: 16),
+          AppCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _ColorSelector(currentHex: widget.user?.displayColor),
+                const Divider(height: 32),
+                const _ThemeSelector(),
+                const Divider(height: 32),
+                Text(
+                  'Ticket Table Font Size',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: context.adaptiveSlate800,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Text('A', style: TextStyle(fontSize: 12, color: context.adaptiveSlate500)),
+                    Expanded(
+                      child: Slider(
+                        value: ref.watch(tableFontSizeProvider),
+                        min: 0.8,
+                        max: 1.5,
+                        divisions: 7,
+                        label: '${(ref.watch(tableFontSizeProvider) * 100).toInt()}%',
+                        activeColor: context.isDarkMode ? Colors.white : AppColors.primary,
+                        inactiveColor: context.isDarkMode ? Colors.white.withValues(alpha: 0.2) : context.adaptiveSlate200,
+                        onChanged: (val) {
+                           ref.read(tableFontSizeProvider.notifier).setScale(val);
+                        },
+                      ),
+                    ),
+                    Text('A', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: context.adaptiveSlate500)),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ],
     );
   }
 }

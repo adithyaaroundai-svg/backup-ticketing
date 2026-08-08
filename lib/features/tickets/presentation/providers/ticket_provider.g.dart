@@ -220,7 +220,7 @@ final class PaginatedTicketsProvider
   PaginatedTickets create() => PaginatedTickets();
 }
 
-String _$paginatedTicketsHash() => r'61c31ee8ff0d3caf0170bf6ed5a52f73e56ac9b8';
+String _$paginatedTicketsHash() => r'ebd62e9b44ccf5abd784702ace1ea3f6036af5df';
 
 abstract class _$PaginatedTickets extends $AsyncNotifier<List<Ticket>> {
   FutureOr<List<Ticket>> build();
@@ -842,7 +842,7 @@ final class TicketStatusUpdaterProvider
 }
 
 String _$ticketStatusUpdaterHash() =>
-    r'db5e9775a3ae0e5a618f623ff1a9c096dad3baf5';
+    r'9bc064da42bbb57b0b444992381a9e719a08231c';
 
 abstract class _$TicketStatusUpdater extends $Notifier<bool> {
   bool build();
@@ -895,7 +895,7 @@ final class TicketAssignerProvider
   }
 }
 
-String _$ticketAssignerHash() => r'5f2d92f2145cb727ebc2417898002e5b0a2d3e9d';
+String _$ticketAssignerHash() => r'0a5fd230e9532a15d288eea98d227ae82d4ce040';
 
 abstract class _$TicketAssigner extends $Notifier<bool> {
   bool build();
@@ -948,7 +948,7 @@ final class TicketCreatorProvider
   }
 }
 
-String _$ticketCreatorHash() => r'31d801c9c0bfd519e8d2625c42bd19e2d3bcdd27';
+String _$ticketCreatorHash() => r'fbf3280378d014ffc054d2acd8bc6d2ccb43fe2a';
 
 abstract class _$TicketCreator extends $Notifier<bool> {
   bool build();
@@ -1001,7 +1001,7 @@ final class TicketUpdaterProvider
   }
 }
 
-String _$ticketUpdaterHash() => r'18e9e332880d07dc4bfdc6a98503f7d5469e8625';
+String _$ticketUpdaterHash() => r'9b0480e1e191cf5f4d3f92d5918702558528bdd2';
 
 abstract class _$TicketUpdater extends $Notifier<bool> {
   bool build();

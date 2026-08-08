@@ -13,7 +13,44 @@ import '../../../tickets/presentation/providers/ticket_provider.dart';
 import '../../data/local/chat_cache_service.dart';
 import '../../data/local/chat_cache_constants.dart';
 
+import 'dart:io';
+import 'package:http/http.dart' as http;
 part 'chat_provider.g.dart';
+
+enum AttachmentUploadStatus { idle, uploading, sent, failed }
+
+class AttachmentUploadState {
+  final AttachmentUploadStatus status;
+  final String? localPath;
+  final String? error;
+  final VoidCallback? onRetry;
+
+  const AttachmentUploadState({
+    required this.status,
+    this.localPath,
+    this.error,
+    this.onRetry,
+  });
+}
+
+class AttachmentUploadStateNotifier extends Notifier<Map<String, AttachmentUploadState>> {
+  @override
+  Map<String, AttachmentUploadState> build() => {};
+
+  void setUploadState(String messageId, AttachmentUploadState uploadState) {
+    state = {...state, messageId: uploadState};
+  }
+
+  void removeUploadState(String messageId) {
+    final newMap = Map<String, AttachmentUploadState>.from(state);
+    newMap.remove(messageId);
+    state = newMap;
+  }
+}
+
+final attachmentUploadStateProvider = NotifierProvider<AttachmentUploadStateNotifier, Map<String, AttachmentUploadState>>(() {
+  return AttachmentUploadStateNotifier();
+});
 
 final _chatCache = <String, List<ChatMessage>>{};
 final _chatHasMoreCache = <String, bool>{};
@@ -346,6 +383,7 @@ class DmStream extends _$DmStream {
     if (!currentList.any((m) => m.id == message.id)) {
       _updateState([...currentList, message]);
     }
+    ref.read(dmConversationsProvider.notifier).onOptimisticMessageSent(message);
   }
 
   void optimisticDelete(String messageId) {
@@ -1075,6 +1113,212 @@ class ChatController extends _$ChatController {
       emoji: emoji,
     );
   }
+
+  Future<String> sendVoiceMessage({
+    required String senderId,
+    required String senderName,
+    required String senderRole,
+    required String localAudioPath,
+    required int durationSeconds,
+    String? receiverId,
+    String? senderAvatarUrl,
+    String? replyToMessageId,
+    String? replyToSenderName,
+    String? replyToContent,
+    String channel = 'support-chat',
+  }) async {
+    final messageId = const Uuid().v4();
+    final fileName = 'voice_${durationSeconds}_${DateTime.now().millisecondsSinceEpoch}.webm';
+    
+    // Create optimistic message (using localPath as temporary fileUrl, no text content as requested)
+    final optimisticMessage = ChatMessage(
+      id: messageId,
+      senderId: senderId,
+      senderName: senderName,
+      senderRole: senderRole,
+      content: '',
+      receiverId: receiverId,
+      senderAvatarUrl: senderAvatarUrl,
+      createdAt: DateTime.now().toUtc(),
+      replyToMessageId: replyToMessageId,
+      replyToSenderName: replyToSenderName,
+      replyToContent: replyToContent,
+      fileUrl: localAudioPath,
+      fileName: fileName,
+      fileType: 'voice',
+      channel: channel,
+    );
+
+    // Inject optimistic message immediately
+    if (receiverId != null) {
+      ref.read(dmStreamProvider(receiverId).notifier).injectOptimisticMessage(optimisticMessage);
+    } else {
+      ref.read(chatStreamProvider(channel).notifier).injectOptimisticMessage(optimisticMessage);
+    }
+
+    // Set initial uploading status
+    ref.read(attachmentUploadStateProvider.notifier).setUploadState(
+      messageId,
+      AttachmentUploadState(
+        status: AttachmentUploadStatus.uploading,
+        localPath: localAudioPath,
+        onRetry: () => _retryVoiceUpload(
+          messageId: messageId,
+          optimisticMessage: optimisticMessage,
+          localAudioPath: localAudioPath,
+          fileName: fileName,
+          senderId: senderId,
+          senderName: senderName,
+          senderRole: senderRole,
+          receiverId: receiverId,
+          senderAvatarUrl: senderAvatarUrl,
+          replyToMessageId: replyToMessageId,
+          replyToSenderName: replyToSenderName,
+          replyToContent: replyToContent,
+          channel: channel,
+        ),
+      ),
+    );
+
+    _performVoiceUpload(
+      messageId: messageId,
+      localAudioPath: localAudioPath,
+      fileName: fileName,
+      senderId: senderId,
+      senderName: senderName,
+      senderRole: senderRole,
+      receiverId: receiverId,
+      senderAvatarUrl: senderAvatarUrl,
+      replyToMessageId: replyToMessageId,
+      replyToSenderName: replyToSenderName,
+      replyToContent: replyToContent,
+      channel: channel,
+      optimisticMessage: optimisticMessage,
+    );
+
+    return messageId;
+  }
+
+  Future<void> _performVoiceUpload({
+    required String messageId,
+    required String localAudioPath,
+    required String fileName,
+    required String senderId,
+    required String senderName,
+    required String senderRole,
+    required String? receiverId,
+    required String? senderAvatarUrl,
+    required String? replyToMessageId,
+    required String? replyToSenderName,
+    required String? replyToContent,
+    required String channel,
+    required ChatMessage optimisticMessage,
+  }) async {
+    try {
+      final supabase = Supabase.instance.client;
+      if (kIsWeb) {
+        final response = await http.get(Uri.parse(localAudioPath));
+        final bytes = response.bodyBytes;
+        await supabase.storage.from('chat_attachments').uploadBinary(
+          fileName,
+          bytes,
+          fileOptions: const FileOptions(contentType: 'audio/webm', upsert: true),
+        );
+      } else {
+        final file = File(localAudioPath);
+        await supabase.storage.from('chat_attachments').upload(
+          fileName,
+          file,
+          fileOptions: const FileOptions(contentType: 'audio/webm', upsert: true),
+        );
+      }
+
+      final publicUrl = supabase.storage.from('chat_attachments').getPublicUrl(fileName);
+      if (publicUrl.isEmpty) throw Exception('Empty URL returned from storage');
+
+      await ref.read(chatRepositoryProvider).sendMessage(
+        id: messageId,
+        senderId: senderId,
+        senderName: senderName,
+        senderRole: senderRole,
+        content: '',
+        receiverId: receiverId,
+        senderAvatarUrl: senderAvatarUrl,
+        replyToMessageId: replyToMessageId,
+        replyToSenderName: replyToSenderName,
+        replyToContent: replyToContent,
+        fileUrl: publicUrl,
+        fileName: fileName,
+        fileType: 'voice',
+        channel: channel,
+      );
+
+      ref.read(attachmentUploadStateProvider.notifier).removeUploadState(messageId);
+
+      if (!kIsWeb) {
+        try {
+          await File(localAudioPath).delete();
+        } catch (_) {}
+      }
+    } catch (e) {
+      debugPrint('Voice message background upload failed: $e');
+      final state = ref.read(attachmentUploadStateProvider)[messageId];
+      if (state != null) {
+        ref.read(attachmentUploadStateProvider.notifier).setUploadState(
+          messageId,
+          AttachmentUploadState(
+            status: AttachmentUploadStatus.failed,
+            localPath: localAudioPath,
+            error: e.toString(),
+            onRetry: state.onRetry,
+          ),
+        );
+      }
+    }
+  }
+
+  void _retryVoiceUpload({
+    required String messageId,
+    required ChatMessage optimisticMessage,
+    required String localAudioPath,
+    required String fileName,
+    required String senderId,
+    required String senderName,
+    required String senderRole,
+    required String? receiverId,
+    required String? senderAvatarUrl,
+    required String? replyToMessageId,
+    required String? replyToSenderName,
+    required String? replyToContent,
+    required String channel,
+  }) {
+    final state = ref.read(attachmentUploadStateProvider)[messageId];
+    if (state != null) {
+      ref.read(attachmentUploadStateProvider.notifier).setUploadState(
+        messageId,
+        AttachmentUploadState(
+          status: AttachmentUploadStatus.uploading,
+          localPath: localAudioPath,
+          onRetry: state.onRetry,
+        ),
+      );
+    }
+    _performVoiceUpload(
+      messageId: messageId,
+      localAudioPath: localAudioPath,
+      fileName: fileName,
+      senderId: senderId,
+      senderName: senderName,
+      senderRole: senderRole,
+      receiverId: receiverId,
+      senderAvatarUrl: senderAvatarUrl,
+      replyToMessageId: replyToMessageId,
+      replyToSenderName: replyToSenderName,
+      replyToContent: replyToContent,
+      channel: channel,
+      optimisticMessage: optimisticMessage,
+    );
+  }
 }
 
 // ── Message status model ─────────────────────────────────────────────────────
@@ -1163,41 +1407,462 @@ final starredMessagesStreamProvider = StreamProvider.family<List<ChatMessage>, S
   return repository.getStarredMessages(userId);
 });
 
-// ── DM conversations provider — real-time updates for left pane ──
-final dmConversationsProvider = StreamProvider<Map<String, Map<String, dynamic>>>((ref) {
-  ref.keepAlive();
-  final currentUser = ref.watch(authProvider);
-  if (currentUser == null) return Stream.value({});
+// ── DM Conversation State & Engine ──────────────────────────────────────────
+class DmConversationState {
+  final String partnerId;
+  final ChatMessage? lastMessage;
+  final int unreadCount;
+  final bool isOpen;
+  final DateTime? lastReadAt;
+  final Set<String> unreadMessageIds;
+  final int totalMessageCount;
 
-  final repository = ref.watch(chatRepositoryProvider);
-  return repository.getDmConversations(currentUser.id);
-});
+  const DmConversationState({
+    required this.partnerId,
+    this.lastMessage,
+    required this.unreadCount,
+    required this.isOpen,
+    this.lastReadAt,
+    required this.unreadMessageIds,
+    this.totalMessageCount = 0,
+  });
 
-// ── Read overrides: partners whose count should be immediately forced to 0 ────
-// Populated when user opens a DM — cleared when a new message arrives from that partner.
-final _dmReadOverrides = <String, DateTime>{};   // partnerId -> override timestamp
-
-void markDmAsReadLocally(String partnerId, DateTime timestamp) {
-  _dmReadOverrides[partnerId] = timestamp;
+  DmConversationState copyWith({
+    String? partnerId,
+    ChatMessage? lastMessage,
+    int? unreadCount,
+    bool? isOpen,
+    DateTime? lastReadAt,
+    Set<String>? unreadMessageIds,
+    int? totalMessageCount,
+  }) {
+    return DmConversationState(
+      partnerId: partnerId ?? this.partnerId,
+      lastMessage: lastMessage ?? this.lastMessage,
+      unreadCount: unreadCount ?? this.unreadCount,
+      isOpen: isOpen ?? this.isOpen,
+      lastReadAt: lastReadAt ?? this.lastReadAt,
+      unreadMessageIds: unreadMessageIds ?? this.unreadMessageIds,
+      totalMessageCount: totalMessageCount ?? this.totalMessageCount,
+    );
+  }
 }
 
-// ── DM unread count per partner ───────────────────────────────────────────────
-final dmUnreadCountProvider = Provider.family<int, String>((ref, partnerId) {
-  final conversationsAsync = ref.watch(dmConversationsProvider);
+class CurrentOpenConversationNotifier extends Notifier<String?> {
+  @override
+  String? build() => null;
+  @override
+  set state(String? value) => super.state = value;
+}
 
-  final conv = conversationsAsync.value?[partnerId];
-  if (conv == null) return 0;
-  
-  final realCount = (conv['unread_count'] as int?) ?? 0;
-  final lastMessageAt = conv['last_message_at'] as DateTime?;
+final currentOpenConversationProvider = NotifierProvider<CurrentOpenConversationNotifier, String?>(() {
+  return CurrentOpenConversationNotifier();
+});
 
-  final overrideTime = _dmReadOverrides[partnerId];
+class DmConversationEngine extends Notifier<Map<String, DmConversationState>> {
+  Ref get _ref => ref;
+  RealtimeChannel? _msgSub;
+  RealtimeChannel? _rcptSub;
+  bool _isBootstrapping = true;
+  final List<PostgresChangePayload> _realtimeBuffer = [];
+  final Set<String> _seenMessageIds = {};
 
-  if (overrideTime != null && lastMessageAt != null) {
-    if (!lastMessageAt.isAfter(overrideTime)) {
-      return 0;
+  int _stateVersion = 0;
+  int get stateVersion => _stateVersion;
+
+  void _commit(Map<String, DmConversationState> nextState, [int? expectedVersion]) {
+    if (expectedVersion != null && expectedVersion != _stateVersion) {
+      debugPrint('DmConversationEngine warning: stale write rejected (expected revision $expectedVersion, actual $_stateVersion).');
+      return;
+    }
+    _stateVersion++;
+    state = nextState;
+  }
+
+  @override
+  Map<String, DmConversationState> build() {
+    ref.onDispose(() {
+      _msgSub?.unsubscribe();
+      _rcptSub?.unsubscribe();
+    });
+    ref.listen<String?>(currentOpenConversationProvider, (previous, current) {
+      onOpenConversationChanged(previous, current);
+    });
+    Future.microtask(() => _init());
+    return const {};
+  }
+
+  Future<void> _init() async {
+    final authUser = _ref.read(authProvider);
+    if (authUser == null) {
+      _isBootstrapping = false;
+      return;
+    }
+    final currentUserId = authUser.id;
+    final repository = _ref.read(chatRepositoryProvider);
+    final cacheService = _ref.read(chatCacheServiceProvider);
+
+    // 1. Start realtime subscriptions immediately before or in parallel with bootstrap
+    _msgSub = repository.subscribeToDmEngineMessages(
+      currentUserId: currentUserId,
+      onEvent: (payload) => _handleMsgEvent(payload, currentUserId),
+    );
+    _rcptSub = repository.subscribeToDmEngineReadReceipts(
+      currentUserId: currentUserId,
+      onEvent: (payload) => _handleRcptEvent(payload, currentUserId),
+    );
+
+    // 2. Restore Hive cache for instant offline startup
+    try {
+      final cachedMessages = await cacheService.readAllDmMessages(currentUserId);
+      final cacheMap = <String, DmConversationState>{};
+      for (final msg in cachedMessages) {
+        final partnerId = msg.senderId == currentUserId ? msg.receiverId! : msg.senderId;
+        if (partnerId == currentUserId) continue;
+        _seenMessageIds.add(msg.id);
+
+        final existing = cacheMap[partnerId];
+        if (existing == null) {
+          final isOpen = _ref.read(currentOpenConversationProvider) == partnerId;
+          final isUnread = !isOpen && msg.senderId == partnerId && !ReadReceiptsTracker.getReadBy(msg.id).contains(currentUserId.trim().toLowerCase());
+          final unreadIds = isUnread ? {msg.id} : <String>{};
+          cacheMap[partnerId] = DmConversationState(
+            partnerId: partnerId,
+            lastMessage: msg,
+            unreadCount: unreadIds.length,
+            isOpen: isOpen,
+            unreadMessageIds: unreadIds,
+            totalMessageCount: 1,
+          );
+        } else {
+          final isNewer = msg.createdAt.isAfter(existing.lastMessage!.createdAt) || msg.createdAt.isAtSameMomentAs(existing.lastMessage!.createdAt);
+          final isOpen = _ref.read(currentOpenConversationProvider) == partnerId;
+          final isUnread = !isOpen && msg.senderId == partnerId && !ReadReceiptsTracker.getReadBy(msg.id).contains(currentUserId.trim().toLowerCase());
+          final unreadIds = Set<String>.from(existing.unreadMessageIds);
+          if (isUnread) unreadIds.add(msg.id);
+          cacheMap[partnerId] = existing.copyWith(
+            lastMessage: isNewer ? msg : existing.lastMessage,
+            unreadCount: unreadIds.length,
+            unreadMessageIds: unreadIds,
+            totalMessageCount: existing.totalMessageCount + 1,
+          );
+        }
+      }
+      if (cacheMap.isNotEmpty) {
+        _commit(cacheMap);
+      }
+    } catch (e) {
+      debugPrint('Error loading DM Hive cache into engine: $e');
+    }
+
+    // 3. Complete bootstrap / delta sync from Supabase
+    try {
+      final bootstrapData = await repository.fetchDmConversationsBootstrap(currentUserId);
+      final nextState = Map<String, DmConversationState>.from(state);
+
+      for (final entry in bootstrapData.entries) {
+        final partnerId = entry.key;
+        final data = entry.value;
+        final lastMsg = data['last_message'] as ChatMessage?;
+        final unreadIds = data['unread_message_ids'] as Set<String>? ?? {};
+        final totalCount = data['total_message_count'] as int? ?? 0;
+
+        if (lastMsg != null) _seenMessageIds.add(lastMsg.id);
+        for (final id in unreadIds) {
+          _seenMessageIds.add(id);
+        }
+
+        final isOpen = _ref.read(currentOpenConversationProvider) == partnerId;
+        final finalUnreadIds = isOpen ? <String>{} : unreadIds;
+        
+        final existing = nextState[partnerId];
+        if (existing == null) {
+          nextState[partnerId] = DmConversationState(
+            partnerId: partnerId,
+            lastMessage: lastMsg,
+            unreadCount: finalUnreadIds.length,
+            isOpen: isOpen,
+            unreadMessageIds: finalUnreadIds,
+            totalMessageCount: totalCount,
+          );
+        } else {
+          final isNewer = lastMsg != null && (existing.lastMessage == null || lastMsg.createdAt.isAfter(existing.lastMessage!.createdAt) || lastMsg.createdAt.isAtSameMomentAs(existing.lastMessage!.createdAt));
+          nextState[partnerId] = existing.copyWith(
+            lastMessage: isNewer ? lastMsg : existing.lastMessage,
+            unreadCount: finalUnreadIds.length,
+            unreadMessageIds: finalUnreadIds,
+            totalMessageCount: totalCount > existing.totalMessageCount ? totalCount : existing.totalMessageCount,
+            isOpen: isOpen,
+          );
+        }
+      }
+      _commit(nextState);
+    } catch (e) {
+      debugPrint('Error running DM bootstrap from Supabase: $e');
+    }
+
+    // 4. Replay buffered events in order and continue normal realtime operation
+    _isBootstrapping = false;
+    if (_realtimeBuffer.isNotEmpty) {
+      final toReplay = List<PostgresChangePayload>.from(_realtimeBuffer);
+      _realtimeBuffer.clear();
+      for (final payload in toReplay) {
+        if (payload.table == 'chat_messages') {
+          _processMsgPayload(payload, currentUserId);
+        } else if (payload.table == 'chat_read_receipts') {
+          _processRcptPayload(payload, currentUserId);
+        }
+      }
     }
   }
 
-  return realCount;
+  void _handleMsgEvent(PostgresChangePayload payload, String currentUserId) {
+    if (_isBootstrapping) {
+      _realtimeBuffer.add(payload);
+      return;
+    }
+    _processMsgPayload(payload, currentUserId);
+  }
+
+  void _handleRcptEvent(PostgresChangePayload payload, String currentUserId) {
+    if (_isBootstrapping) {
+      _realtimeBuffer.add(payload);
+      return;
+    }
+    _processRcptPayload(payload, currentUserId);
+  }
+
+  void _processMsgPayload(PostgresChangePayload payload, String currentUserId) {
+    if (payload.eventType == PostgresChangeEvent.insert || payload.eventType == PostgresChangeEvent.update) {
+      final msg = ChatMessage.fromJson(payload.newRecord);
+      
+      if (msg.receiverId == null) return;
+      final isRelevant = (msg.senderId == currentUserId || msg.receiverId == currentUserId);
+      if (!isRelevant) return;
+
+      final partnerId = msg.senderId == currentUserId ? msg.receiverId! : msg.senderId;
+      if (partnerId == currentUserId) return;
+
+      final isOpen = _ref.read(currentOpenConversationProvider) == partnerId;
+      final isInsert = payload.eventType == PostgresChangeEvent.insert;
+      
+      if (isInsert) {
+        if (_seenMessageIds.contains(msg.id)) return;
+        _seenMessageIds.add(msg.id);
+      }
+
+      final currentMap = state;
+      final existing = currentMap[partnerId];
+
+      DmConversationState updatedConv;
+      if (existing == null) {
+        final isIncoming = msg.senderId == partnerId;
+        final shouldMarkUnread = isIncoming && !isOpen;
+        final unreadIds = shouldMarkUnread ? {msg.id} : <String>{};
+        
+        updatedConv = DmConversationState(
+          partnerId: partnerId,
+          lastMessage: msg,
+          unreadCount: unreadIds.length,
+          isOpen: isOpen,
+          unreadMessageIds: unreadIds,
+          totalMessageCount: 1,
+        );
+      } else {
+        ChatMessage? nextLastMessage = existing.lastMessage;
+        if (nextLastMessage == null || msg.createdAt.isAfter(nextLastMessage.createdAt) || msg.createdAt.isAtSameMomentAs(nextLastMessage.createdAt) || msg.id == nextLastMessage.id) {
+          nextLastMessage = msg;
+        }
+
+        final unreadIds = Set<String>.from(existing.unreadMessageIds);
+        int nextTotalCount = existing.totalMessageCount;
+        if (isInsert) {
+          nextTotalCount += 1;
+          if (msg.senderId == partnerId) {
+            if (!isOpen) {
+              unreadIds.add(msg.id);
+            }
+          }
+        }
+
+        updatedConv = existing.copyWith(
+          lastMessage: nextLastMessage,
+          unreadCount: isOpen ? 0 : unreadIds.length,
+          unreadMessageIds: isOpen ? const {} : unreadIds,
+          isOpen: isOpen,
+          totalMessageCount: nextTotalCount,
+        );
+      }
+
+      final nextMap = Map<String, DmConversationState>.from(currentMap);
+      nextMap[partnerId] = updatedConv;
+      _commit(nextMap);
+
+      if (isOpen && msg.senderId == partnerId && isInsert) {
+        ReadReceiptsTracker.markMultipleAsRead([msg.id], currentUserId);
+      }
+    } else if (payload.eventType == PostgresChangeEvent.delete) {
+      final deletedId = payload.oldRecord['id'] as String?;
+      if (deletedId != null) {
+        _seenMessageIds.remove(deletedId);
+        final currentMap = state;
+        for (final entry in currentMap.entries) {
+          if (entry.value.unreadMessageIds.contains(deletedId)) {
+            final unreadIds = Set<String>.from(entry.value.unreadMessageIds)..remove(deletedId);
+            final nextMap = Map<String, DmConversationState>.from(currentMap);
+            nextMap[entry.key] = entry.value.copyWith(
+              unreadCount: unreadIds.length,
+              unreadMessageIds: unreadIds,
+            );
+            _commit(nextMap);
+            break;
+          }
+        }
+      }
+    }
+  }
+
+  void _processRcptPayload(PostgresChangePayload payload, String currentUserId) {
+    if (payload.eventType != PostgresChangeEvent.insert && payload.eventType != PostgresChangeEvent.update) return;
+    final msgId = payload.newRecord['message_id']?.toString();
+    final userId = payload.newRecord['user_id']?.toString();
+    if (msgId == null || userId == null || userId.trim().toLowerCase() != currentUserId.trim().toLowerCase()) return;
+
+    final currentMap = state;
+    String? matchedPartnerId;
+    for (final entry in currentMap.entries) {
+      if (entry.value.unreadMessageIds.contains(msgId)) {
+        matchedPartnerId = entry.key;
+        break;
+      }
+    }
+
+    if (matchedPartnerId != null) {
+      final existing = currentMap[matchedPartnerId]!;
+      final nextUnreadIds = Set<String>.from(existing.unreadMessageIds)..remove(msgId);
+      final nextMap = Map<String, DmConversationState>.from(currentMap);
+      nextMap[matchedPartnerId] = existing.copyWith(
+        unreadCount: nextUnreadIds.length,
+        unreadMessageIds: nextUnreadIds,
+        lastReadAt: DateTime.now().toUtc(),
+      );
+      _commit(nextMap);
+    }
+  }
+
+  void onOpenConversationChanged(String? previous, String? current) {
+    final authUser = _ref.read(authProvider);
+    if (authUser == null) return;
+    final myId = authUser.id;
+
+    final currentMap = state;
+    final nextMap = Map<String, DmConversationState>.from(currentMap);
+    bool changed = false;
+
+    if (previous != null && nextMap.containsKey(previous)) {
+      nextMap[previous] = nextMap[previous]!.copyWith(isOpen: false);
+      changed = true;
+    }
+
+    if (current != null) {
+      if (!nextMap.containsKey(current)) {
+        nextMap[current] = DmConversationState(
+          partnerId: current,
+          unreadCount: 0,
+          isOpen: true,
+          unreadMessageIds: const {},
+          lastReadAt: DateTime.now().toUtc(),
+        );
+        changed = true;
+      } else {
+        final conv = nextMap[current]!;
+        if (!conv.isOpen || conv.unreadCount > 0) {
+          final idsToMarkRead = Set<String>.from(conv.unreadMessageIds);
+          nextMap[current] = conv.copyWith(
+            isOpen: true,
+            unreadCount: 0,
+            unreadMessageIds: const {},
+            lastReadAt: DateTime.now().toUtc(),
+          );
+          changed = true;
+          
+          if (idsToMarkRead.isNotEmpty) {
+            ReadReceiptsTracker.markMultipleAsRead(idsToMarkRead.toList(), myId);
+          }
+        }
+      }
+    }
+
+    if (changed) {
+      _commit(nextMap);
+    }
+  }
+
+  void markConversationAsRead(String partnerId) {
+    final authUser = _ref.read(authProvider);
+    if (authUser == null) return;
+    final myId = authUser.id;
+    
+    final currentMap = state;
+    final conv = currentMap[partnerId];
+    if (conv == null) return;
+
+    if (conv.unreadCount > 0 || !conv.isOpen) {
+      final idsToMarkRead = Set<String>.from(conv.unreadMessageIds);
+      final nextMap = Map<String, DmConversationState>.from(currentMap);
+      nextMap[partnerId] = conv.copyWith(
+        isOpen: _ref.read(currentOpenConversationProvider) == partnerId,
+        unreadCount: 0,
+        unreadMessageIds: const {},
+        lastReadAt: DateTime.now().toUtc(),
+      );
+      _commit(nextMap);
+      if (idsToMarkRead.isNotEmpty) {
+        ReadReceiptsTracker.markMultipleAsRead(idsToMarkRead.toList(), myId);
+      }
+    }
+  }
+
+  void onOptimisticMessageSent(ChatMessage message) {
+    final authUser = _ref.read(authProvider);
+    if (authUser == null || message.receiverId == null) return;
+    final myId = authUser.id;
+    final partnerId = message.senderId == myId ? message.receiverId! : message.senderId;
+    if (partnerId == myId) return;
+
+    _seenMessageIds.add(message.id);
+    final currentMap = state;
+    final existing = currentMap[partnerId];
+    final isOpen = _ref.read(currentOpenConversationProvider) == partnerId;
+
+    DmConversationState updatedConv;
+    if (existing == null) {
+      updatedConv = DmConversationState(
+        partnerId: partnerId,
+        lastMessage: message,
+        unreadCount: 0,
+        isOpen: isOpen,
+        unreadMessageIds: const {},
+        totalMessageCount: 1,
+      );
+    } else {
+      updatedConv = existing.copyWith(
+        lastMessage: message,
+        isOpen: isOpen,
+        totalMessageCount: existing.totalMessageCount + 1,
+      );
+    }
+    final nextMap = Map<String, DmConversationState>.from(currentMap);
+    nextMap[partnerId] = updatedConv;
+    _commit(nextMap);
+  }
+
+}
+
+final dmConversationsProvider = NotifierProvider<DmConversationEngine, Map<String, DmConversationState>>(() {
+  return DmConversationEngine();
+});
+
+final dmUnreadCountProvider = Provider.family<int, String>((ref, partnerId) {
+  return ref.watch(dmConversationsProvider.select((map) => map[partnerId]?.unreadCount ?? 0));
 });

@@ -314,6 +314,7 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
 
     final isChatRoute =
         widget.currentPath.startsWith('/chat') ||
+        widget.currentPath.startsWith('/calls') ||
         widget.currentPath.startsWith('/channel') ||
         (widget.currentPath.startsWith('/sales-channel') && 
           (GoRouterState.of(context).uri.queryParameters['tab'] ?? '0') == '0');
@@ -460,15 +461,7 @@ class _TopNav extends ConsumerWidget {
                           '0') ==
                       '0',
         ),
-        _TopNavItem(
-          label: 'Sales',
-          icon: LucideIcons.shoppingCart,
-          path: '/sales-channel?tab=1',
-          isActive:
-              currentPath.contains('/sales-channel') &&
-              (GoRouterState.of(context).uri.queryParameters['tab'] ?? '') ==
-                  '1',
-        ),
+
         _TopNavItem(
           label: 'Pipeline',
           icon: LucideIcons.layers,
@@ -486,6 +479,7 @@ class _TopNav extends ConsumerWidget {
           isActive: currentPath.startsWith('/chat'),
           badgeCount: unreadCount,
         ),
+
         if (!isRestrictedAgent)
           _TopNavItem(
             label: showBillsAsDashboard
@@ -887,7 +881,6 @@ class _TopNav extends ConsumerWidget {
                   ref.invalidate(customersListProvider);
                   ref.invalidate(agentsListProvider);
                   ref.invalidate(chatStreamProvider('support-chat'));
-                  ref.invalidate(dmConversationsProvider);
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
                       content: Text('Data refreshed'),
@@ -1383,8 +1376,17 @@ class _TopNavHoverMenuState extends State<_TopNavHoverMenu>
 
     _overlayEntry = OverlayEntry(
       builder: (context) {
+        final screenWidth = MediaQuery.of(context).size.width;
+        const dropdownWidth = 200.0;
+        double leftPos = offset.dx;
+        
+        // Prevent dropdown from rendering off-screen on the right edge
+        if (leftPos + dropdownWidth > screenWidth) {
+          leftPos = screenWidth - dropdownWidth - 16; // 16px padding
+        }
+
         return Positioned(
-          left: offset.dx,
+          left: leftPos,
           top: offset.dy + size.height,
           child: MouseRegion(
             onEnter: (_) {
@@ -1484,6 +1486,30 @@ class _TopNavHoverMenuState extends State<_TopNavHoverMenu>
     if (widget.items.isEmpty && widget.onDirectTap == null)
       return const SizedBox.shrink();
 
+    Widget iconWidget = Container(
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: widget.isParentActive
+            ? AppColors.primaryLight.withValues(alpha: 0.15)
+            : Colors.transparent,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Icon(
+        widget.icon,
+        color: widget.isParentActive
+            ? AppColors.primaryLight
+            : Colors.white.withValues(alpha: 0.72),
+        size: 20,
+      ),
+    );
+
+    if (widget.items.isEmpty) {
+      iconWidget = Tooltip(
+        message: widget.tooltip,
+        child: iconWidget,
+      );
+    }
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
       child: MouseRegion(
@@ -1507,25 +1533,7 @@ class _TopNavHoverMenuState extends State<_TopNavHoverMenu>
               widget.onDirectTap!();
             }
           },
-          child: Tooltip(
-            message: widget.tooltip,
-            child: Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: widget.isParentActive
-                    ? AppColors.primaryLight.withValues(alpha: 0.15)
-                    : Colors.transparent,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Icon(
-                widget.icon,
-                color: widget.isParentActive
-                    ? AppColors.primaryLight
-                    : Colors.white.withValues(alpha: 0.72),
-                size: 20,
-              ),
-            ),
-          ),
+          child: iconWidget,
         ),
       ),
     );
@@ -1724,12 +1732,8 @@ class _BottomNav extends ConsumerWidget {
     final isWhiteTheme = themeType == AppThemeType.white;
     final isLight = isWhiteTheme;
 
-    int aggregateUnread = ref.watch(chatUnreadCountProvider) + ref.watch(allAroundTallyUnreadCountProvider);
-    final conversationsAsync = ref.watch(dmConversationsProvider);
-    final conversations = conversationsAsync.value ?? {};
-    for (final id in conversations.keys) {
-      aggregateUnread += ref.watch(dmUnreadCountProvider(id));
-    }
+    final int totalDmUnread = ref.watch(dmConversationsProvider.select<int>((map) => map.values.fold<int>(0, (sum, conv) => sum + conv.unreadCount)));
+    final int aggregateUnread = (ref.watch(chatUnreadCountProvider) + ref.watch(allAroundTallyUnreadCountProvider) + totalDmUnread).toInt();
 
     final bgColor = isLight 
         ? Colors.white 
@@ -2443,7 +2447,7 @@ class _ChannelsListState extends ConsumerState<_ChannelsList> {
     final currentPath = widget.currentPath;
     final isChatActive = currentPath == '/chat';
     final agentsAsync = ref.watch(agentsListProvider);
-    final conversationsAsync = ref.watch(dmConversationsProvider);
+    final conversations = ref.watch(dmConversationsProvider);
     final currentUser = ref.watch(authProvider);
     final customChannelsAsync = ref.watch(customChannelsProvider);
 
@@ -2496,133 +2500,7 @@ class _ChannelsListState extends ConsumerState<_ChannelsList> {
       child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Companies Header - hidden from restricted agents
-        if (!isRestrictedAgent)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-            child: Row(
-              children: [
-                Icon(
-                  LucideIcons.building2,
-                  size: 14,
-                  color: textColor70,
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  'Companies',
-                  style: TextStyle(
-                    color: textColor70,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        // AroundTally Company - hidden from restricted agents
-        if (!isRestrictedAgent)
-          Material(
-            color: Colors.transparent,
-            child: InkWell(
-              onTap: () => context.go('/company/aroundtally'),
-              child: Container(
-                margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 6,
-                ),
-                decoration: BoxDecoration(
-                  color: currentPath.startsWith('/company/aroundtally')
-                      ? activeBgColor
-                      : Colors.transparent,
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      LucideIcons.building2,
-                      size: 16,
-                      color: currentPath.startsWith('/company/aroundtally')
-                          ? textColorPrimary
-                          : textColor54,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      'AroundTally',
-                      style: TextStyle(
-                        color: currentPath.startsWith('/company/aroundtally')
-                            ? textColorPrimary
-                            : textColor70,
-                        fontSize: 13,
-                        fontWeight:
-                            currentPath.startsWith('/company/aroundtally')
-                            ? FontWeight.w600
-                            : FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        // AroundAi Company - hidden from restricted agents
-        if (!isRestrictedAgent)
-          Material(
-            color: Colors.transparent,
-            child: InkWell(
-              onTap: restrictedFromAroundAi
-                  ? () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('You do not have access to AroundAi'),
-                          backgroundColor: AppColors.error,
-                        ),
-                      );
-                    }
-                  : () => context.go('/company/aroundai'),
-              child: Container(
-                margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 6,
-                ),
-                decoration: BoxDecoration(
-                  color: currentPath.startsWith('/company/aroundai')
-                      ? activeBgColor
-                      : Colors.transparent,
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      LucideIcons.building2,
-                      size: 16,
-                      color: currentPath.startsWith('/company/aroundai')
-                          ? textColorPrimary
-                          : textColor54,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      'AroundAi',
-                      style: TextStyle(
-                        color: currentPath.startsWith('/company/aroundai')
-                            ? textColorPrimary
-                            : textColor70,
-                        fontSize: 13,
-                        fontWeight: currentPath.startsWith('/company/aroundai')
-                            ? FontWeight.w600
-                            : FontWeight.w500,
-                      ),
-                    ),
-                    if (restrictedFromAroundAi) ...[
-                      const SizedBox(width: 6),
-                      Icon(LucideIcons.lock, size: 12, color: textColor54),
-                    ],
-                  ],
-                ),
-              ),
-            ),
-          ),
+
 
         // Channels Header
         Padding(
@@ -2781,7 +2659,7 @@ class _ChannelsListState extends ConsumerState<_ChannelsList> {
           Material(
             color: Colors.transparent,
             child: InkWell(
-              onTap: () => context.push('/sales-channel'),
+              onTap: () => context.go('/sales-channel'),
               child: Container(
                 margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 padding: const EdgeInsets.symmetric(
@@ -2826,7 +2704,7 @@ class _ChannelsListState extends ConsumerState<_ChannelsList> {
           Material(
             color: Colors.transparent,
             child: InkWell(
-              onTap: () => context.push('/deals-tracker'),
+              onTap: () => context.go('/deals-tracker'),
               child: Container(
                 margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 padding: const EdgeInsets.symmetric(
@@ -2882,7 +2760,7 @@ class _ChannelsListState extends ConsumerState<_ChannelsList> {
             return Material(
               color: Colors.transparent,
               child: InkWell(
-                onTap: () => context.push('/channel/all-aroundtally'),
+                onTap: () => context.go('/channel/all-aroundtally'),
                 child: Container(
                   margin: const EdgeInsets.symmetric(
                     horizontal: 8,
@@ -2949,6 +2827,45 @@ class _ChannelsListState extends ConsumerState<_ChannelsList> {
           },
         ),
 
+          // Calls Sidebar Item
+          Builder(
+            builder: (context) {
+              final isCallsActive = currentPath.startsWith('/calls');
+              return Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: () => context.go('/calls'),
+                  child: Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: isCallsActive ? activeBgColor : Colors.transparent,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          LucideIcons.phone,
+                          size: 16,
+                          color: isCallsActive ? textColorPrimary : textColor54,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Calls',
+                          style: TextStyle(
+                            color: isCallsActive ? textColorPrimary : textColor70,
+                            fontSize: 13,
+                            fontWeight: isCallsActive ? FontWeight.w700 : FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            }
+          ),
+
           const SizedBox(height: 16),
           // Direct Messages Header
           Padding(
@@ -2975,7 +2892,6 @@ class _ChannelsListState extends ConsumerState<_ChannelsList> {
                 InkWell(
                   onTap: () {
                     ref.invalidate(agentsListProvider);
-                    ref.invalidate(dmConversationsProvider);
                   },
                   borderRadius: BorderRadius.circular(4),
                   child: Padding(
@@ -2990,299 +2906,84 @@ class _ChannelsListState extends ConsumerState<_ChannelsList> {
           // Agents List
           agentsAsync.when(
               data: (agents) {
-                return conversationsAsync.when(
-                  data: (conversations) {
-                    // Filter out specific agents
-                    final hiddenAgentIds = const {
-                
-                      '2d58eb0a-916a-4cb6-9245-b5b124caa0a3',
-                    };
-                    final filteredAgents = agents.where((a) {
-                      final id = a['id']?.toString() ?? '';
-                      if (hiddenAgentIds.contains(id)) return false;
-                      
-                      if (isMobile) {
-                        final name = (a['full_name'] ?? a['username'] ?? '').toString().toLowerCase();
-                        if (name.contains('abhirami') || name.contains('thaness')) return false;
-                      }
-                      
-                      return true;
-                    }).toList();
+                // Filter out specific agents
+                final hiddenAgentIds = const {
+                  '2d58eb0a-916a-4cb6-9245-b5b124caa0a3',
+                };
+                final filteredAgents = agents.where((a) {
+                  final id = a['id']?.toString() ?? '';
+                  if (hiddenAgentIds.contains(id)) return false;
+                  
+                  if (isMobile) {
+                    final name = (a['full_name'] ?? a['username'] ?? '').toString().toLowerCase();
+                    if (name.contains('abhirami') || name.contains('thaness')) return false;
+                  }
+                  
+                  return true;
+                }).toList();
 
-                    // Resolve unread counts first to ensure stable ref.watch ordering
-                    final unreadCounts = <String, int>{};
-                    for (final a in filteredAgents) {
-                      final id = a['id']?.toString() ?? '';
-                      unreadCounts[id] = ref.watch(dmUnreadCountProvider(id));
+                // Sort agents: own chat first, then unread, then recent message timestamp, then frequency
+                final sortedAgents = List.from(filteredAgents)
+                  ..sort((a, b) {
+                    final agentAId = a['id']?.toString() ?? '';
+                    final agentBId = b['id']?.toString() ?? '';
+
+                    if (currentUser != null) {
+                      if (agentAId == currentUser.id && agentBId != currentUser.id) return -1;
+                      if (agentBId == currentUser.id && agentAId != currentUser.id) return 1;
                     }
 
-                    // Sort agents: own chat first, then unread, then alphabetical
-                    final sortedAgents = List.from(filteredAgents)
-                      ..sort((a, b) {
-                        final agentAId = a['id']?.toString() ?? '';
-                        final agentBId = b['id']?.toString() ?? '';
+                    final unreadA = conversations[agentAId]?.unreadCount ?? 0;
+                    final unreadB = conversations[agentBId]?.unreadCount ?? 0;
+                    if (unreadA > 0 && unreadB == 0) return -1;
+                    if (unreadB > 0 && unreadA == 0) return 1;
 
-                        // Own chat pinned to the top
-                        if (currentUser != null) {
-                          if (agentAId == currentUser.id &&
-                              agentBId != currentUser.id)
-                            return -1;
-                          if (agentBId == currentUser.id &&
-                              agentAId != currentUser.id)
-                            return 1;
-                        }
+                    final convA = conversations[agentAId];
+                    final convB = conversations[agentBId];
+                    
+                    final lastA = convA?.lastMessage?.createdAt;
+                    final lastB = convB?.lastMessage?.createdAt;
 
-                        // Agents with unread messages come before agents without
-                        final unreadA = unreadCounts[agentAId] ?? 0;
-                        final unreadB = unreadCounts[agentBId] ?? 0;
-                        if (unreadA > 0 && unreadB == 0) return -1;
-                        if (unreadB > 0 && unreadA == 0) return 1;
+                    if (lastA != null && lastB != null) {
+                      final timeComp = lastB.compareTo(lastA);
+                      if (timeComp != 0) return timeComp;
+                    } else if (lastA != null) {
+                      return -1;
+                    } else if (lastB != null) {
+                      return 1;
+                    }
 
-                        // Sort by most recent message first
-                        final convA = conversations[agentAId];
-                        final convB = conversations[agentBId];
-                        
-                        final lastA = convA?['last_message_at'] as DateTime?;
-                        final lastB = convB?['last_message_at'] as DateTime?;
+                    final countA = convA?.totalMessageCount ?? 0;
+                    final countB = convB?.totalMessageCount ?? 0;
+                    
+                    if (countA != countB) {
+                      return countB.compareTo(countA);
+                    }
 
-                        if (lastA != null && lastB != null) {
-                          final timeComp = lastB.compareTo(lastA); // Descending (recent first)
-                          if (timeComp != 0) return timeComp;
-                        } else if (lastA != null) {
-                          return -1;
-                        } else if (lastB != null) {
-                          return 1;
-                        }
+                    final nameA = (a['full_name'] ?? a['username'] ?? '').toString().toLowerCase();
+                    final nameB = (b['full_name'] ?? b['username'] ?? '').toString().toLowerCase();
+                    return nameA.compareTo(nameB);
+                  });
 
-                        // Sort by message frequency (most exchanged messages first)
-                        final countA = (convA?['total_message_count'] as int?) ?? 0;
-                        final countB = (convB?['total_message_count'] as int?) ?? 0;
-                        
-                        if (countA != countB) {
-                          return countB.compareTo(countA); // Descending (higher frequency first)
-                        }
-
-                        // Otherwise alphabetical
-                        final nameA = (a['full_name'] ?? a['username'] ?? '')
-                            .toString()
-                            .toLowerCase();
-                        final nameB = (b['full_name'] ?? b['username'] ?? '')
-                            .toString()
-                            .toLowerCase();
-                        return nameA.compareTo(nameB);
-                      });
-
-                    return ListView.builder(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      padding: EdgeInsets.zero,
-                      itemCount: sortedAgents.length,
-                      itemBuilder: (context, index) {
-                        final agent = sortedAgents[index];
-                        final agentId = agent['id']?.toString() ?? '';
-                        final isCurrentUser = currentUser?.id == agentId;
-                        final name = isCurrentUser
-                            ? 'YOU'
-                            : (agent['full_name'] ?? 'Unknown');
-                        final unreadCount = unreadCounts[agentId] ?? 0;
-
-                        // Determine online status based on last_seen timestamp
-                        final lastSeen = agent['last_seen'] != null
-                            ? DateTime.tryParse(agent['last_seen'].toString())
-                            : null;
-                        final now = DateTime.now();
-
-                        // Online: seen within last 5 minutes
-                        final isOnline =
-                            lastSeen != null &&
-                            now.difference(lastSeen).inMinutes < 5;
-
-                        // Away: seen within last 30 minutes but not online
-                        final isAway =
-                            lastSeen != null &&
-                            !isOnline &&
-                            now.difference(lastSeen).inMinutes < 30;
-
-                        // Generate a distinct color based on index
-                        final List<Color> avatarColors = [
-                          Colors.red.shade400,
-                          Colors.blue.shade400,
-                          Colors.green.shade500,
-                          Colors.orange.shade500,
-                          Colors.purple.shade400,
-                          Colors.teal.shade400,
-                          Colors.pink.shade400,
-                          Colors.indigo.shade400,
-                        ];
-                        final avatarColor =
-                            avatarColors[index % avatarColors.length];
-
-                        final isSelected = widget.currentPath == '/chat/dm/$agentId';
-
-                        return Material(
-                          color: isSelected ? activeBgColor : Colors.transparent,
-                          child: InkWell(
-                            onTap: () {
-                              context.push('/chat/dm/${agent['id']}');
-                            },
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 6,
-                              ),
-                              child: Row(
-                                children: [
-                                  // Avatar — tap to show profile menu
-                                  GestureDetector(
-                                    onTapUp: (details) {
-                                      final avatarUrl = agent['avatar_url'] as String?;
-                                      showMenu(
-                                        context: context,
-                                        position: RelativeRect.fromLTRB(
-                                          details.globalPosition.dx,
-                                          details.globalPosition.dy,
-                                          details.globalPosition.dx + 1,
-                                          details.globalPosition.dy + 1,
-                                        ),
-                                        color: const Color(0xFF1E293B),
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(8),
-                                          side: BorderSide(color: Colors.white.withValues(alpha: 0.12)),
-                                        ),
-                                        items: [
-                                          PopupMenuItem(
-                                            enabled: avatarUrl != null,
-                                            onTap: avatarUrl != null
-                                                ? () => _showProfilePicture(context, name, avatarUrl, avatarColor)
-                                                : null,
-                                            child: Row(
-                                              children: [
-                                                Icon(LucideIcons.userCircle2, size: 16,
-                                                    color: avatarUrl != null ? Colors.white : Colors.white38),
-                                                const SizedBox(width: 10),
-                                                Text('View Profile Picture',
-                                                    style: TextStyle(
-                                                        color: avatarUrl != null ? Colors.white : Colors.white38,
-                                                        fontSize: 13)),
-                                              ],
-                                            ),
-                                          ),
-                                          PopupMenuItem(
-                                            onTap: () => context.push('/chat/dm/${agent['id']}'),
-                                            child: const Row(
-                                              children: [
-                                                Icon(LucideIcons.messageSquare, size: 16, color: Colors.white),
-                                                SizedBox(width: 10),
-                                                Text('Send Message',
-                                                    style: TextStyle(color: Colors.white, fontSize: 13)),
-                                              ],
-                                            ),
-                                          ),
-                                        ],
-                                      );
-                                    },
-                                    child: Stack(
-                                      children: [
-                                        CircleAvatar(
-                                          radius: 12,
-                                          backgroundColor: avatarColor,
-                                          backgroundImage: agent['avatar_url'] != null
-                                              ? NetworkImage(agent['avatar_url'])
-                                              : null,
-                                          child: agent['avatar_url'] == null
-                                              ? Text(
-                                                  name.isNotEmpty ? name[0].toUpperCase() : '?',
-                                                  style: const TextStyle(
-                                                      fontSize: 12, color: Colors.white, fontWeight: FontWeight.bold),
-                                                )
-                                              : null,
-                                        ),
-                                      Positioned(
-                                        right: 0,
-                                        bottom: 0,
-                                        child: Container(
-                                          width: 8,
-                                          height: 8,
-                                          decoration: BoxDecoration(
-                                            color: isOnline
-                                                ? Colors.green
-                                                : isAway
-                                                ? Colors.orange
-                                                : Colors.grey,
-                                            shape: BoxShape.circle,
-                                            border: Border.all(
-                                              color: isMobile && isLight ? Colors.white : AppColors.slate900,
-                                              width: 1.5,
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                    ],  // Stack children
-                                  ),  // Stack
-                                  ),  // GestureDetector
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Text(
-                                      name,
-                                      style: TextStyle(
-                                        color: textColor70,
-                                        fontSize: 13,
-                                      ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                  if (unreadCount > 0)
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 6,
-                                        vertical: 2,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: AppColors.error,
-                                        borderRadius: BorderRadius.circular(10),
-                                      ),
-                                      child: Text(
-                                        unreadCount > 99
-                                            ? '99+'
-                                            : unreadCount.toString(),
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                    ),
-                                ],  // Row children
-                              ),  // Row
-                            ),  // Container
-                          ),  // InkWell
-                        );  // Material
-                      },
+                return ListView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  padding: EdgeInsets.zero,
+                  itemCount: sortedAgents.length,
+                  itemBuilder: (context, index) {
+                    final agent = sortedAgents[index];
+                    final agentId = agent['id']?.toString() ?? '';
+                    return _SidebarDmTile(
+                      key: ValueKey(agentId),
+                      agent: agent,
+                      index: index,
+                      currentPath: widget.currentPath,
+                      isMobile: isMobile,
+                      isLight: isLight,
+                      textColor70: textColor70,
+                      activeBgColor: activeBgColor,
                     );
                   },
-                  skipLoadingOnReload: true,
-                  skipLoadingOnRefresh: true,
-                  loading: () => Center(
-                    child: SizedBox(
-                      height: 16,
-                      width: 16,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: textColor54,
-                      ),
-                    ),
-                  ),
-                  error: (_, __) => Center(
-                    child: SizedBox(
-                      height: 16,
-                      width: 16,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: textColor54,
-                      ),
-                    ),
-                  ),
                 );
               },
               skipLoadingOnReload: true,
@@ -3305,9 +3006,207 @@ class _ChannelsListState extends ConsumerState<_ChannelsList> {
                 ),
               ),
             ),
-          // removed Expanded closing
       ],
     ));
+  }
+}
+
+class _SidebarDmTile extends ConsumerWidget {
+  final Map<String, dynamic> agent;
+  final int index;
+  final String currentPath;
+  final bool isMobile;
+  final bool isLight;
+  final Color textColor70;
+  final Color activeBgColor;
+
+  const _SidebarDmTile({
+    Key? key,
+    required this.agent,
+    required this.index,
+    required this.currentPath,
+    required this.isMobile,
+    required this.isLight,
+    required this.textColor70,
+    required this.activeBgColor,
+  }) : super(key: key);
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final currentUser = ref.watch(authProvider);
+    final agentId = agent['id']?.toString() ?? '';
+    final isCurrentUser = currentUser?.id == agentId;
+    final name = isCurrentUser ? 'YOU' : (agent['full_name'] ?? 'Unknown');
+    final unreadCount = ref.watch(dmUnreadCountProvider(agentId));
+
+    final lastSeen = agent['last_seen'] != null
+        ? DateTime.tryParse(agent['last_seen'].toString())
+        : null;
+    final now = DateTime.now();
+
+    final isOnline = lastSeen != null && now.difference(lastSeen).inMinutes < 5;
+    final isAway = lastSeen != null && !isOnline && now.difference(lastSeen).inMinutes < 30;
+
+    final List<Color> avatarColors = [
+      Colors.red.shade400,
+      Colors.blue.shade400,
+      Colors.green.shade500,
+      Colors.orange.shade500,
+      Colors.purple.shade400,
+      Colors.teal.shade400,
+      Colors.pink.shade400,
+      Colors.indigo.shade400,
+    ];
+    final avatarColor = avatarColors[index % avatarColors.length];
+    final isSelected = currentPath == '/chat/dm/$agentId';
+
+    return Material(
+      color: isSelected ? activeBgColor : Colors.transparent,
+      child: InkWell(
+        onTap: () {
+          context.go('/chat/dm/${agent['id']}');
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 6,
+          ),
+          child: Row(
+            children: [
+              GestureDetector(
+                onTapUp: (details) {
+                  final avatarUrl = agent['avatar_url'] as String?;
+                  showMenu(
+                    context: context,
+                    position: RelativeRect.fromLTRB(
+                      details.globalPosition.dx,
+                      details.globalPosition.dy,
+                      details.globalPosition.dx + 1,
+                      details.globalPosition.dy + 1,
+                    ),
+                    color: const Color(0xFF1E293B),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      side: BorderSide(color: Colors.white.withValues(alpha: 0.12)),
+                    ),
+                    items: [
+                      PopupMenuItem(
+                        enabled: avatarUrl != null,
+                        onTap: avatarUrl != null
+                            ? () => _showProfilePicture(context, name, avatarUrl, avatarColor)
+                            : null,
+                        child: Row(
+                          children: [
+                            Icon(LucideIcons.userCircle2, size: 16,
+                                color: avatarUrl != null ? Colors.white : Colors.white38),
+                            const SizedBox(width: 10),
+                            Text('View Profile Picture',
+                                style: TextStyle(
+                                    color: avatarUrl != null ? Colors.white : Colors.white38,
+                                    fontSize: 13)),
+                          ],
+                        ),
+                      ),
+                      PopupMenuItem(
+                        onTap: () => context.go('/chat/dm/${agent['id']}'),
+                        child: const Row(
+                          children: [
+                            Icon(LucideIcons.messageSquare, size: 16, color: Colors.white),
+                            SizedBox(width: 10),
+                            Text('Send Message',
+                                style: TextStyle(color: Colors.white, fontSize: 13)),
+                          ],
+                        ),
+                      ),
+                    ],
+                  );
+                },
+                child: Stack(
+                  children: [
+                    CircleAvatar(
+                      radius: 12,
+                      backgroundColor: avatarColor,
+                      backgroundImage: agent['avatar_url'] != null
+                          ? NetworkImage(agent['avatar_url'])
+                          : null,
+                      child: agent['avatar_url'] == null
+                          ? Text(
+                              name.isNotEmpty ? name[0].toUpperCase() : '?',
+                              style: const TextStyle(
+                                  fontSize: 12, color: Colors.white, fontWeight: FontWeight.bold),
+                            )
+                          : null,
+                    ),
+                    Positioned(
+                      right: 0,
+                      bottom: 0,
+                      child: Container(
+                        width: 8,
+                        height: 8,
+                        decoration: BoxDecoration(
+                          color: isOnline
+                              ? Colors.green
+                              : isAway
+                              ? Colors.orange
+                              : Colors.grey,
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: isMobile && isLight ? Colors.white : AppColors.slate900,
+                            width: 1.5,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        name,
+                        style: TextStyle(
+                          color: isSelected ? (isLight ? AppColors.slate900 : Colors.white) : textColor70,
+                          fontSize: 13,
+                          fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    if (unreadCount > 0) ...[
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.error,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          unreadCount > 99
+                              ? '99+'
+                              : unreadCount.toString(),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 

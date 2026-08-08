@@ -128,7 +128,7 @@ class _CreateLeadDialogState extends ConsumerState<CreateLeadDialog> {
             : (_customerNameController.text.trim().isNotEmpty
                 ? _customerNameController.text.trim()
                 : 'Unnamed Company'),
-        'status': 'New',
+        'status': 'New Lead',
         'phone_number': _phoneNumberController.text.trim(),
         'owner': _selectedOwner ?? currentUser?.fullName ?? 'Unassigned',
         'source': sourceValue,
@@ -152,6 +152,7 @@ class _CreateLeadDialogState extends ConsumerState<CreateLeadDialog> {
         if (leadData['source'] != null) 'Source: ${leadData['source']}',
         if (leadData['product'] != null) 'Product: ${leadData['product']}',
         'Owner: ${leadData['owner']}',
+        'Status: New Lead',
       ].join('\n');
 
       // Close dialog immediately

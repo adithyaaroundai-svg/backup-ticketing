@@ -40,6 +40,7 @@ import 'features/dashboard/presentation/pages/reports_page.dart';
 import 'features/dashboard/presentation/pages/revenue_page.dart';
 import 'features/dashboard/presentation/pages/app_settings_page.dart';
 import 'features/productivity/presentation/pages/notifications_page.dart';
+import 'features/calls/presentation/pages/call_history_page.dart';
 import 'features/productivity/presentation/pages/deals_page.dart';
 import 'features/dashboard/presentation/providers/app_settings_provider.dart';
 import 'features/sales/presentation/pages/proposal_generator_page.dart';
@@ -289,6 +290,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/alerts',
         builder: (context, state) => const TicketAlertsPage(),
+      ),
+      GoRoute(
+        path: '/calls',
+        builder: (context, state) => const CallHistoryPage(),
       ),
       GoRoute(path: '/bills', builder: (context, state) => const BillsPage()),
       GoRoute(

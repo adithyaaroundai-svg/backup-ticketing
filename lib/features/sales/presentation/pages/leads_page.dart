@@ -153,7 +153,7 @@ class _LeadsPageState extends ConsumerState<LeadsPage> {
             Expanded(
               child: leadsAsync.when(
                 data: (leads) {
-                  var columns = ['New', 'Qualified', 'Proposal', 'Negotiation'];
+                  var columns = ['New Lead', 'Contacted', 'Qualified', 'Proposal', 'Negotiation'];
                   
                   final wonLeads = leads.where((d) => d.status == 'Won' || d.status == 'win').toList();
                   final lostLeads = leads.where((d) => d.status == 'Lost' || d.status == 'loss').toList();
@@ -172,7 +172,7 @@ class _LeadsPageState extends ConsumerState<LeadsPage> {
                                     crossAxisAlignment: CrossAxisAlignment.stretch,
                                     children: columns.map((status) {
                                       final statusLeads = leads.where((d) {
-                                        if (status == 'New' && d.status == 'pending') return true;
+                                        if (status == 'New Lead' && (d.status == 'pending' || d.status == 'New')) return true;
                                         return d.status == status;
                                       }).toList();
                                       
@@ -200,7 +200,7 @@ class _LeadsPageState extends ConsumerState<LeadsPage> {
                                   crossAxisAlignment: CrossAxisAlignment.stretch,
                                   children: columns.map((status) {
                                     final statusLeads = leads.where((d) {
-                                      if (status == 'New' && d.status == 'pending') return true;
+                                      if (status == 'New Lead' && (d.status == 'pending' || d.status == 'New')) return true;
                                       return d.status == status;
                                     }).toList();
                                     
@@ -453,7 +453,8 @@ class _KanbanColumn extends StatelessWidget {
 
   Color get statusColor {
     switch (status) {
-      case 'New': return AppColors.slate500;
+      case 'New Lead': return AppColors.slate500;
+      case 'Contacted': return AppColors.info;
       case 'Qualified': return AppColors.primaryLight;
       case 'Proposal': return Colors.purple.shade400;
       case 'Negotiation': return Colors.deepOrange;
@@ -680,7 +681,7 @@ class _CustomerCard extends StatelessWidget {
                     onStageChange(nextStage);
                   },
                   itemBuilder: (BuildContext context) {
-                    return ['New', 'Qualified', 'Proposal', 'Negotiation', 'Won', 'Lost'].map((String choice) {
+                    return ['New Lead', 'Contacted', 'Qualified', 'Proposal', 'Negotiation', 'Won', 'Lost'].map((String choice) {
                       return PopupMenuItem<String>(
                         value: choice,
                         child: Text(choice, style: TextStyle(fontSize: 13, color: context.adaptiveSlate700)),
@@ -699,7 +700,7 @@ class _CustomerCard extends StatelessWidget {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          lead.status == 'pending' ? 'New' : (lead.status == 'win' ? 'Won' : (lead.status == 'loss' ? 'Lost' : lead.status)), 
+                          (lead.status == 'pending' || lead.status == 'New') ? 'New Lead' : (lead.status == 'win' ? 'Won' : (lead.status == 'loss' ? 'Lost' : lead.status)), 
                           style: TextStyle(fontSize: 13, color: context.adaptiveSlate700),
                         ),
                         Icon(LucideIcons.chevronDown, size: 16, color: context.adaptiveSlate400),
@@ -772,7 +773,7 @@ class _LeadCard extends StatelessWidget {
         border: Border.all(
           color: context.isDarkMode
               ? color.withValues(alpha: 0.5)
-              : (lead.status == 'pending' || lead.status == 'New' ? Colors.orange.shade300 : context.adaptiveBorder),
+              : (lead.status == 'pending' || lead.status == 'New' || lead.status == 'New Lead' ? Colors.orange.shade300 : context.adaptiveBorder),
           width: 1.5,
         ),
         boxShadow: [
@@ -971,7 +972,7 @@ class _LeadCard extends StatelessWidget {
                         Navigator.pop(context);
                       },
                       itemBuilder: (BuildContext context) {
-                        return ['New', 'Qualified', 'Proposal', 'Negotiation', 'Won', 'Lost'].map((String choice) {
+                        return ['New Lead', 'Contacted', 'Qualified', 'Proposal', 'Negotiation', 'Won', 'Lost'].map((String choice) {
                           return PopupMenuItem<String>(
                             value: choice,
                             child: Text(choice, style: TextStyle(fontSize: 14, color: context.adaptiveSlate700)),
@@ -986,7 +987,7 @@ class _LeadCard extends StatelessWidget {
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Text(
-                              lead.status == 'pending' ? 'New' : (lead.status == 'win' ? 'Won' : (lead.status == 'loss' ? 'Lost' : lead.status)), 
+                              (lead.status == 'pending' || lead.status == 'New') ? 'New Lead' : (lead.status == 'win' ? 'Won' : (lead.status == 'loss' ? 'Lost' : lead.status)), 
                               style: TextStyle(fontSize: 14, color: context.adaptiveSlate700, fontWeight: FontWeight.w600),
                             ),
                             Icon(LucideIcons.chevronDown, size: 18, color: context.adaptiveSlate500),

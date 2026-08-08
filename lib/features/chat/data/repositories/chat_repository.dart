@@ -236,24 +236,6 @@ class ChatRepository {
         .eq('id', messageId);
   }
 
-  Future<Map<String, Set<String>>> getReadReceipts() async {
-    final rows = await _client
-        .from('chat_read_receipts')
-        .select('message_id, user_id');
-
-    final receipts = <String, Set<String>>{};
-    for (final row in rows) {
-      final messageId = row['message_id']?.toString();
-      final userId = row['user_id']?.toString();
-      if (messageId == null || userId == null) continue;
-
-      receipts
-          .putIfAbsent(messageId, () => <String>{})
-          .add(userId.trim().toLowerCase());
-    }
-    return receipts;
-  }
-
   Future<void> markAsRead(String messageId, String userId) async {
     await _client.from('chat_read_receipts').upsert({
       'message_id': messageId,
@@ -381,111 +363,97 @@ class ChatRepository {
     });
   }
 
-  // Get DM conversation metadata — realtime, fires on any message INSERT/UPDATE/DELETE
-  // Returns per-partner: last_message_at, unread_count (messages from partner not yet read)
-  Future<Map<String, Map<String, dynamic>>> getDmConversationsOnce(String currentUserId) async {
-    final data = await _client
+  Future<Map<String, Map<String, dynamic>>> fetchDmConversationsBootstrap(String currentUserId) async {
+    final response = await _client
         .from('chat_messages')
-        .select('id, sender_id, receiver_id, sender_name, sender_avatar_url, content, created_at')
+        .select('id, sender_id, receiver_id, sender_name, sender_role, sender_avatar_url, content, created_at, is_deleted, reactions, reply_to_message_id, reply_to_sender_name, reply_to_content, file_url, file_name, file_type, channel')
         .not('receiver_id', 'is', null)
         .or('sender_id.eq.$currentUserId,receiver_id.eq.$currentUserId')
-        .order('created_at', ascending: true);
-
-    final conversations = <String, Map<String, dynamic>>{};
-
-    for (final msg in data) {
-      final msgId = msg['id']?.toString();
-      final senderId = msg['sender_id']?.toString();
-      final receiverId = msg['receiver_id']?.toString();
-      final createdAt = DateTime.tryParse(msg['created_at']?.toString() ?? '');
-      if (msgId == null || receiverId == null || createdAt == null) continue;
-
-      final partnerId = senderId == currentUserId ? receiverId : senderId;
-      if (partnerId == null || partnerId == currentUserId) continue;
-
-      conversations.putIfAbsent(partnerId, () => {
-        'last_message_at': createdAt,
-        'last_message_id': msgId,
-        'last_message': msg['content'],
-        'last_sender_id': senderId,
-        'sender_name': msg['sender_name'],
-        'sender_avatar_url': msg['sender_avatar_url'],
-        'messages_from_partner': <String>[],
-        'total_message_count': 0,
-      });
-
-      conversations[partnerId]!['total_message_count'] = (conversations[partnerId]!['total_message_count'] as int) + 1;
-
-      final currentLast = conversations[partnerId]!['last_message_at'] as DateTime;
-      if (createdAt.isAfter(currentLast) || createdAt.isAtSameMomentAs(currentLast)) {
-        conversations[partnerId]!['last_message_at'] = createdAt;
-        conversations[partnerId]!['last_message_id'] = msgId;
-        conversations[partnerId]!['last_message'] = msg['content'];
-        conversations[partnerId]!['last_sender_id'] = senderId;
+        .order('created_at', ascending: false)
+        .limit(1000);
         
-        // If the partner sent this message, use their name and avatar
-        // Otherwise keep whatever we had, or fetch from agents later
-        if (senderId != currentUserId) {
-          conversations[partnerId]!['sender_name'] = msg['sender_name'];
-          conversations[partnerId]!['sender_avatar_url'] = msg['sender_avatar_url'];
-        }
-      }
+    final data = response.reversed.toList();
 
-      if (senderId != currentUserId) {
-        (conversations[partnerId]!['messages_from_partner'] as List<String>).add(msgId);
+    final incomingMessageIds = data
+        .where((m) => m['sender_id']?.toString() != currentUserId)
+        .map((m) => m['id'].toString())
+        .toList();
+
+    final readMessageIds = <String>{};
+    if (incomingMessageIds.isNotEmpty) {
+      const batchSize = 300;
+      for (var i = 0; i < incomingMessageIds.length; i += batchSize) {
+        final chunk = incomingMessageIds.sublist(
+          i,
+          i + batchSize > incomingMessageIds.length ? incomingMessageIds.length : i + batchSize,
+        );
+        final receiptsData = await _client
+            .from('chat_read_receipts')
+            .select('message_id')
+            .eq('user_id', currentUserId)
+            .inFilter('message_id', chunk);
+        for (final row in receiptsData) {
+          readMessageIds.add(row['message_id'].toString());
+        }
       }
     }
 
-    final receiptsData = await _client
-        .from('chat_read_receipts')
-        .select('message_id')
-        .eq('user_id', currentUserId);
-    final readMessageIds = receiptsData.map((row) => row['message_id'].toString()).toSet();
+    final conversations = <String, Map<String, dynamic>>{};
 
-    for (final partnerId in conversations.keys) {
-      final messagesFromPartner = conversations[partnerId]!['messages_from_partner'] as List<String>;
-      
-      int unread = 0;
-      for (final msgId in messagesFromPartner) {
-        if (!readMessageIds.contains(msgId)) unread++;
+    for (final json in data) {
+      final msg = ChatMessage.fromJson(json);
+      final partnerId = msg.senderId == currentUserId ? msg.receiverId : msg.senderId;
+      if (partnerId == null || partnerId == currentUserId) continue;
+
+      if (!conversations.containsKey(partnerId)) {
+        conversations[partnerId] = {
+          'last_message': msg,
+          'unread_message_ids': <String>{},
+          'total_message_count': 0,
+        };
       }
 
-      conversations[partnerId]!['unread_count'] = unread;
-      conversations[partnerId]!.remove('messages_from_partner');
-      conversations[partnerId]!.remove('total_message_count');
+      final conv = conversations[partnerId]!;
+      conv['total_message_count'] = (conv['total_message_count'] as int) + 1;
+
+      final lastMsg = conv['last_message'] as ChatMessage;
+      if (msg.createdAt.isAfter(lastMsg.createdAt) || msg.createdAt.isAtSameMomentAs(lastMsg.createdAt)) {
+        conv['last_message'] = msg;
+      }
+
+      if (msg.senderId != currentUserId) {
+        if (!readMessageIds.contains(msg.id)) {
+          (conv['unread_message_ids'] as Set<String>).add(msg.id);
+        }
+      }
     }
 
     return conversations;
   }
 
-  Stream<Map<String, Map<String, dynamic>>> getDmConversations(String currentUserId) {
-    final controller = StreamController<Map<String, Map<String, dynamic>>>.broadcast();
-
-    Future<void> fetch() async {
-      try {
-        final conversations = await getDmConversationsOnce(currentUserId);
-        if (!controller.isClosed) {
-          controller.add(conversations);
-        }
-      } catch (e) {
-        if (!controller.isClosed) controller.addError(e);
-      }
-    }
-
-    fetch();
-
-    final channelMessages = _client
-        .channel('dm_convos_msg_$currentUserId')
+  RealtimeChannel subscribeToDmEngineMessages({
+    required String currentUserId,
+    required void Function(PostgresChangePayload payload) onEvent,
+  }) {
+    final uniqueId = DateTime.now().millisecondsSinceEpoch;
+    return _client
+        .channel('dm_engine_msg_${currentUserId}_$uniqueId')
         .onPostgresChanges(
           event: PostgresChangeEvent.all,
           schema: 'public',
           table: 'chat_messages',
-          callback: (_) => fetch(),
+          callback: onEvent,
         )
         .subscribe();
+  }
 
-    final channelReceipts = _client
-        .channel('dm_convos_rcpt_$currentUserId')
+  RealtimeChannel subscribeToDmEngineReadReceipts({
+    required String currentUserId,
+    required void Function(PostgresChangePayload payload) onEvent,
+  }) {
+    final uniqueId = DateTime.now().millisecondsSinceEpoch;
+    return _client
+        .channel('dm_engine_rcpt_${currentUserId}_$uniqueId')
         .onPostgresChanges(
           event: PostgresChangeEvent.all,
           schema: 'public',
@@ -495,15 +463,9 @@ class ChatRepository {
             column: 'user_id',
             value: currentUserId,
           ),
-          callback: (_) => fetch(),
+          callback: onEvent,
         )
         .subscribe();
-
-    controller.onCancel = () {
-      _client.removeChannel(channelMessages);
-      _client.removeChannel(channelReceipts);
-    };
-    return controller.stream;
   }
 }
 

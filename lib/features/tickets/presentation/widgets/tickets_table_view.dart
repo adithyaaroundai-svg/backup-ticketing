@@ -101,6 +101,42 @@ class _TicketsTableViewState extends ConsumerState<TicketsTableView> {
     }
   }
 
+  Widget _buildTableHeaders(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: context.adaptiveSlate50,
+        border: Border(bottom: BorderSide(color: AppColors.border)),
+      ),
+      child: Row(
+        children: [
+          Expanded(flex: 2, child: Text('Status', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: context.adaptiveSlate600))),
+          const SizedBox(width: 32),
+          Expanded(flex: 2, child: Text('Name of Customer', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: context.adaptiveSlate600))),
+          const SizedBox(width: 32),
+          Expanded(flex: 2, child: Text('Contact No.', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: context.adaptiveSlate600))),
+          const SizedBox(width: 32),
+          Expanded(flex: 2, child: Text('Claimed by', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: context.adaptiveSlate600))),
+          const SizedBox(width: 32),
+          Expanded(flex: 3, child: Padding(padding: const EdgeInsets.only(left: 12), child: Text('Task', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: context.adaptiveSlate600)))),
+          const SizedBox(width: 32),
+          Expanded(flex: 2, child: Text('Bill Amount', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: context.adaptiveSlate600))),
+          const SizedBox(width: 32),
+          Expanded(flex: 2, child: Text('Bill Description', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: context.adaptiveSlate600))),
+          const SizedBox(width: 32),
+          Expanded(flex: 1, child: Text('Payment\nCollected', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: context.adaptiveSlate600))),
+          const SizedBox(width: 32),
+          Expanded(flex: 1, child: Text('AMC', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: context.adaptiveSlate600))),
+          const SizedBox(width: 32),
+          Expanded(flex: 2, child: Text('Completed Date', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: context.adaptiveSlate600))),
+          const SizedBox(width: 32),
+          Expanded(flex: 2, child: Text('Reported Date', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: context.adaptiveSlate600))),
+          const SizedBox(width: 34),
+        ],
+      ),
+    );
+  }
+
   void _cancelAddingTicket() {
     setState(() {
       _addingTicketGroup = null;
@@ -214,6 +250,16 @@ class _TicketsTableViewState extends ConsumerState<TicketsTableView> {
     final customers = customersAsync.value ?? [];
     final customersMap = {for (final c in customers) c.id.toString(): c};
 
+    final globalAssigneeFilter = ref.watch(ticketAssigneeFilterProvider);
+    String? dropdownValue;
+    if (globalAssigneeFilter.startsWith('agent:')) {
+      dropdownValue = globalAssigneeFilter.substring(6);
+      if (agentsAsync.value != null) {
+        final agentExists = agentsAsync.value!.any((a) => a['id']?.toString() == dropdownValue);
+        if (!agentExists) dropdownValue = null;
+      }
+    }
+
     // Filter tickets by search query and apply optimistic overrides
     final statusOverrides = ref.watch(ticketOptimisticStatusOverridesProvider);
     final assigneeOverrides = ref.watch(
@@ -226,6 +272,7 @@ class _TicketsTableViewState extends ConsumerState<TicketsTableView> {
             assignedTo: assigneeOverrides[t.ticketId] ?? t.assignedTo,
           );
         }).toList();
+
     if (_searchQuery.isNotEmpty) {
       final query = _searchQuery.toLowerCase();
       filteredTickets = filteredTickets.where((ticket) {
@@ -233,7 +280,8 @@ class _TicketsTableViewState extends ConsumerState<TicketsTableView> {
         final customerName = customer?.companyName.toLowerCase() ?? '';
         final ticketPhone = ticket.contactPhone?.toLowerCase() ?? '';
         final customerPhones = customer?.phoneNumbers.join(' ').toLowerCase() ?? '';
-        return customerName.contains(query) || 
+        return ticket.title.toLowerCase().contains(query) || 
+               customerName.contains(query) || 
                ticketPhone.contains(query) || 
                customerPhones.contains(query);
       }).toList();
@@ -292,7 +340,7 @@ class _TicketsTableViewState extends ConsumerState<TicketsTableView> {
                     ),
                     child: TextField(
                       decoration: InputDecoration(
-                        hintText: 'Search customer...',
+                        hintText: 'Search customer, task...',
                         hintStyle: TextStyle(fontSize: 13, color: context.adaptiveSlate400),
                         prefixIcon: Icon(LucideIcons.search, size: 16, color: context.adaptiveSlate400),
                         border: InputBorder.none,
@@ -304,6 +352,48 @@ class _TicketsTableViewState extends ConsumerState<TicketsTableView> {
                         setState(() {
                           _searchQuery = val;
                         });
+                      },
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Container(
+                  height: 36,
+                  width: 200,
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  decoration: BoxDecoration(
+                    color: context.adaptiveSlate50,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: context.adaptiveBorder),
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<String?>(
+                      isExpanded: true,
+                      isDense: true,
+                      value: dropdownValue,
+                      hint: Text('Filter by Assigned Agent', style: TextStyle(fontSize: 13, color: context.adaptiveSlate400)),
+                      icon: Icon(LucideIcons.chevronDown, size: 16, color: context.adaptiveSlate400),
+                      style: TextStyle(fontSize: 13, color: context.adaptiveSlate700),
+                      items: [
+                        const DropdownMenuItem<String?>(
+                          value: null,
+                          child: Text('All Agents'),
+                        ),
+                        ...(agentsAsync.value ?? []).map((agent) {
+                          final agentId = agent['id']?.toString();
+                          final agentName = agent['full_name']?.toString() ?? agent['username']?.toString() ?? 'Unknown';
+                          return DropdownMenuItem<String?>(
+                            value: agentId,
+                            child: Text(agentName),
+                          );
+                        }),
+                      ],
+                      onChanged: (val) {
+                        if (val == null) {
+                          ref.read(ticketAssigneeFilterProvider.notifier).setAll();
+                        } else {
+                          ref.read(ticketAssigneeFilterProvider.notifier).setAgent(val);
+                        }
                       },
                     ),
                   ),
@@ -326,137 +416,7 @@ class _TicketsTableViewState extends ConsumerState<TicketsTableView> {
           width: 1600,
           child: Column(
             children: [
-              // Table Header
-          Container(
-            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              border: Border(bottom: BorderSide(color: AppColors.border)),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  flex: 2,
-                  child: Text(
-                    'Status',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: context.adaptiveSlate600,
-                    ),
-                  ),
-                ),
-                SizedBox(width: 32),
-                Expanded(
-                  flex: 2,
-                  child: Text(
-                    'Name of Customer',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: context.adaptiveSlate600,
-                    ),
-                  ),
-                ),
-                SizedBox(width: 32),
-                Expanded(
-                  flex: 2,
-                  child: Text(
-                    'Contact No.',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: context.adaptiveSlate600,
-                    ),
-                  ),
-                ),
-                SizedBox(width: 32),
-                Expanded(
-                  flex: 2,
-                  child: Text(
-                    'Claimed by',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: context.adaptiveSlate600,
-                    ),
-                  ),
-                ),
-                SizedBox(width: 32),
-                Expanded(
-                  flex: 3,
-                  child: Text(
-                    'Task',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: context.adaptiveSlate600,
-                    ),
-                  ),
-                ),
-                SizedBox(width: 32),
-                Expanded(
-                  flex: 2,
-                  child: Text(
-                    'Bill Amount',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: context.adaptiveSlate600,
-                    ),
-                  ),
-                ),
-                SizedBox(width: 32),
-                Expanded(
-                  flex: 1,
-                  child: Text(
-                    'Payment\nCollected',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: context.adaptiveSlate600,
-                    ),
-                  ),
-                ),
-                SizedBox(width: 32),
-                Expanded(
-                  flex: 1,
-                  child: Text(
-                    'AMC',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: context.adaptiveSlate600,
-                    ),
-                  ),
-                ),
-                SizedBox(width: 32),
-                Expanded(
-                  flex: 2,
-                  child: Text(
-                    'Completed Date',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: context.adaptiveSlate600,
-                    ),
-                  ),
-                ),
-                SizedBox(width: 32),
-                Expanded(
-                  flex: 2,
-                  child: Text(
-                    'Reported Date',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: context.adaptiveSlate600,
-                    ),
-                  ),
-                ),
-                SizedBox(width: 34),
-              ],
-            ),
-          ),
+              // Global Table Headers removed and placed inside each group
           // Table Content
           Expanded(
             child: groupedTickets.isEmpty
@@ -505,80 +465,65 @@ class _TicketsTableViewState extends ConsumerState<TicketsTableView> {
                               return Padding(
                                 key: ValueKey(groupDateKey),
                                 padding: EdgeInsets.only(
-                                  top: index == 0 ? 0 : 20,
-                                  bottom: 4,
+                                  top: index == 0 ? 0 : 32,
+                                  bottom: 24,
                                 ),
-                                child: Container(
-                                  decoration: BoxDecoration(
-                                    color: context.adaptiveCard,
-                                    borderRadius: BorderRadius.circular(10),
-                                    border: Border.all(color: AppColors.border),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: Colors.black.withValues(alpha: 0.04),
-                                        blurRadius: 8,
-                                        offset: const Offset(0, 2),
-                                      ),
-                                    ],
-                                  ),
-                                  clipBehavior: Clip.antiAlias,
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      // Date Header
-                                      if (group['date'] != null)
-                                        Container(
-                                          width: double.infinity,
-                                          padding: EdgeInsets.symmetric(
-                                            horizontal: 16,
-                                            vertical: 10,
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    if (group['date'] != null)
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                        decoration: BoxDecoration(
+                                          color: context.adaptiveSlate50,
+                                          borderRadius: const BorderRadius.only(
+                                            topLeft: Radius.circular(8),
+                                            topRight: Radius.circular(8),
                                           ),
-                                          decoration: BoxDecoration(
-                                            color: context.adaptiveSlate100,
-                                            border: Border(
-                                              bottom: BorderSide(color: AppColors.border),
-                                            ),
-                                          ),
-                                          child: Row(
-                                            children: [
-                                              Icon(
-                                                LucideIcons.calendarDays,
-                                                size: 13,
-                                                color: context.adaptiveSlate500,
-                                              ),
-                                              SizedBox(width: 6),
-                                              Text(
-                                                group['date'],
-                                                style: TextStyle(
-                                                  fontSize: 12,
-                                                  fontWeight: FontWeight.w700,
-                                                  color: context.adaptiveSlate700,
-                                                  letterSpacing: 0.3,
-                                                ),
-                                              ),
-                                              SizedBox(width: 8),
-                                              Container(
-                                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                                decoration: BoxDecoration(
-                                                  color: context.isDarkMode 
-                                                      ? Colors.white.withValues(alpha: 0.15) 
-                                                      : AppColors.primary.withValues(alpha: 0.1),
-                                                  borderRadius: BorderRadius.circular(12),
-                                                ),
-                                                child: Text(
-                                                  '${(group['tickets'] as List).length} ticket${(group['tickets'] as List).length == 1 ? '' : 's'}',
-                                                  style: TextStyle(
-                                                    fontSize: 10,
-                                                    fontWeight: FontWeight.w600,
-                                                    color: context.isDarkMode 
-                                                        ? Colors.white 
-                                                        : AppColors.primary,
-                                                  ),
-                                                ),
-                                              ),
-                                            ],
+                                          border: Border(
+                                            top: BorderSide(color: AppColors.border),
+                                            left: BorderSide(color: AppColors.border),
+                                            right: BorderSide(color: AppColors.border),
                                           ),
                                         ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(LucideIcons.calendarDays, size: 13, color: context.adaptiveSlate500),
+                                            const SizedBox(width: 6),
+                                            Text(group['date'], style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: context.adaptiveSlate700, letterSpacing: 0.3)),
+                                            const SizedBox(width: 8),
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                              decoration: BoxDecoration(
+                                                color: context.isDarkMode ? Colors.white.withValues(alpha: 0.15) : AppColors.primary.withValues(alpha: 0.1),
+                                                borderRadius: BorderRadius.circular(12),
+                                              ),
+                                              child: Text('${(group['tickets'] as List).length} Items', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: context.isDarkMode ? Colors.white : AppColors.primary)),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    Container(
+                                      decoration: BoxDecoration(
+                                        color: context.adaptiveCard,
+                                        borderRadius: BorderRadius.only(
+                                          topRight: const Radius.circular(10),
+                                          bottomLeft: const Radius.circular(10),
+                                          bottomRight: const Radius.circular(10),
+                                          topLeft: group['date'] == null ? const Radius.circular(10) : Radius.zero,
+                                        ),
+                                        border: Border.all(color: AppColors.border),
+                                        boxShadow: [
+                                          BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 2)),
+                                        ],
+                                      ),
+                                      clipBehavior: Clip.antiAlias,
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          if (group['date'] != null)
+                                            _buildTableHeaders(context),
                                       // Tickets for this date
                                       ...group['tickets'].map<Widget>((ticket) {
                                         return TicketTableRow(
@@ -753,6 +698,12 @@ class _TicketsTableViewState extends ConsumerState<TicketsTableView> {
                                                     ),
                                                   ),
                                                   SizedBox(width: 32),
+                                                  // Bill description placeholder during creation
+                                                  Expanded(
+                                                    flex: 2,
+                                                    child: SizedBox.shrink(),
+                                                  ),
+                                                  SizedBox(width: 32),
                                                   // Payment Collected dropdown (flex: 1)
                                                   Expanded(
                                                     flex: 1,
@@ -866,8 +817,10 @@ class _TicketsTableViewState extends ConsumerState<TicketsTableView> {
                                     ],
                                   ),
                                 ),
-                              );
-                            },
+                              ],
+                            ),
+                          );
+                        },
                           );
                         },
                         loading: () => Center(child: CircularProgressIndicator()),
@@ -1148,6 +1101,26 @@ class _TicketsTableViewState extends ConsumerState<TicketsTableView> {
                   if (ticket.completedDate != null)
                     _mobileTag('Completed: ${DateFormat('d/M/yy').format(ticket.completedDate!)}'),
                 ],
+              ),
+            ],
+            if (ticket.billDescription != null && ticket.billDescription!.isNotEmpty) ...[
+              SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: context.isDarkMode ? AppColors.slate800 : AppColors.slate50,
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: context.isDarkMode ? AppColors.slate700 : AppColors.slate200),
+                ),
+                child: Row(
+                  children: [
+                    Icon(LucideIcons.fileText, size: 14, color: AppColors.slate500),
+                    SizedBox(width: 6),
+                    Expanded(
+                      child: _buildHighlightedMentionText(ticket.billDescription!, agentsMap, context, fontSize: 12),
+                    ),
+                  ],
+                ),
               ),
             ],
           ],
@@ -1433,6 +1406,11 @@ class _TicketTableRowState extends ConsumerState<TicketTableRow> {
   bool _savingContact = false;
   bool _editingBill = false;
   bool _savingBill = false;
+  bool _editingBillDesc = false;
+  bool _savingBillDesc = false;
+  bool _showMentions = false;
+  String _mentionQuery = '';
+  int _mentionStartIndex = -1;
   bool _savingCompletedDate = false;
   bool _savingReportedDate = false;
   bool _isDeleting = false;
@@ -1442,6 +1420,7 @@ class _TicketTableRowState extends ConsumerState<TicketTableRow> {
   late TextEditingController _taskCtrl;
   late TextEditingController _contactCtrl;
   late TextEditingController _billCtrl;
+  late TextEditingController _billDescCtrl;
 
   @override
   void initState() {
@@ -1450,6 +1429,8 @@ class _TicketTableRowState extends ConsumerState<TicketTableRow> {
     _taskCtrl = TextEditingController(text: widget.ticket.title);
     _contactCtrl = TextEditingController(text: widget.ticket.contactPhone ?? '');
     _billCtrl = TextEditingController(text: widget.ticket.billAmount?.toString() ?? '');
+    _billDescCtrl = TextEditingController(text: widget.ticket.billDescription ?? '');
+    _billDescCtrl.addListener(_onBillDescChanged);
   }
 
   @override
@@ -1458,6 +1439,8 @@ class _TicketTableRowState extends ConsumerState<TicketTableRow> {
     _taskCtrl.dispose();
     _contactCtrl.dispose();
     _billCtrl.dispose();
+    _billDescCtrl.removeListener(_onBillDescChanged);
+    _billDescCtrl.dispose();
     super.dispose();
   }
 
@@ -1566,6 +1549,72 @@ class _TicketTableRowState extends ConsumerState<TicketTableRow> {
       }
     } finally {
       if (mounted) setState(() => _savingBill = false);
+    }
+  }
+
+  void _onBillDescChanged() {
+    if (!_editingBillDesc) return;
+    final text = _billDescCtrl.text;
+    final selection = _billDescCtrl.selection;
+    if (!selection.isValid || selection.isDirectional || selection.baseOffset <= 0) {
+      if (_showMentions) setState(() => _showMentions = false);
+      return;
+    }
+    final textBeforeCursor = text.substring(0, selection.baseOffset);
+    final lastAtSignIndex = textBeforeCursor.lastIndexOf('@');
+
+    if (lastAtSignIndex != -1) {
+      if (lastAtSignIndex == 0 || textBeforeCursor[lastAtSignIndex - 1] == ' ') {
+        final query = textBeforeCursor.substring(lastAtSignIndex + 1);
+        if (!query.contains(' ') && !query.contains(']')) {
+          setState(() {
+            _showMentions = true;
+            _mentionQuery = query.toLowerCase();
+            _mentionStartIndex = lastAtSignIndex;
+          });
+          return;
+        }
+      }
+    }
+    if (_showMentions) setState(() => _showMentions = false);
+  }
+
+  void _insertMention(String agentId) {
+    final text = _billDescCtrl.text;
+    final selection = _billDescCtrl.selection;
+    if (_mentionStartIndex == -1 || _mentionStartIndex >= text.length) return;
+    
+    final before = text.substring(0, _mentionStartIndex);
+    final after = selection.isValid && selection.baseOffset <= text.length 
+        ? text.substring(selection.baseOffset) 
+        : '';
+    
+    final newText = '$before@[$agentId] $after';
+    _billDescCtrl.text = newText;
+    final newOffset = _mentionStartIndex + agentId.length + 4;
+    if (newOffset <= newText.length) {
+      _billDescCtrl.selection = TextSelection.collapsed(offset: newOffset);
+    }
+    setState(() => _showMentions = false);
+  }
+
+  Future<void> _saveBillDescription(String newDesc) async {
+    setState(() => _savingBillDesc = true);
+    final notifier = ref.read(ticketUpdaterProvider.notifier);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final val = newDesc.trim().isEmpty ? null : newDesc.trim();
+      final updated = widget.ticket.copyWith(billDescription: val);
+      await notifier.updateTicket(updated);
+      if (mounted) setState(() => _editingBillDesc = false);
+    } catch (e) {
+      if (mounted) {
+        messenger.showSnackBar(
+          SnackBar(content: Text('Failed to update bill description: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _savingBillDesc = false);
     }
   }
 
@@ -2089,6 +2138,127 @@ class _TicketTableRowState extends ConsumerState<TicketTableRow> {
                     ),
             ),
             SizedBox(width: 32),
+            // Bill Description cell with @ mentions
+            Expanded(
+              flex: 2,
+              child: isClaimedByMe
+                  ? _editingBillDesc
+                      ? Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: TextField(
+                                    controller: _billDescCtrl,
+                                    autofocus: true,
+                                    style: TextStyle(fontSize: 13, color: context.adaptiveSlate900, fontWeight: FontWeight.w500),
+                                    decoration: InputDecoration(
+                                      isDense: true,
+                                      hintText: 'Type notes or @name...',
+                                      hintStyle: TextStyle(fontSize: 11, color: context.adaptiveSlate400),
+                                      contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                                      border: const OutlineInputBorder(),
+                                    ),
+                                    onSubmitted: (_) => _saveBillDescription(_billDescCtrl.text),
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                                if (_savingBillDesc)
+                                  const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                                else ...[
+                                  InkWell(
+                                    onTap: () => _saveBillDescription(_billDescCtrl.text),
+                                    child: const Icon(LucideIcons.check, size: 16, color: Colors.green),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  InkWell(
+                                    onTap: () => setState(() {
+                                      _editingBillDesc = false;
+                                      _showMentions = false;
+                                      _billDescCtrl.text = widget.ticket.billDescription ?? '';
+                                    }),
+                                    child: const Icon(LucideIcons.x, size: 16, color: Colors.grey),
+                                  ),
+                                ],
+                              ],
+                            ),
+                            if (_showMentions) ...[
+                              const SizedBox(height: 4),
+                              Container(
+                                constraints: const BoxConstraints(maxHeight: 150),
+                                decoration: BoxDecoration(
+                                  color: context.isDarkMode ? AppColors.slate800 : Colors.white,
+                                  borderRadius: BorderRadius.circular(6),
+                                  boxShadow: [
+                                    BoxShadow(color: Colors.black.withValues(alpha: 0.15), blurRadius: 6, offset: const Offset(0, 2)),
+                                  ],
+                                  border: Border.all(color: AppColors.slate200),
+                                ),
+                                child: ListView(
+                                  shrinkWrap: true,
+                                  children: widget.agents.where((a) {
+                                    final name = (a['full_name'] ?? a['username'] ?? '').toString().toLowerCase();
+                                    return name.contains(_mentionQuery);
+                                  }).map<Widget>((a) {
+                                    final id = a['id'].toString();
+                                    final name = (a['full_name'] ?? a['username'] ?? 'User').toString();
+                                    return InkWell(
+                                      onTap: () => _insertMention(id),
+                                      child: Padding(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                                        child: Row(
+                                          children: [
+                                            Icon(LucideIcons.user, size: 14, color: AppColors.primary),
+                                            const SizedBox(width: 6),
+                                            Expanded(child: Text(name, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500))),
+                                          ],
+                                        ),
+                                      ),
+                                    );
+                                  }).toList(),
+                                ),
+                              ),
+                            ],
+                          ],
+                        )
+                      : Row(
+                          children: [
+                            Flexible(
+                              child: (widget.ticket.billDescription != null && widget.ticket.billDescription!.isNotEmpty)
+                                  ? _buildHighlightedMentionText(widget.ticket.billDescription!, widget.agentsMap, context)
+                                  : Text(
+                                      'Add description...',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: context.adaptiveSlate400,
+                                        fontStyle: FontStyle.italic,
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                            ),
+                            const SizedBox(width: 4),
+                            _EditButton(
+                              onTap: () => setState(() {
+                                _suppressNextTap = true;
+                                _billDescCtrl.text = widget.ticket.billDescription ?? '';
+                                _editingBillDesc = true;
+                                Future.delayed(const Duration(milliseconds: 100), () {
+                                  if (mounted) setState(() => _suppressNextTap = false);
+                                });
+                              }),
+                            ),
+                          ],
+                        )
+                  : (widget.ticket.billDescription != null && widget.ticket.billDescription!.isNotEmpty)
+                      ? _buildHighlightedMentionText(widget.ticket.billDescription!, widget.agentsMap, context)
+                      : Text(
+                          '-',
+                          style: TextStyle(fontSize: 13, color: context.adaptiveSlate400),
+                        ),
+            ),
+            SizedBox(width: 32),
             // Payment collected
             Expanded(
               flex: 1,
@@ -2423,4 +2593,70 @@ class _EditButton extends StatelessWidget {
       ),
     );
   }
+}
+
+Widget _buildHighlightedMentionText(String text, Map<String, dynamic> agentsMap, BuildContext context, {double fontSize = 13, bool isBold = false}) {
+  if (text.isEmpty) return const SizedBox.shrink();
+  final regExp = RegExp(r'@\[([a-zA-Z0-9\-]{1,40})\]');
+  final spans = <InlineSpan>[];
+  int lastMatchEnd = 0;
+
+  for (final match in regExp.allMatches(text)) {
+    if (match.start > lastMatchEnd) {
+      spans.add(TextSpan(
+        text: text.substring(lastMatchEnd, match.start),
+        style: TextStyle(
+          fontSize: fontSize,
+          color: context.isDarkMode ? Colors.white : context.adaptiveSlate600,
+          fontWeight: isBold ? (context.isDarkMode ? FontWeight.bold : FontWeight.w500) : FontWeight.normal,
+        ),
+      ));
+    }
+
+    final agentId = match.group(1);
+    final agentData = agentId != null ? agentsMap[agentId] : null;
+    final agentName = agentData != null
+        ? ((agentData['full_name'] ?? agentData['username']) ?? 'User').toString()
+        : 'User';
+
+    spans.add(WidgetSpan(
+      alignment: PlaceholderAlignment.middle,
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 2),
+        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+        decoration: BoxDecoration(
+          color: AppColors.primary.withValues(alpha: 0.15),
+          borderRadius: BorderRadius.circular(4),
+          border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+        ),
+        child: Text(
+          '@$agentName',
+          style: TextStyle(
+            fontSize: fontSize - 1,
+            fontWeight: FontWeight.w600,
+            color: AppColors.primary,
+          ),
+        ),
+      ),
+    ));
+
+    lastMatchEnd = match.end;
+  }
+
+  if (lastMatchEnd < text.length) {
+    spans.add(TextSpan(
+      text: text.substring(lastMatchEnd),
+      style: TextStyle(
+        fontSize: fontSize,
+        color: context.isDarkMode ? Colors.white : context.adaptiveSlate600,
+        fontWeight: isBold ? (context.isDarkMode ? FontWeight.bold : FontWeight.w500) : FontWeight.normal,
+      ),
+    ));
+  }
+
+  return RichText(
+    text: TextSpan(children: spans),
+    maxLines: 2,
+    overflow: TextOverflow.ellipsis,
+  );
 }

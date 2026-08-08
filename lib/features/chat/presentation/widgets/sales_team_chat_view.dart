@@ -18,6 +18,7 @@ import '../../../auth/presentation/providers/auth_provider.dart';
 import '../providers/chat_provider.dart';
 import '../../domain/entities/chat_message.dart';
 import 'markdown_text_editing_controller.dart';
+import 'chat_voice_recorder.dart';
 
 IconData _getFileIcon(String? fileType) {
   if (fileType == null) return Icons.insert_drive_file;
@@ -68,6 +69,9 @@ class _SalesTeamChatViewState extends ConsumerState<SalesTeamChatView> {
   String _mentionQuery = '';
   int _mentionStartIndex = 0;
 
+  bool _isRecordingVoice = false;
+  bool _isTextEmpty = true;
+
   @override
   void initState() {
     super.initState();
@@ -76,6 +80,10 @@ class _SalesTeamChatViewState extends ConsumerState<SalesTeamChatView> {
 
     _messageCtrl.addListener(() {
       final text = _messageCtrl.text;
+      final isEmpty = text.trim().isEmpty;
+      if (isEmpty != _isTextEmpty) {
+        setState(() => _isTextEmpty = isEmpty);
+      }
       final selection = _messageCtrl.selection;
       
       if (!selection.isValid || selection.baseOffset == -1) return;
@@ -401,6 +409,27 @@ class _SalesTeamChatViewState extends ConsumerState<SalesTeamChatView> {
     _focusNode.requestFocus();
   }
 
+  Future<void> _sendVoiceNote(String localPath, int durationSeconds) async {
+    final currentUser = ref.read(authProvider);
+    if (currentUser == null) return;
+
+    final controller = ref.read(chatControllerProvider.notifier);
+    
+    await controller.sendVoiceMessage(
+      senderId: currentUser.id,
+      senderName: currentUser.fullName.isNotEmpty ? currentUser.fullName : currentUser.username,
+      senderRole: currentUser.role,
+      localAudioPath: localPath,
+      durationSeconds: durationSeconds,
+      channel: _channelId,
+      replyToMessageId: _replyingTo,
+      replyToSenderName: _replyToName,
+      replyToContent: _replyToContent,
+    );
+    _scrollToBottom();
+    _cancelReply();
+  }
+
   Future<void> _sendMessage() async {
     final text = _messageCtrl.text.trim();
     if (text.isEmpty && _selectedFile == null) return;
@@ -482,6 +511,45 @@ class _SalesTeamChatViewState extends ConsumerState<SalesTeamChatView> {
     });
 
     _scrollToBottom();
+  }
+
+  Widget _buildDateDivider(DateTime date, BuildContext context) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final yesterday = today.subtract(const Duration(days: 1));
+    final msgDate = DateTime(date.year, date.month, date.day);
+
+    String dateText;
+    if (msgDate == today) {
+      dateText = 'Today';
+    } else if (msgDate == yesterday) {
+      dateText = 'Yesterday';
+    } else {
+      dateText = DateFormat('MMM d, yyyy').format(date);
+    }
+
+    return Center(
+      child: Container(
+        margin: const EdgeInsets.symmetric(vertical: 16),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+        decoration: BoxDecoration(
+          color: context.isDarkMode 
+              ? Colors.white.withValues(alpha: 0.1) 
+              : Colors.grey.shade200,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Text(
+          dateText,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: context.isDarkMode 
+                ? Colors.white70 
+                : Colors.grey.shade600,
+          ),
+        ),
+      ),
+    );
   }
 
   String _getMimeType(String? extension) {
@@ -566,8 +634,9 @@ class _SalesTeamChatViewState extends ConsumerState<SalesTeamChatView> {
 
                 return Stack(
                     children: [
-                      ListView.builder(
-                        controller: _scrollCtrl,
+                      SelectionArea(
+                        child: ListView.builder(
+                          controller: _scrollCtrl,
                         padding: const EdgeInsets.only(left: 16, right: 16, bottom: 16, top: 60),
                         reverse: true,
                         itemCount: messages.length,
@@ -579,14 +648,38 @@ class _SalesTeamChatViewState extends ConsumerState<SalesTeamChatView> {
                           final showSender = prevMsg == null || prevMsg.senderId != msg.senderId;
                           final isDeleted = msg.isDeleted;
 
-                          return _ChatBubble(
+                          bool showDateDivider = false;
+                          if (prevMsg == null) {
+                            showDateDivider = true;
+                          } else {
+                            final prevDate = prevMsg.createdAt.toLocal();
+                            final currDate = msg.createdAt.toLocal();
+                            if (prevDate.year != currDate.year || prevDate.month != currDate.month || prevDate.day != currDate.day) {
+                              showDateDivider = true;
+                            }
+                          }
+
+                          Widget bubble = _ChatBubble(
                             message: msg,
                             isMe: isMe,
                             showSender: showSender,
                             isDeleted: isDeleted,
                             onReply: () => _setReply(msg),
                           );
+
+                          if (showDateDivider) {
+                            return Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                _buildDateDivider(msg.createdAt.toLocal(), context),
+                                bubble,
+                              ],
+                            );
+                          }
+                          return bubble;
                         },
+                      ),
                       ),
                       if (_showScrollToBottom)
                         Positioned(
@@ -952,16 +1045,26 @@ class _SalesTeamChatViewState extends ConsumerState<SalesTeamChatView> {
                     ),
                     const SizedBox(width: 8),
                     // Send button
-                    CircleAvatar(
-                      backgroundColor: AppColors.primary,
-                      radius: 20,
-                      child: IconButton(
-                        icon: const Icon(LucideIcons.send, color: Colors.white, size: 18),
-                        onPressed: _sendMessage,
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(),
+                    if (_isRecordingVoice || (_isTextEmpty && _selectedFile == null && !_isUploading))
+                      ChatVoiceRecorder(
+                        key: const ValueKey('sales_chat_voice_recorder'),
+                        disabled: _selectedFile != null || _isUploading,
+                        onRecordComplete: (path, duration) => _sendVoiceNote(path, duration),
+                        onRecordingStateChanged: (isRecording) {
+                          setState(() => _isRecordingVoice = isRecording);
+                        },
+                      )
+                    else
+                      CircleAvatar(
+                        backgroundColor: AppColors.primary,
+                        radius: 20,
+                        child: IconButton(
+                          icon: const Icon(LucideIcons.send, color: Colors.white, size: 18),
+                          onPressed: _sendMessage,
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                        ),
                       ),
-                    ),
                   ],
                 ),
               ),
@@ -1260,6 +1363,7 @@ class _ChatBubbleState extends ConsumerState<_ChatBubble> {
                                   timeStr,
                                   style: TextStyle(
                                     fontSize: 10,
+                                    fontWeight: FontWeight.w600,
                                     color: isMe
                                         ? (context.isDarkMode ? Colors.white60 : AppColors.primary.withValues(alpha: 0.6))
                                         : (context.isDarkMode ? Colors.white54 : AppColors.slate400),

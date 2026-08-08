@@ -32,6 +32,8 @@ import '../../data/repositories/chat_repository.dart';
 import '../../../tickets/domain/entities/ticket.dart';
 
 import '../../../tickets/presentation/providers/ticket_provider.dart';
+import '../widgets/chat_attachment_renderer.dart';
+import '../widgets/chat_voice_recorder.dart';
 
 import '../../../dashboard/presentation/widgets/create_ticket_dialog.dart';
 
@@ -105,6 +107,8 @@ class _DirectMessagePageState extends ConsumerState<DirectMessagePage> {
   ChatMessage? _replyingToMessage;
   PlatformFile? _selectedFile;
   bool _isUploadingFile = false;
+  bool _isRecordingVoice = false;
+  bool _isTextEmpty = true;
 
   void _insertFormatting(String prefix, String suffix) {
     final text = _textCtrl.text;
@@ -282,12 +286,26 @@ class _DirectMessagePageState extends ConsumerState<DirectMessagePage> {
     _textCtrl.addListener(_onTextChanged);
     _scrollCtrl.addListener(_onScroll);
 
-    // Mark conversation as read when opened
+    // Mark conversation as read and set currently open conversation
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted && (ModalRoute.of(context)?.isCurrent ?? false)) {
+        ref.read(currentOpenConversationProvider.notifier).state = widget.partnerId;
         _markConversationAsRead();
       }
     });
+  }
+
+  @override
+  void didUpdateWidget(DirectMessagePage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.partnerId != widget.partnerId) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && (ModalRoute.of(context)?.isCurrent ?? false)) {
+          ref.read(currentOpenConversationProvider.notifier).state = widget.partnerId;
+          _markConversationAsRead();
+        }
+      });
+    }
   }
 
   void _onScroll() {
@@ -303,6 +321,12 @@ class _DirectMessagePageState extends ConsumerState<DirectMessagePage> {
 
   void _onTextChanged() {
     final text = _textCtrl.text;
+    final currentlyEmpty = text.trim().isEmpty;
+    if (_isTextEmpty != currentlyEmpty) {
+      setState(() {
+        _isTextEmpty = currentlyEmpty;
+      });
+    }
 
     final selection = _textCtrl.selection;
 
@@ -340,12 +364,15 @@ class _DirectMessagePageState extends ConsumerState<DirectMessagePage> {
 
   @override
   void dispose() {
+    try {
+      if (ref.read(currentOpenConversationProvider) == widget.partnerId) {
+        ref.read(currentOpenConversationProvider.notifier).state = null;
+      }
+    } catch (_) {}
+
     _textCtrl.dispose();
     _messageFocusNode.dispose();
-
     _scrollCtrl.dispose();
-
-
     super.dispose();
   }
 
@@ -409,10 +436,6 @@ class _DirectMessagePageState extends ConsumerState<DirectMessagePage> {
           fileType: fileType,
         );
 
-    // Unread count is handled automatically by Postgres listener
-    ref.invalidate(dmUnreadCountProvider(widget.partnerId));
-    ref.invalidate(dmConversationsProvider);
-
     final agentsAsync = ref.read(agentsListProvider);
 
     final agents = agentsAsync.value ?? [];
@@ -442,6 +465,30 @@ class _DirectMessagePageState extends ConsumerState<DirectMessagePage> {
     setState(() {
       _selectedFile = null;
     });
+  }
+
+  void _sendVoiceNote(String path, int duration) {
+    final agent = ref.read(authProvider);
+    if (agent == null) return;
+
+    ref.read(chatControllerProvider.notifier).sendVoiceMessage(
+          senderId: agent.id,
+          senderName: agent.fullName,
+          senderRole: agent.role,
+          localAudioPath: path,
+          durationSeconds: duration,
+          receiverId: widget.partnerId,
+          senderAvatarUrl: agent.avatarUrl,
+          replyToMessageId: _replyingToMessage?.id,
+          replyToSenderName: _replyingToMessage?.senderName,
+          replyToContent: _replyingToMessage?.content,
+        );
+
+    if (_replyingToMessage != null) {
+      setState(() {
+        _replyingToMessage = null;
+      });
+    }
   }
 
   // ignore: unused_element
@@ -508,10 +555,23 @@ class _DirectMessagePageState extends ConsumerState<DirectMessagePage> {
     required String? zohoMailId,
     required bool video,
   }) async {
-    final hasTeams = teamsUserId != null && teamsUserId.trim().isNotEmpty;
     final hasZoho = zohoMailId != null && zohoMailId.trim().isNotEmpty;
 
-    // Always show the picker with both options
+    if (!hasZoho) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('This agent has not set up their Zoho Cliq ID yet.'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+      return;
+    }
+    await _launchZohoCliqCall(zohoMailId, video: video);
+
+    /* KEEPING FOR FUTURE REFERENCE:
+    final hasTeams = teamsUserId != null && teamsUserId.trim().isNotEmpty;
     if (!mounted) return;
     final choice = await showDialog<String>(
       context: context,
@@ -564,7 +624,9 @@ class _DirectMessagePageState extends ConsumerState<DirectMessagePage> {
       }
       await _launchZohoCliqCall(zohoMailId, video: video);
     }
+    */
   }
+
 
   Future<void> _launchTeamsCall(
     String? teamsUserId, {
@@ -676,6 +738,24 @@ class _DirectMessagePageState extends ConsumerState<DirectMessagePage> {
     final partnerTeamsId = partnerData['teams_user_id'] as String?;
     final partnerZohoId = partnerData['zoho_mail_id'] as String?;
 
+    String partnerStatus = 'Offline';
+    Color partnerStatusColor = Colors.grey.shade400;
+    
+    final lastSeenStr = partnerData['last_seen']?.toString();
+    if (lastSeenStr != null) {
+      final lastSeen = DateTime.tryParse(lastSeenStr);
+      if (lastSeen != null) {
+        final diff = DateTime.now().difference(lastSeen).inMinutes;
+        if (diff < 5) {
+          partnerStatus = 'Online';
+          partnerStatusColor = Colors.green.shade500;
+        } else if (diff < 15) {
+          partnerStatus = 'Away';
+          partnerStatusColor = Colors.orange.shade500;
+        }
+      }
+    }
+
     ref.listen(dmStreamProvider(widget.partnerId), (previous, next) {
       if (next is AsyncData<List<ChatMessage>> && next.value.isNotEmpty) {
         final previousNewest = previous is AsyncData<List<ChatMessage>> && previous.value.isNotEmpty
@@ -707,7 +787,7 @@ class _DirectMessagePageState extends ConsumerState<DirectMessagePage> {
     });
 
     return MainLayout(
-      currentPath: '/chat',
+      currentPath: '/chat/dm/${widget.partnerId}',
 
       child: Scaffold(
         backgroundColor: context.adaptiveBackground,
@@ -772,16 +852,37 @@ class _DirectMessagePageState extends ConsumerState<DirectMessagePage> {
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-                    Text(
-                      partnerName.isNotEmpty
-                          ? 'Direct Message'
-                          : 'Instant communication with the team',
-                      style: TextStyle(
-                        color: context.adaptiveSlate500,
-                        fontSize: 11,
-                        fontWeight: FontWeight.normal,
+                    if (partnerName.isNotEmpty)
+                      Row(
+                        children: [
+                          Container(
+                            width: 6,
+                            height: 6,
+                            margin: const EdgeInsets.only(right: 6),
+                            decoration: BoxDecoration(
+                              color: partnerStatusColor,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          Text(
+                            partnerStatus,
+                            style: TextStyle(
+                              color: partnerStatusColor,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      )
+                    else
+                      Text(
+                        'Instant communication with the team',
+                        style: TextStyle(
+                          color: context.adaptiveSlate500,
+                          fontSize: 11,
+                          fontWeight: FontWeight.normal,
+                        ),
                       ),
-                    ),
                   ],
                 ),
               ),
@@ -893,8 +994,9 @@ class _DirectMessagePageState extends ConsumerState<DirectMessagePage> {
                         
                         final hasMore = ref.watch(dmStreamProvider(widget.partnerId).notifier).hasMore;
 
-                        return ListView.builder(
-                          controller: _scrollCtrl,
+                        return SelectionArea(
+                          child: ListView.builder(
+                            controller: _scrollCtrl,
                           padding: const EdgeInsets.symmetric(
                             horizontal: 16,
                             vertical: 20,
@@ -961,6 +1063,7 @@ class _DirectMessagePageState extends ConsumerState<DirectMessagePage> {
                               ],
                             );
                           },
+                        ),
                         );
                       },
                       loading: () =>
@@ -1008,7 +1111,10 @@ class _DirectMessagePageState extends ConsumerState<DirectMessagePage> {
     final currentUser = ref.read(authProvider);
     if (currentUser == null) return;
 
-    // Mark all messages in this conversation as read
+    // Instantly clear the unread badge in the conversation engine without blinking or DB re-fetches
+    ref.read(dmConversationsProvider.notifier).markConversationAsRead(widget.partnerId);
+
+    // Mark all messages in this conversation as read in DB via ReadReceiptsTracker
     final messagesAsync = ref.read(dmStreamProvider(widget.partnerId));
     messagesAsync.maybeWhen(
       data: (messages) {
@@ -1021,17 +1127,6 @@ class _DirectMessagePageState extends ConsumerState<DirectMessagePage> {
           _capturedEntryUnread = true;
           _entryFirstUnreadMessageId = _findFirstUnreadMessageId(validMessages, currentUser.id);
         }
-
-        final newestMessageAt = validMessages.last.createdAt.toUtc();
-
-        // Update the global chat last seen
-        ref
-            .read(chatUnreadCountProvider.notifier)
-            .markAsRead(timestamp: newestMessageAt);
-
-        // Optimistically clear the unread badge locally for instant feedback
-        markDmAsReadLocally(widget.partnerId, newestMessageAt);
-        ref.invalidate(dmUnreadCountProvider(widget.partnerId));
 
         final unreadIds = <String>[];
         final normalizedUserId = currentUser.id.trim().toLowerCase();
@@ -1402,11 +1497,12 @@ class _DirectMessagePageState extends ConsumerState<DirectMessagePage> {
               ),
             Row(
               children: [
-                IconButton(
-                  icon: const Icon(Icons.add, color: AppColors.slate500),
-                  onPressed: _pickFile,
-                  padding: const EdgeInsets.all(12),
-                ),
+                if (!_isRecordingVoice) ...[
+                  IconButton(
+                    icon: const Icon(Icons.add, color: AppColors.slate500),
+                    onPressed: _pickFile,
+                    padding: const EdgeInsets.all(12),
+                  ),
                 Expanded(
                   child: Container(
                     decoration: BoxDecoration(
@@ -1462,19 +1558,8 @@ class _DirectMessagePageState extends ConsumerState<DirectMessagePage> {
                                   fontSize: 14,
                                 ),
                                 border: InputBorder.none,
-                                contentPadding: EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical:
-                                      MediaQuery.sizeOf(context).width < 800
-                                      ? 0
-                                      : 12,
-                                ),
-                                prefixIconConstraints: const BoxConstraints(),
                                 prefixIcon: Padding(
-                                  padding: const EdgeInsets.only(
-                                    left: 12.0,
-                                    right: 4.0,
-                                  ),
+                                  padding: const EdgeInsets.only(left: 8, right: 2),
                                   child: Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
@@ -1488,11 +1573,11 @@ class _DirectMessagePageState extends ConsumerState<DirectMessagePage> {
                                             color: context.isDarkMode
                                                 ? Colors.white70
                                                 : AppColors.slate500,
-                                            size: 20,
+                                            size: 18,
                                           ),
                                         ),
                                       ),
-                                      const SizedBox(width: 4),
+                                      const SizedBox(width: 2),
                                       InkWell(
                                         onTap: () {
                                           setState(() {
@@ -1502,73 +1587,91 @@ class _DirectMessagePageState extends ConsumerState<DirectMessagePage> {
                                         },
                                         borderRadius: BorderRadius.circular(12),
                                         child: Padding(
-                                          padding: EdgeInsets.all(4.0),
+                                          padding: const EdgeInsets.all(4.0),
                                           child: Icon(
-                                            _showFormattingBar
-                                                ? Icons.text_format
-                                                : Icons.text_format,
+                                            Icons.text_format,
                                             color: _showFormattingBar
                                                 ? AppColors.primary
                                                 : (context.isDarkMode
                                                       ? Colors.white70
                                                       : AppColors.slate500),
-                                            size: 20,
+                                            size: 18,
                                           ),
                                         ),
                                       ),
                                     ],
                                   ),
                                 ),
-                                suffixIconConstraints: const BoxConstraints(),
-                                suffixIcon: Padding(
-                                  padding: const EdgeInsets.only(
-                                    right: 12.0,
-                                    left: 4.0,
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      InkWell(
-                                        onTap: _triggerMention,
-                                        borderRadius: BorderRadius.circular(12),
-                                        child: Padding(
-                                          padding: const EdgeInsets.all(4.0),
-                                          child: Icon(
-                                            Icons.alternate_email,
-                                            color: context.isDarkMode
-                                                ? Colors.white70
-                                                : AppColors.slate500,
-                                            size: 20,
-                                          ),
-                                        ),
-                                      ),
-                                      const SizedBox(width: 4),
-                                      InkWell(
-                                        onTap: _showGifPicker,
-                                        borderRadius: BorderRadius.circular(12),
-                                        child: Padding(
-                                          padding: const EdgeInsets.all(4.0),
-                                          child: Icon(
-                                            Icons.movie_outlined,
-                                            color: context.isDarkMode
-                                                ? Colors.white70
-                                                : AppColors.slate500,
-                                            size: 20,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
+                                prefixIconConstraints: const BoxConstraints(
+                                  minWidth: 0,
+                                  minHeight: 0,
+                                ),
+                                contentPadding: EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical:
+                                      MediaQuery.sizeOf(context).width < 800
+                                      ? 0
+                                      : 12,
                                 ),
                               ),
                             ),
+                          ),
+                        ),
+                        // Right side icons
+                        Padding(
+                          padding: const EdgeInsets.only(left: 2, right: 8),
+                          child: Row(
+                            children: [
+                              // Mention button
+                              InkWell(
+                                onTap: _triggerMention,
+                                borderRadius: BorderRadius.circular(12),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(4.0),
+                                  child: Icon(
+                                    Icons.alternate_email,
+                                    color: context.isDarkMode
+                                        ? Colors.white70
+                                        : AppColors.slate500,
+                                    size: 18,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 2),
+                              // GIF button
+                              InkWell(
+                                onTap: _showGifPicker,
+                                borderRadius: BorderRadius.circular(12),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(4.0),
+                                  child: Icon(
+                                    Icons.movie_outlined,
+                                    color: context.isDarkMode
+                                        ? Colors.white70
+                                        : AppColors.slate500,
+                                    size: 18,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ],
                     ),
                   ),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: 4),
+                ],
+                if (_isRecordingVoice || (_isTextEmpty && _selectedFile == null && !_isUploadingFile))
+                  ChatVoiceRecorder(
+                    key: const ValueKey('chat_voice_recorder'),
+                    disabled: _selectedFile != null || _isUploadingFile,
+                    onRecordComplete: (path, duration) => _sendVoiceNote(path, duration),
+                    onRecordingStateChanged: (isRecording) {
+                      setState(() => _isRecordingVoice = isRecording);
+                    },
+                  )
+                else ...[
                 Container(
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
@@ -1608,6 +1711,7 @@ class _DirectMessagePageState extends ConsumerState<DirectMessagePage> {
                           onPressed: _sendMessage,
                         ),
                 ),
+                ],
               ],
             ),
           ],
@@ -3269,107 +3373,10 @@ class _ChatBubble extends ConsumerWidget {
                         _buildSlackStyleMessageContent(context, ref),
 
                         // File attachment display
-                        if (message.fileUrl != null &&
-                            message.fileUrl!.isNotEmpty)
-                          if (message.fileType?.toLowerCase() == 'gif')
-                            // Render GIF as animated inline image
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(8),
-                              child: Image.network(
-                                message.fileUrl!,
-                                width: 200,
-                                fit: BoxFit.cover,
-                                loadingBuilder: (_, child, progress) =>
-                                    progress == null
-                                    ? child
-                                    : SizedBox(
-                                        width: 200,
-                                        height: 120,
-                                        child: Center(
-                                          child: CircularProgressIndicator(
-                                            strokeWidth: 2,
-                                            value:
-                                                progress.expectedTotalBytes !=
-                                                    null
-                                                ? progress.cumulativeBytesLoaded /
-                                                      progress
-                                                          .expectedTotalBytes!
-                                                : null,
-                                          ),
-                                        ),
-                                      ),
-                                errorBuilder: (_, __, ___) => Container(
-                                  width: 200,
-                                  height: 80,
-                                  decoration: BoxDecoration(
-                                    color: Colors.grey.shade200,
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: const Center(
-                                    child: Icon(
-                                      Icons.gif,
-                                      size: 32,
-                                      color: AppColors.slate400,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            )
-                          else
-                            GestureDetector(
-                              onTap: () => _downloadFile(
-                                message.fileUrl!,
-                                message.fileName ?? 'file',
-                              ),
-                              child: Container(
-                                margin: const EdgeInsets.only(
-                                  top: 4,
-                                  bottom: 8,
-                                ),
-                                padding: const EdgeInsets.all(8),
-                                decoration: BoxDecoration(
-                                  color: context.isDarkMode
-                                      ? context.adaptiveSlate800
-                                      : Colors.white,
-                                  borderRadius: BorderRadius.circular(6),
-                                  border: Border.all(
-                                    color: context.isDarkMode
-                                        ? context.adaptiveSlate700
-                                        : Colors.grey.shade300,
-                                  ),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(
-                                      _getFileIcon(message.fileType),
-                                      size: 16,
-                                      color: context.adaptiveSlate400,
-                                    ),
-                                    const SizedBox(width: 6),
-                                    Flexible(
-                                      child: Text(
-                                        message.fileName ?? 'File',
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          color: context.isDarkMode
-                                              ? Colors.white
-                                              : Colors.black87,
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 6),
-                                    Icon(
-                                      LucideIcons.download,
-                                      size: 14,
-                                      color: context.adaptiveSlate400,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
+                        ChatAttachmentRenderer(
+                          message: message,
+                          isMe: isMe,
+                        ),
 
                         const SizedBox(height: 6),
 
@@ -3395,6 +3402,7 @@ class _ChatBubble extends ConsumerWidget {
   }
 
   Widget _buildSlackStyleMessageContent(BuildContext context, WidgetRef ref) {
+    if (message.content.isEmpty) return const SizedBox.shrink();
     final isTicketMessage =
         message.content.startsWith('Company: ') &&
         message.content.contains('\nIssue: ');

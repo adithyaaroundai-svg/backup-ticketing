@@ -30,16 +30,16 @@ class _VoiceNoteWidgetState extends State<VoiceNoteWidget> {
     super.initState();
     _player = AudioPlayer();
     _player.onPlayerStateChanged.listen((state) {
-      setState(() => _isPlaying = state == PlayerState.playing);
+      if (mounted) setState(() => _isPlaying = state == PlayerState.playing);
     });
     _player.onPlayerComplete.listen((_) {
-      setState(() => _position = Duration.zero);
+      if (mounted) setState(() => _position = Duration.zero);
     });
     _player.onPositionChanged.listen((pos) {
-      setState(() => _position = pos);
+      if (mounted) setState(() => _position = pos);
     });
     _player.onDurationChanged.listen((dur) {
-      setState(() => _totalDuration = dur);
+      if (mounted) setState(() => _totalDuration = dur);
     });
     _loadSource();
   }
@@ -51,10 +51,12 @@ class _VoiceNoteWidgetState extends State<VoiceNoteWidget> {
         _totalDuration = Duration(seconds: widget.duration);
       }
     } catch (_) {
-      setState(() {
-        _unsupported = true;
-        _errorMessage = 'Unable to play this voice note.';
-      });
+      if (mounted) {
+        setState(() {
+          _unsupported = true;
+          _errorMessage = 'Unable to play this voice note.';
+        });
+      }
     }
   }
 
@@ -65,18 +67,18 @@ class _VoiceNoteWidgetState extends State<VoiceNoteWidget> {
         await _player.pause();
       } else {
         await _player.resume();
-        setState(() => _isPlaying = true);
+        if (mounted) setState(() => _isPlaying = true);
       }
     } catch (_) {
-      setState(() {
-        _unsupported = true;
-        _errorMessage = 'Failed to play voice note.';
-        _isPlaying = false;
-      });
+      if (mounted) {
+        setState(() {
+          _unsupported = true;
+          _errorMessage = 'Failed to play voice note.';
+          _isPlaying = false;
+        });
+      }
     }
   }
-
-  Color get _primaryTextColor => widget.isMe ? Colors.white : Colors.black87;
 
   String _format(Duration duration) {
     final minutes = duration.inMinutes.remainder(60).toString().padLeft(2, '0');
@@ -99,63 +101,98 @@ class _VoiceNoteWidgetState extends State<VoiceNoteWidget> {
 
   @override
   Widget build(BuildContext context) {
-    final durationLabel = _totalDuration > Duration.zero
-        ? _format(_totalDuration)
-        : '00:00';
+    final effectiveDuration = _totalDuration > Duration.zero
+        ? _totalDuration
+        : (widget.duration > 0 ? Duration(seconds: widget.duration) : Duration.zero);
+    final durationLabel = _format(effectiveDuration);
     final positionLabel = _format(_position);
+    final displayLabel = _isPlaying || _position > Duration.zero
+        ? '$positionLabel / $durationLabel'
+        : durationLabel;
+
+    final colorScheme = Theme.of(context).colorScheme;
+    final primaryTextColor = widget.isMe ? Colors.white : colorScheme.onSurface;
+    final buttonBg = widget.isMe ? Colors.white : colorScheme.primary;
+    final iconColor = widget.isMe ? colorScheme.primary : Colors.white;
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      constraints: const BoxConstraints(maxWidth: 240, minWidth: 180),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
         color: widget.isMe
-            ? Theme.of(context).colorScheme.primary
-            : Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(20),
+            ? colorScheme.primary.withValues(alpha: 0.95)
+            : colorScheme.surface.withValues(alpha: 0.8),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: widget.isMe ? Colors.white24 : colorScheme.outlineVariant.withValues(alpha: 0.5),
+          width: 1,
+        ),
       ),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (_errorMessage != null)
             Padding(
-              padding: const EdgeInsets.only(bottom: 8.0),
+              padding: const EdgeInsets.only(bottom: 4),
               child: Text(
                 _errorMessage!,
-                style: Theme.of(
-                  context,
-                ).textTheme.bodySmall?.copyWith(color: Colors.redAccent),
+                style: const TextStyle(color: Colors.redAccent, fontSize: 10),
               ),
             ),
           Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              IconButton(
-                icon: Icon(
-                  _isPlaying ? Icons.pause : Icons.play_arrow,
-                  color: widget.isMe
-                      ? Colors.white
-                      : Theme.of(context).colorScheme.primary,
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: buttonBg,
+                  shape: BoxShape.circle,
                 ),
-                onPressed: _unsupported ? null : _togglePlayPause,
+                child: IconButton(
+                  padding: EdgeInsets.zero,
+                  icon: Icon(
+                    _isPlaying ? Icons.pause : Icons.play_arrow,
+                    color: iconColor,
+                    size: 18,
+                  ),
+                  onPressed: _unsupported ? null : _togglePlayPause,
+                ),
               ),
+              const SizedBox(width: 8),
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    LinearProgressIndicator(
-                      value: _progressValue,
-                      backgroundColor: Colors.white24,
-                      valueColor: AlwaysStoppedAnimation<Color>(
-                        widget.isMe
-                            ? Colors.white
-                            : Theme.of(context).colorScheme.primary,
-                      ),
-                      minHeight: 4,
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      '$positionLabel / $durationLabel',
-                      style: TextStyle(color: _primaryTextColor),
-                    ),
-                  ],
+                child: SliderTheme(
+                  data: SliderTheme.of(context).copyWith(
+                    trackHeight: 3,
+                    thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 5),
+                    overlayShape: const RoundSliderOverlayShape(overlayRadius: 10),
+                    trackShape: const RectangularSliderTrackShape(),
+                  ),
+                  child: Slider(
+                    value: _progressValue,
+                    onChanged: _unsupported
+                        ? null
+                        : (val) {
+                            final totalMs = effectiveDuration.inMilliseconds;
+                            if (totalMs > 0) {
+                              _player.seek(Duration(milliseconds: (val * totalMs).round()));
+                            }
+                          },
+                    activeColor: widget.isMe ? Colors.white : colorScheme.primary,
+                    inactiveColor: widget.isMe
+                        ? Colors.white.withValues(alpha: 0.3)
+                        : colorScheme.primary.withValues(alpha: 0.2),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                displayLabel,
+                style: TextStyle(
+                  color: primaryTextColor.withValues(alpha: 0.9),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ],
