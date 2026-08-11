@@ -2,7 +2,29 @@ enum CallDirection { incoming, outgoing }
 
 enum CallType { audio, video }
 
-enum CallStatus { answered, missed, rejected, cancelled }
+enum CallStatus { initiated, ringing, answered, missed, rejected, cancelled, ended }
+
+enum CallParticipantRole { caller, participant }
+
+class CallParticipant {
+  final String id;
+  final String agentId;
+  final String agentName;
+  final CallParticipantRole role;
+  final DateTime? joinedAt;
+  final DateTime? leftAt;
+  final String? avatarUrl;
+
+  const CallParticipant({
+    required this.id,
+    required this.agentId,
+    required this.agentName,
+    required this.role,
+    this.joinedAt,
+    this.leftAt,
+    this.avatarUrl,
+  });
+}
 
 class CallHistoryItem {
   final String id;
@@ -17,6 +39,7 @@ class CallHistoryItem {
   final CallType callType;
   final CallDirection direction;
   final CallStatus status;
+  final List<CallParticipant> participants;
 
   const CallHistoryItem({
     required this.id,
@@ -31,6 +54,7 @@ class CallHistoryItem {
     required this.callType,
     required this.direction,
     required this.status,
+    this.participants = const [],
   });
 
   CallHistoryItem copyWith({
@@ -46,6 +70,7 @@ class CallHistoryItem {
     CallType? callType,
     CallDirection? direction,
     CallStatus? status,
+    List<CallParticipant>? participants,
   }) {
     return CallHistoryItem(
       id: id ?? this.id,
@@ -60,6 +85,7 @@ class CallHistoryItem {
       callType: callType ?? this.callType,
       direction: direction ?? this.direction,
       status: status ?? this.status,
+      participants: participants ?? this.participants,
     );
   }
 }

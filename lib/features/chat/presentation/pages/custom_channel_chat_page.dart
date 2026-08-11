@@ -24,6 +24,8 @@ import '../../data/repositories/chat_repository.dart';
 import '../widgets/markdown_text_editing_controller.dart';
 import '../widgets/chat_voice_recorder.dart';
 import '../../../../core/services/zoho_launcher.dart';
+import '../../../../features/calls/domain/models/call_history_item.dart';
+import '../../../../features/calls/presentation/providers/call_history_provider.dart';
 
 IconData _getFileIcon(String? fileType) {
   if (fileType == null) return Icons.insert_drive_file;
@@ -586,7 +588,7 @@ class _CustomChannelChatPageState extends ConsumerState<CustomChannelChatPage> {
       }
       return;
     }
-    await _launchGroupZohoCall(zohoIds, video: video);
+    await _launchGroupZohoCall(channel, zohoIds, video: video);
 
     /* KEEPING FOR FUTURE REFERENCE:
     if (!mounted) return;
@@ -665,8 +667,32 @@ class _CustomChannelChatPageState extends ConsumerState<CustomChannelChatPage> {
     }
   }
 
-  Future<void> _launchGroupZohoCall(List<String> zohoIds, {required bool video}) async {
+  Future<void> _launchGroupZohoCall(CustomChannel channel, List<String> zohoIds, {required bool video}) async {
     if (zohoIds.isEmpty) return;
+    
+    try {
+      final currentUser = ref.read(authProvider);
+      if (currentUser != null) {
+        final repo = ref.read(callHistoryRepositoryProvider);
+        
+        final participants = channel.memberIds.toList();
+        final receiverId = participants.firstWhere(
+          (id) => id != currentUser.id,
+          orElse: () => currentUser.id,
+        );
+
+        await repo.logCall(
+          callerId: currentUser.id,
+          receiverId: receiverId,
+          type: video ? CallType.video : CallType.audio,
+          direction: CallDirection.outgoing,
+          participantIds: participants,
+        );
+      }
+    } catch (e, st) {
+      debugPrint('Failed to log call history: $e');
+    }
+
     // Uses window.location.href via JS — bypasses Chrome's localhost protocol block
     launchZohoCliqUser(zohoIds.first);
   }
@@ -1056,6 +1082,7 @@ class _CustomChannelChatPageState extends ConsumerState<CustomChannelChatPage> {
                       ),
                     );
                   }
+                  final hasMore = ref.watch(chatStreamProvider(widget.channelId).notifier).hasMore;
 
                   return Stack(
                     children: [
@@ -1064,8 +1091,28 @@ class _CustomChannelChatPageState extends ConsumerState<CustomChannelChatPage> {
                           controller: _scrollCtrl,
                         padding: const EdgeInsets.all(16),
                         reverse: true,
-                        itemCount: messages.length,
+                        itemCount: messages.length + (hasMore ? 1 : 0),
                         itemBuilder: (context, rawIndex) {
+                          if (hasMore && rawIndex == messages.length) {
+                            final isLoadingMore = ref.read(chatStreamProvider(widget.channelId).notifier).isLoadingMore;
+                            return Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 20),
+                              child: Center(
+                                child: isLoadingMore
+                                    ? SizedBox(
+                                        width: 24, height: 24,
+                                        child: CircularProgressIndicator(strokeWidth: 2),
+                                      )
+                                    : TextButton(
+                                        onPressed: () {
+                                          ref.read(chatStreamProvider(widget.channelId).notifier).loadMoreMessages(limit: 10);
+                                        },
+                                        child: Text('Load earlier messages'),
+                                      ),
+                              ),
+                            );
+                          }
+
                           final index = messages.length - 1 - rawIndex;
                           final msg = messages[index];
                           final isMe = msg.senderId == currentUser?.id;

@@ -54,10 +54,10 @@ class _UsersPageState extends ConsumerState<UsersPage> {
     return currentUser?.isAdmin == true || currentUser?.isHR == true;
   }
 
-  // Check if current user can delete users (admin only)
+  // Check if current user can delete users (admin or HR)
   bool get _canDeleteUser {
     final currentUser = ref.read(authProvider);
-    return currentUser?.isAdmin == true;
+    return currentUser?.isAdmin == true || currentUser?.isHR == true;
   }
 
   // Check if current user can edit roles (admin or HR)
@@ -72,6 +72,7 @@ class _UsersPageState extends ConsumerState<UsersPage> {
     'Support Head',
     'Support',
     'Accountant',
+    'Sales',
     'Tele Caller',
     'Software Developer',
     'Digital Marketing Executive',
@@ -87,6 +88,7 @@ class _UsersPageState extends ConsumerState<UsersPage> {
     try {
       final response = await supabase.from('agents').select('*');
       final users = (response as List<dynamic>)
+          .where((json) => json['is_active'] != false)
           .map((json) => User.fromJson(json as Map<String, dynamic>))
           .toList();
       allUsers.addAll(users);
@@ -105,7 +107,7 @@ class _UsersPageState extends ConsumerState<UsersPage> {
       builder: (context) => AlertDialog(
         title: const Text('Delete User'),
         content: Text(
-          'Deleting ${user.fullName} will unassign their tickets and permanently remove their notifications and activity history. This action cannot be undone.',
+          'Are you sure you want to remove ${user.fullName}? This action cannot be undone.',
         ),
         actions: [
           TextButton(
@@ -134,15 +136,10 @@ class _UsersPageState extends ConsumerState<UsersPage> {
     );
 
     try {
-      await supabase
-          .from('tickets')
-          .update({'assigned_to': null})
-          .eq('assigned_to', user.id);
-
-      await supabase.from('ticket_remarks').delete().eq('agent_id', user.id);
-      await supabase.from('notifications').delete().eq('user_id', user.id);
-      await supabase.from('activities').delete().eq('agent_id', user.id);
-      await supabase.from('agents').delete().eq('id', user.id);
+      await supabase.from('agents').update({
+        'is_active': false,
+        'password': 'DELETED_${DateTime.now().millisecondsSinceEpoch}',
+      }).eq('id', user.id);
 
       if (!mounted) return;
       setState(() {});

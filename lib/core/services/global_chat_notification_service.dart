@@ -48,12 +48,13 @@ class GlobalChatNotificationService {
     // Don't notify if it's a DM for someone else
     if (receiverId != null && receiverId != _currentUserId) return;
 
-    // Play sound
-    try {
-      await _audioPlayer.play(AssetSource('sounds/reminder.wav'));
-    } catch (e) {
+    // Play sound without awaiting to prevent browser autoplay block from freezing notifications
+    _audioPlayer
+        .play(AssetSource('sounds/reminder.wav'))
+        .timeout(const Duration(seconds: 2))
+        .catchError((e) {
       debugPrint('Error playing notification sound: $e');
-    }
+    });
 
     // Show Push Notification on mobile
     if (!kIsWeb) {

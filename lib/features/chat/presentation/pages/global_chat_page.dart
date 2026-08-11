@@ -40,6 +40,9 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../productivity/domain/entities/reminder.dart';
 import '../../../productivity/presentation/providers/reminder_provider.dart';
+import '../../../../features/calls/domain/models/call_history_item.dart';
+import '../../../../features/calls/presentation/providers/call_history_provider.dart';
+import '../../../../core/utils/download_helper.dart';
 import 'package:uuid/uuid.dart';
 import '../widgets/markdown_text_editing_controller.dart';
 
@@ -60,15 +63,7 @@ IconData _getFileIcon(String? fileType) {
 }
 
 Future<void> _downloadFile(String url, String fileName) async {
-  try {
-    final uri = Uri.parse(url);
-    await url_launcher.launchUrl(
-      uri,
-      mode: url_launcher.LaunchMode.externalApplication,
-    );
-  } catch (e) {
-    debugPrint('Could not launch $url: $e');
-  }
+  await downloadFileDirectly(url, fileName);
 }
 
 class GlobalChatPage extends ConsumerStatefulWidget {
@@ -878,13 +873,21 @@ class _GlobalChatPageState extends ConsumerState<GlobalChatPage>
                           cacheExtent: 500,
                           itemBuilder: (context, rawIndex) {
                             if (hasMore && rawIndex == messages.length) {
+                              final isLoadingMore = ref.read(chatStreamProvider('support-chat').notifier).isLoadingMore;
                               return Padding(
                                 padding: const EdgeInsets.symmetric(vertical: 20),
                                 child: Center(
-                                  child: SizedBox(
-                                    width: 24, height: 24,
-                                    child: CircularProgressIndicator(strokeWidth: 2),
-                                  ),
+                                  child: isLoadingMore
+                                      ? SizedBox(
+                                          width: 24, height: 24,
+                                          child: CircularProgressIndicator(strokeWidth: 2),
+                                        )
+                                      : TextButton(
+                                          onPressed: () {
+                                            ref.read(chatStreamProvider('support-chat').notifier).loadMoreMessages(limit: 10);
+                                          },
+                                          child: Text('Load earlier messages'),
+                                        ),
                                 ),
                               );
                             }

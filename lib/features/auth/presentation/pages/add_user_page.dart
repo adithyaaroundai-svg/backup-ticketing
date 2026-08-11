@@ -73,6 +73,7 @@ class _AddUserPageState extends ConsumerState<AddUserPage> {
         'full_name': _fullNameController.text.trim(),
         'role': _selectedRole,
         'created_at': DateTime.now().toUtc().toIso8601String(),
+        'is_active': true,
       });
 
       if (mounted) {

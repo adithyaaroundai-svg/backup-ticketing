@@ -632,6 +632,8 @@ class _SalesTeamChatViewState extends ConsumerState<SalesTeamChatView> {
                   );
                 }
 
+                final hasMore = ref.watch(chatStreamProvider('sales-team').notifier).hasMore;
+
                 return Stack(
                     children: [
                       SelectionArea(
@@ -639,8 +641,28 @@ class _SalesTeamChatViewState extends ConsumerState<SalesTeamChatView> {
                           controller: _scrollCtrl,
                         padding: const EdgeInsets.only(left: 16, right: 16, bottom: 16, top: 60),
                         reverse: true,
-                        itemCount: messages.length,
+                        itemCount: messages.length + (hasMore ? 1 : 0),
                         itemBuilder: (context, rawIndex) {
+                          if (hasMore && rawIndex == messages.length) {
+                            final isLoadingMore = ref.read(chatStreamProvider('sales-team').notifier).isLoadingMore;
+                            return Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 20),
+                              child: Center(
+                                child: isLoadingMore
+                                    ? SizedBox(
+                                        width: 24, height: 24,
+                                        child: CircularProgressIndicator(strokeWidth: 2),
+                                      )
+                                    : TextButton(
+                                        onPressed: () {
+                                          ref.read(chatStreamProvider('sales-team').notifier).loadMoreMessages(limit: 10);
+                                        },
+                                        child: Text('Load earlier messages'),
+                                      ),
+                              ),
+                            );
+                          }
+
                           final index = messages.length - 1 - rawIndex;
                           final msg = messages[index];
                           final isMe = msg.senderId == currentUser?.id;

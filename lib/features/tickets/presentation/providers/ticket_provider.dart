@@ -220,6 +220,8 @@ class PaginatedTickets extends _$PaginatedTickets {
   bool _isLoadingMore = false;
   bool get hasMore => _hasMore;
   
+  DateTime? _windowStartDate;
+  
   @override
   FutureOr<List<Ticket>> build() async {
     final repository = ref.watch(ticketRepositoryProvider);
@@ -229,14 +231,17 @@ class PaginatedTickets extends _$PaginatedTickets {
     final searchQuery = await ref.watch(debouncedTicketSearchQueryProvider.future);
     final currentUser = ref.watch(authProvider);
 
-    // Initial limit: e.g., last 3 days
-    final limit = 50;
-    final before = DateTime.now().add(const Duration(days: 1)); // Just to ensure we get latest
+    final isSearching = searchQuery.isNotEmpty;
+    DateTime? afterDate;
     
-    // We could filter by "created_at >= now - 3 days" but the user said "limit of last 3 day ticekt initally, and when scrolled down load others"
-    // Since we order by created_at DESC, if we just use a limit of 50, it gets the latest 50. If we want exactly 3 days, we'd need a date filter, but limit 50 is safer for UI.
-    // I will use limit 50, but we can also add a 3 days filter. Let's just use limit 50 which acts like "recent tickets". The prompt said "limit of last 3 day ticekt initally".
-    // I will fetch tickets created in the last 3 days, but limit to 50 so it's not huge.
+    if (!isSearching) {
+      _windowStartDate = DateTime.now().subtract(const Duration(days: 2));
+      afterDate = _windowStartDate;
+    } else {
+      _windowStartDate = null;
+    }
+
+    final limit = 50;
     
     final tickets = await repository.getPaginatedTickets(
       statusFilter: statusFilter,
@@ -244,19 +249,16 @@ class PaginatedTickets extends _$PaginatedTickets {
       assigneeFilter: assigneeFilter,
       searchQuery: searchQuery,
       currentUserId: currentUser?.id,
+      after: afterDate,
       limit: limit,
     );
     
-    // Filter to only include tickets from last 3 days initially
-    final threeDaysAgo = DateTime.now().subtract(const Duration(days: 3));
-    final initialTickets = tickets.where((t) => t.createdAt != null && t.createdAt!.isAfter(threeDaysAgo)).toList();
-    
-    // If there are less than 50 in the last 3 days, we might have more. If there are 50, we definitely have more.
-    _hasMore = tickets.length == limit;
+    if (!isSearching) {
+      _hasMore = true;
+    } else {
+      _hasMore = tickets.length == limit;
+    }
 
-    // We use the full `tickets` list if the 3 days filter results in too few tickets (e.g. 0), but to strictly follow the prompt we only take the 3 days ones.
-    // Actually, just fetching limit=50 is standard pagination. Let's stick to the 3-day filtered list, but if it's empty we still use it.
-    
     _eventSub?.cancel();
     _eventSub = repository.ticketEvents.listen(_handleEvent);
     
@@ -264,7 +266,7 @@ class PaginatedTickets extends _$PaginatedTickets {
       _eventSub?.cancel();
     });
     
-    return initialTickets.isNotEmpty ? initialTickets : tickets; // fallback if no tickets in 3 days
+    return tickets;
   }
 
   void _handleEvent(Map<String, dynamic> event) {
@@ -298,11 +300,9 @@ class PaginatedTickets extends _$PaginatedTickets {
   Future<void> loadMore() async {
     if (!_hasMore || _isLoadingMore) return;
     final currentList = state.value ?? [];
-    if (currentList.isEmpty) return;
-
+    
     _isLoadingMore = true;
     try {
-      final oldestTicket = currentList.last; // Since it's sorted newest first
       final repository = ref.read(ticketRepositoryProvider);
       final statusFilter = ref.read(ticketFilterProvider);
       final priorityFilter = ref.read(ticketPriorityFilterProvider);
@@ -310,22 +310,40 @@ class PaginatedTickets extends _$PaginatedTickets {
       final searchQuery = ref.read(ticketSearchQueryProvider);
       final currentUser = ref.read(authProvider);
 
+      final isSearching = searchQuery.isNotEmpty;
+      DateTime? beforeDate;
+      DateTime? afterDate;
       final limit = 50;
+
+      if (!isSearching) {
+        beforeDate = _windowStartDate;
+        _windowStartDate = _windowStartDate?.subtract(const Duration(days: 2));
+        afterDate = _windowStartDate;
+      } else {
+        if (currentList.isEmpty) {
+          _isLoadingMore = false;
+          return;
+        }
+        beforeDate = currentList.last.createdAt;
+      }
+
       final olderTickets = await repository.getPaginatedTickets(
         statusFilter: statusFilter,
         priorityFilter: priorityFilter,
         assigneeFilter: assigneeFilter,
         searchQuery: searchQuery,
         currentUserId: currentUser?.id,
-        before: oldestTicket.createdAt,
+        before: beforeDate,
+        after: afterDate,
         limit: limit,
       );
 
-      if (olderTickets.length < limit) {
-        _hasMore = false;
+      if (isSearching) {
+        if (olderTickets.length < limit) {
+          _hasMore = false;
+        }
       }
       
-      // Prevent duplicating tickets just in case
       final existingIds = currentList.map((t) => t.ticketId).toSet();
       final uniqueOlder = olderTickets.where((t) => !existingIds.contains(t.ticketId)).toList();
       

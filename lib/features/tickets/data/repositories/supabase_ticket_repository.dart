@@ -12,72 +12,6 @@ const _ticketBaseColumns = 'id, customer_id, client_ticket_uuid, title, descript
 const _ticketFullColumns = _ticketBaseColumns;
 const _ticketAlertColumns = 'id, customer_id, status, assigned_to, created_at, updated_at, assignment_history';
 
-/// Creates a realtime stream for a Supabase table that fires on ANY change
-/// (INSERT, UPDATE, DELETE) — not just inserts like .stream() does.
-Stream<List<Map<String, dynamic>>> _realtimeStream({
-  required SupabaseClient supabase,
-  required String table,
-  required String channelSuffix,
-  required Future<List<Map<String, dynamic>>> Function() fetcher,
-}) {
-  final controller = StreamController<List<Map<String, dynamic>>>.broadcast();
-  List<Map<String, dynamic>> currentData = [];
-  bool hasFetched = false;
-
-  Future<void> fetch() async {
-    try {
-      final data = await fetcher();
-      currentData = List<Map<String, dynamic>>.from(data);
-      hasFetched = true;
-      if (!controller.isClosed) controller.add(currentData);
-    } catch (e) {
-      if (!controller.isClosed) controller.addError(e);
-    }
-  }
-
-  // Initial load
-  fetch();
-
-  // Subscribe to all changes
-  final channel = supabase
-      .channel('realtime_${table}_$channelSuffix')
-      .onPostgresChanges(
-        event: PostgresChangeEvent.all,
-        schema: 'public',
-        table: table,
-        callback: (payload) {
-          if (!hasFetched) return;
-          
-          final eventType = payload.eventType;
-          final newRecord = payload.newRecord;
-          final oldRecord = payload.oldRecord;
-          
-          if (eventType == PostgresChangeEvent.insert) {
-            currentData.insert(0, newRecord);
-          } else if (eventType == PostgresChangeEvent.update) {
-            final index = currentData.indexWhere((item) => item['id'] == newRecord['id']);
-            if (index != -1) {
-              currentData[index] = newRecord;
-            } else {
-              // If it's updated but not in our list (e.g., due to limits or filters),
-              // we can fetch again or just ignore. Ignoring is safer for egress.
-              // We could insert it, but it might mess up ordering. 
-            }
-          } else if (eventType == PostgresChangeEvent.delete) {
-            currentData.removeWhere((item) => item['id'] == oldRecord['id']);
-          }
-          
-          if (!controller.isClosed) controller.add(List.from(currentData));
-        },
-      )
-      .subscribe();
-
-  controller.onCancel = () {
-    supabase.removeChannel(channel);
-  };
-
-  return controller.stream;
-}
 
 class SupabaseTicketRepository implements TicketRepository {
   final SupabaseClient _supabase;
@@ -127,6 +61,7 @@ class SupabaseTicketRepository implements TicketRepository {
     String? searchQuery,
     String? currentUserId,
     DateTime? before,
+    DateTime? after,
     int limit = 50,
   }) async {
     var query = _supabase.from('tickets').select();
@@ -165,28 +100,23 @@ class SupabaseTicketRepository implements TicketRepository {
     if (before != null) {
       query = query.lt('created_at', before.toIso8601String());
     }
+    if (after != null) {
+      query = query.gte('created_at', after.toIso8601String());
+    }
 
     final data = await query.order('created_at', ascending: false).limit(limit);
     return data.map((json) => Ticket.fromJson(json)).toList();
   }
 
   @override
-  Stream<List<Ticket>> getTickets({String? statusFilter}) async* {
-    final rows = await _supabase
+  Stream<List<Ticket>> getTickets({String? statusFilter}) {
+    return _supabase
         .from('tickets')
-        .select(_ticketFullColumns)
+        .stream(primaryKey: ['id'])
         .order('created_at', ascending: false)
-        .limit(500);
-
-    final cache = <String, Ticket>{};
-    for (final r in rows) {
-      final t = Ticket.fromJson(r);
-      cache[t.ticketId] = t;
-    }
-    
-    List<Ticket> getFiltered() {
-      var list = cache.values.toList();
-      list.sort((a, b) => (b.createdAt ?? DateTime(0)).compareTo(a.createdAt ?? DateTime(0)));
+        .limit(500)
+        .map((rows) {
+      final list = rows.map((r) => Ticket.fromJson(r)).toList();
       if (statusFilter == 'Open') {
         return list.where((t) => [
           'New', 'Open', 'In Progress', 'Waiting for Customer', 'BillRaised'
@@ -197,32 +127,7 @@ class SupabaseTicketRepository implements TicketRepository {
         ].contains(t.status)).toList();
       }
       return list;
-    }
-
-    yield getFiltered();
-
-    await for (final event in ticketEvents) {
-      final eventType = event['eventType'] as String;
-      final newRecord = event['newRecord'] as Map<String, dynamic>?;
-      final oldRecord = event['oldRecord'] as Map<String, dynamic>?;
-
-      bool changed = false;
-      if ((eventType.toUpperCase() == 'INSERT' || eventType.toUpperCase() == 'UPDATE') && newRecord != null) {
-        final t = Ticket.fromJson(newRecord);
-        cache[t.ticketId] = t;
-        changed = true;
-      } else if (eventType.toUpperCase() == 'DELETE' && oldRecord != null) {
-        final id = (oldRecord['ticket_id'] ?? oldRecord['id']) as String?;
-        if (id != null && cache.containsKey(id)) {
-          cache.remove(id);
-          changed = true;
-        }
-      }
-      
-      if (changed) {
-        yield getFiltered();
-      }
-    }
+    });
   }
 
   // New method to get tickets with customer data (for detail view)
@@ -258,17 +163,15 @@ class SupabaseTicketRepository implements TicketRepository {
   Stream<List<Ticket>> getTicketsByStatuses(List<String> statuses) {
     if (statuses.isEmpty) return getTickets(statusFilter: null);
 
-    return _realtimeStream(
-      supabase: _supabase,
-      table: 'tickets',
-      channelSuffix: 'byStatuses_${statuses.join('_')}',
-      fetcher: () => _supabase
-          .from('tickets')
-          .select()
-          .inFilter('status', statuses)
-          .order('created_at', ascending: false)
-          .limit(500),
-    ).map((list) => list.map(Ticket.fromJson).toList());
+    return _supabase
+        .from('tickets')
+        .stream(primaryKey: ['id'])
+        .order('created_at', ascending: false)
+        .limit(500)
+        .map((rows) => rows
+            .map((r) => Ticket.fromJson(r))
+            .where((t) => statuses.contains(t.status))
+            .toList());
   }
 
   @override
@@ -543,9 +446,10 @@ class SupabaseTicketRepository implements TicketRepository {
     try {
       final response = await _supabase
           .from('agents')
-          .select('id, username, full_name, role, display_color, last_seen, avatar_url, teams_user_id, zoho_mail_id')
+          .select('id, username, full_name, role, display_color, last_seen, avatar_url, teams_user_id, zoho_mail_id, is_active')
           .order('username');
-      return List<Map<String, dynamic>>.from(response);
+      final agents = List<Map<String, dynamic>>.from(response);
+      return agents.where((agent) => agent['is_active'] != false).toList();
     } catch (e) {
       return [];
     }
@@ -567,14 +471,12 @@ class SupabaseTicketRepository implements TicketRepository {
 
   @override
   Stream<Map<String, int>> getTicketStats() {
-    return _realtimeStream(
-      supabase: _supabase,
-      table: 'tickets',
-      channelSuffix: 'stats',
-      fetcher: () => _supabase.from('tickets').select('status'),
-    ).map((list) {
+    return _supabase
+        .from('tickets')
+        .stream(primaryKey: ['id'])
+        .map((rows) {
       final stats = <String, int>{'Open': 0, 'In Progress': 0, 'Resolved': 0};
-      for (var map in list) {
+      for (var map in rows) {
         final status = map['status'] as String? ?? 'New';
         if (['New', 'Open', 'Waiting for Customer'].contains(status)) {
           stats['Open'] = (stats['Open'] ?? 0) + 1;
@@ -590,16 +492,12 @@ class SupabaseTicketRepository implements TicketRepository {
 
   @override
   Stream<List<TicketComment>> getComments(String ticketId) {
-    return _realtimeStream(
-      supabase: _supabase,
-      table: 'ticket_comments',
-      channelSuffix: 'ticket_$ticketId',
-      fetcher: () => _supabase
-          .from('ticket_comments')
-          .select()
-          .eq('ticket_id', ticketId)
-          .order('created_at', ascending: true),
-    ).map((list) => list.map((map) => TicketComment.fromJson(map)).toList());
+    return _supabase
+        .from('ticket_comments')
+        .stream(primaryKey: ['id'])
+        .eq('ticket_id', ticketId)
+        .order('created_at', ascending: true)
+        .map((rows) => rows.map((map) => TicketComment.fromJson(map)).toList());
   }
 
   @override

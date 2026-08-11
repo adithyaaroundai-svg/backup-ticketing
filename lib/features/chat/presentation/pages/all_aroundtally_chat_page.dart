@@ -18,6 +18,8 @@ import '../../../../core/design_system/design_system.dart';
 import '../../../../core/design_system/theme/app_colors.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
 import '../providers/chat_provider.dart';
+import '../../data/repositories/chat_repository.dart';
+import '../../../../core/utils/download_helper.dart';
 import '../../domain/entities/chat_message.dart';
 import '../../../tickets/presentation/providers/ticket_provider.dart';
 import '../widgets/chat_voice_recorder.dart';
@@ -38,17 +40,7 @@ IconData _getFileIcon(String? fileType) {
 }
 
 Future<void> _downloadFile(String url, String fileName) async {
-  try {
-    final uri = Uri.parse(url);
-    if (await url_launcher.canLaunchUrl(uri)) {
-      await url_launcher.launchUrl(
-        uri,
-        mode: url_launcher.LaunchMode.externalApplication,
-      );
-    }
-  } catch (e) {
-    debugPrint('Could not launch $url: $e');
-  }
+  await downloadFileDirectly(url, fileName);
 }
 
 class AllAroundTallyChatPage extends ConsumerStatefulWidget {
@@ -653,13 +645,33 @@ class _AllAroundTallyChatPageState extends ConsumerState<AllAroundTallyChatPage>
                       Builder(
                         builder: (context) {
                           _markVisibleMessagesRead(messages);
+                          final hasMore = ref.watch(chatStreamProvider('all-aroundtally').notifier).hasMore;
                           return SelectionArea(
                             child: ListView.builder(
                               controller: _scrollCtrl,
                             padding: const EdgeInsets.all(16),
                         reverse: true,
-                        itemCount: messages.length,
+                        itemCount: messages.length + (hasMore ? 1 : 0),
                         itemBuilder: (context, rawIndex) {
+                          if (hasMore && rawIndex == messages.length) {
+                            final isLoadingMore = ref.read(chatStreamProvider('all-aroundtally').notifier).isLoadingMore;
+                            return Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 20),
+                              child: Center(
+                                child: isLoadingMore
+                                    ? SizedBox(
+                                        width: 24, height: 24,
+                                        child: CircularProgressIndicator(strokeWidth: 2),
+                                      )
+                                    : TextButton(
+                                        onPressed: () {
+                                          ref.read(chatStreamProvider('all-aroundtally').notifier).loadMoreMessages(limit: 10);
+                                        },
+                                        child: Text('Load earlier messages'),
+                                      ),
+                              ),
+                            );
+                          }
                           final index = messages.length - 1 - rawIndex;
                           final msg = messages[index];
                           final isMe = msg.senderId == currentUser?.id;

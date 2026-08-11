@@ -40,6 +40,9 @@ import '../../../dashboard/presentation/widgets/create_ticket_dialog.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../widgets/markdown_text_editing_controller.dart';
 import '../../../../core/services/zoho_launcher.dart';
+import '../../../../features/calls/domain/models/call_history_item.dart';
+import '../../../../features/calls/presentation/providers/call_history_provider.dart';
+import '../../../../core/utils/download_helper.dart';
 
 IconData _getFileIcon(String? fileType) {
   if (fileType == null) return Icons.insert_drive_file;
@@ -58,15 +61,7 @@ IconData _getFileIcon(String? fileType) {
 }
 
 Future<void> _downloadFile(String url, String fileName) async {
-  try {
-    final uri = Uri.parse(url);
-    await url_launcher.launchUrl(
-      uri,
-      mode: url_launcher.LaunchMode.externalApplication,
-    );
-  } catch (e) {
-    debugPrint('Could not launch $url: $e');
-  }
+  await downloadFileDirectly(url, fileName);
 }
 
 class DirectMessagePage extends ConsumerStatefulWidget {
@@ -699,6 +694,23 @@ class _DirectMessagePageState extends ConsumerState<DirectMessagePage> {
       }
       return;
     }
+
+    try {
+      final currentUser = ref.read(authProvider);
+      if (currentUser != null) {
+        final repo = ref.read(callHistoryRepositoryProvider);
+        await repo.logCall(
+          callerId: currentUser.id,
+          receiverId: widget.partnerId,
+          type: video ? CallType.video : CallType.audio,
+          direction: CallDirection.outgoing,
+          participantIds: [currentUser.id, widget.partnerId],
+        );
+      }
+    } catch (e, st) {
+      debugPrint('Failed to log call history: $e');
+    }
+
     // Uses window.location.href via JS — bypasses Chrome's localhost protocol block
     launchZohoCliqUser(zohoMailId.trim());
   }

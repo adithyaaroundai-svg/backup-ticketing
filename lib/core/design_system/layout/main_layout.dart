@@ -17,11 +17,14 @@ import '../../network/connectivity_provider.dart';
 import '../../../features/chat/presentation/providers/chat_provider.dart';
 import '../../../features/chat/presentation/providers/custom_channel_provider.dart';
 import '../../../features/chat/presentation/widgets/create_channel_dialog.dart';
+import '../../../features/chat/presentation/widgets/new_dm_dialog.dart';
 import '../../../features/tickets/domain/entities/ticket.dart';
 import '../../../features/chat/presentation/widgets/chat_toast_overlay.dart';
 import '../../../features/productivity/presentation/widgets/add_reminder_dialog.dart';
 import '../../../features/productivity/presentation/widgets/reminder_toast_overlay.dart';
 import '../../../features/productivity/presentation/providers/reminder_provider.dart';
+import '../../../features/deals/presentation/providers/deals_provider.dart';
+import '../../../features/sales/presentation/providers/lead_provider.dart';
 import '../../services/reminder_sound_service.dart';
 import '../../services/chat_sound_service.dart';
 // -- Layout State Providers ---------------------------------------------------
@@ -500,9 +503,10 @@ class _TopNav extends ConsumerWidget {
                                 currentUser?.isHR == true ||
                                 currentUser?.isProjectCoordinator == true
                             ? '/support'
-                            : '/')),
+                            : '/dashboard')),
             isActive:
                 currentPath == '/' ||
+                currentPath == '/dashboard' ||
                 currentPath == '/admin' ||
                 currentPath == '/accountant' ||
                 currentPath == '/sales' ||
@@ -916,6 +920,9 @@ class _GlobalSearchDialogState extends ConsumerState<_GlobalSearchDialog> {
   Widget build(BuildContext context) {
     final ticketsAsync = ref.watch(ticketsStreamProvider);
     final customersAsync = ref.watch(customersListProvider);
+    final dealsAsync = ref.watch(dealsProvider);
+    final leadsAsync = ref.watch(leadsProvider);
+    final agentsAsync = ref.watch(agentsListProvider);
 
     return Dialog(
       insetPadding: const EdgeInsets.all(24),
@@ -955,159 +962,224 @@ class _GlobalSearchDialogState extends ConsumerState<_GlobalSearchDialog> {
               Flexible(
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxHeight: 360),
-                  child: ticketsAsync.when(
-                  data: (tickets) {
-                    return customersAsync.when(
-                      data: (customers) {
-                        final q = _query.toLowerCase();
+                  child: Builder(
+                    builder: (context) {
+                      final isLoading = ticketsAsync.isLoading ||
+                          customersAsync.isLoading ||
+                          dealsAsync.isLoading ||
+                          leadsAsync.isLoading ||
+                          agentsAsync.isLoading;
 
-                        final ticketResults = q.isEmpty
-                            ? <dynamic>[]
-                            : tickets
-                                  .where((t) {
-                                    final title = t.title.toLowerCase();
-                                    final id = t.ticketId.toLowerCase();
-                                    final desc = (t.description ?? '')
-                                        .toString()
-                                        .toLowerCase();
-                                    return title.contains(q) ||
-                                        id.contains(q) ||
-                                        desc.contains(q);
-                                  })
-                                  .take(10)
-                                  .toList();
+                      if (isLoading && _query.isEmpty) {
+                        return const Center(
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        );
+                      }
 
-                        final customerResults = q.isEmpty
-                            ? <dynamic>[]
-                            : customers
-                                  .where((c) {
-                                    final name = c.companyName.toLowerCase();
-                                    final apiKey = c.apiKey.toLowerCase();
-                                    return name.contains(q) ||
-                                        apiKey.contains(q);
-                                  })
-                                  .take(10)
-                                  .toList();
+                      final tickets = ticketsAsync.asData?.value ?? [];
+                      final customers = customersAsync.asData?.value ?? [];
+                      final deals = dealsAsync.asData?.value ?? [];
+                      final leads = leadsAsync.asData?.value ?? [];
+                      final agents = agentsAsync.asData?.value ?? [];
 
-                        if (ticketResults.isEmpty && customerResults.isEmpty) {
-                          return const Center(
-                            child: Text(
-                              'Type to search tickets or customers',
+                      final q = _query.toLowerCase();
+
+                      final ticketResults = q.isEmpty
+                          ? <dynamic>[]
+                          : tickets
+                              .where((t) {
+                                final title = t.title.toLowerCase();
+                                final id = t.ticketId.toLowerCase();
+                                final desc = (t.description ?? '').toString().toLowerCase();
+                                return title.contains(q) || id.contains(q) || desc.contains(q);
+                              })
+                              .take(10)
+                              .toList();
+
+                      final customerResults = q.isEmpty
+                          ? <dynamic>[]
+                          : customers
+                              .where((c) {
+                                final name = c.companyName.toLowerCase();
+                                final apiKey = c.apiKey.toLowerCase();
+                                return name.contains(q) || apiKey.contains(q);
+                              })
+                              .take(10)
+                              .toList();
+
+                      final dealResults = q.isEmpty
+                          ? <dynamic>[]
+                          : deals
+                              .where((d) {
+                                final name = d.name.toLowerCase();
+                                final remark = d.remark.toLowerCase();
+                                return name.contains(q) || remark.contains(q);
+                              })
+                              .take(10)
+                              .toList();
+
+                      final leadResults = q.isEmpty
+                          ? <dynamic>[]
+                          : leads
+                              .where((l) {
+                                final name = l.companyName.toLowerCase();
+                                return name.contains(q);
+                              })
+                              .take(10)
+                              .toList();
+
+                      final agentResults = q.isEmpty
+                          ? <dynamic>[]
+                          : agents
+                              .where((a) {
+                                final name = (a['full_name']?.toString() ?? '').toLowerCase();
+                                final username = (a['username']?.toString() ?? '').toLowerCase();
+                                return name.contains(q) || username.contains(q);
+                              })
+                              .take(10)
+                              .toList();
+
+                      if (ticketResults.isEmpty &&
+                          customerResults.isEmpty &&
+                          dealResults.isEmpty &&
+                          leadResults.isEmpty &&
+                          agentResults.isEmpty) {
+                        return const Center(
+                          child: Text(
+                            'Type to search tickets, customers, deals, leads, or agents',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: AppColors.slate500,
+                            ),
+                          ),
+                        );
+                      }
+
+                      return ListView(
+                        children: [
+                          if (ticketResults.isNotEmpty) ...[
+                            const Text(
+                              'Tickets',
                               style: TextStyle(
                                 fontSize: 13,
-                                color: AppColors.slate500,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.slate700,
                               ),
                             ),
-                          );
-                        }
-
-                        return ListView(
-                          children: [
-                            if (ticketResults.isNotEmpty) ...[
-                              const Text(
-                                'Tickets',
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                  color: AppColors.slate700,
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              ...ticketResults.map((t) {
-                                return ListTile(
-                                  dense: true,
-                                  leading: const Icon(
-                                    LucideIcons.ticket,
-                                    size: 18,
-                                    color: AppColors.primary,
-                                  ),
-                                  title: Text(
-                                    t.title ?? 'Ticket',
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                  subtitle: Text(
-                                    'ID: ${t.ticketId}',
-                                    style: const TextStyle(
-                                      fontSize: 11,
-                                      color: AppColors.slate600,
-                                    ),
-                                  ),
-                                  onTap: () {
-                                    Navigator.of(context).pop();
-                                    context.push('/ticket/${t.ticketId}');
-                                  },
-                                );
-                              }),
-                              const SizedBox(height: 12),
-                            ],
-                            if (customerResults.isNotEmpty) ...[
-                              const Text(
-                                'Customers',
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                  color: AppColors.slate700,
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              ...customerResults.map((c) {
-                                return ListTile(
-                                  dense: true,
-                                  leading: const Icon(
-                                    LucideIcons.users,
-                                    size: 18,
-                                    color: AppColors.slate700,
-                                  ),
-                                  title: Text(
-                                    c.companyName,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                  subtitle: Text(
-                                    c.apiKey,
-                                    style: const TextStyle(
-                                      fontSize: 11,
-                                      color: AppColors.slate600,
-                                    ),
-                                  ),
-                                  onTap: () {
-                                    Navigator.of(context).pop();
-                                    context.push('/customer/${c.id}');
-                                  },
-                                );
-                              }),
-                            ],
+                            const SizedBox(height: 8),
+                            ...ticketResults.map((t) {
+                              return ListTile(
+                                dense: true,
+                                leading: const Icon(LucideIcons.ticket, size: 18, color: AppColors.primary),
+                                title: Text(t.title ?? 'Ticket', maxLines: 1, overflow: TextOverflow.ellipsis),
+                                subtitle: Text('ID: ${t.ticketId}', style: const TextStyle(fontSize: 11, color: AppColors.slate600)),
+                                onTap: () {
+                                  Navigator.of(context).pop();
+                                  context.push('/ticket/${t.ticketId}');
+                                },
+                              );
+                            }),
+                            const SizedBox(height: 12),
                           ],
-                        );
-                      },
-                      loading: () => const Center(
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      ),
-                      error: (err, _) => Center(
-                        child: Text(
-                          'Error loading customers: $err',
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: AppColors.error,
-                          ),
-                        ),
-                      ),
-                    );
-                  },
-                  loading: () => const Center(
-                    child: CircularProgressIndicator(strokeWidth: 2),
+                          if (customerResults.isNotEmpty) ...[
+                            const Text(
+                              'Customers',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.slate700,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            ...customerResults.map((c) {
+                              return ListTile(
+                                dense: true,
+                                leading: const Icon(LucideIcons.users, size: 18, color: AppColors.slate700),
+                                title: Text(c.companyName, maxLines: 1, overflow: TextOverflow.ellipsis),
+                                subtitle: Text(c.apiKey, style: const TextStyle(fontSize: 11, color: AppColors.slate600)),
+                                onTap: () {
+                                  Navigator.of(context).pop();
+                                  context.push('/customer/${c.id}');
+                                },
+                              );
+                            }),
+                            const SizedBox(height: 12),
+                          ],
+                          if (dealResults.isNotEmpty) ...[
+                            const Text(
+                              'Deals',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.slate700,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            ...dealResults.map((d) {
+                              return ListTile(
+                                dense: true,
+                                leading: const Icon(LucideIcons.briefcase, size: 18, color: AppColors.success),
+                                title: Text(d.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+                                subtitle: Text(d.remark, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11, color: AppColors.slate600)),
+                                onTap: () {
+                                  Navigator.of(context).pop();
+                                  context.push('/deals');
+                                },
+                              );
+                            }),
+                            const SizedBox(height: 12),
+                          ],
+                          if (leadResults.isNotEmpty) ...[
+                            const Text(
+                              'Leads',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.slate700,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            ...leadResults.map((l) {
+                              return ListTile(
+                                dense: true,
+                                leading: const Icon(LucideIcons.target, size: 18, color: AppColors.warning),
+                                title: Text(l.companyName, maxLines: 1, overflow: TextOverflow.ellipsis),
+                                subtitle: Text('Amount: ${l.amount}', style: const TextStyle(fontSize: 11, color: AppColors.slate600)),
+                                onTap: () {
+                                  Navigator.of(context).pop();
+                                  context.push('/leads');
+                                },
+                              );
+                            }),
+                            const SizedBox(height: 12),
+                          ],
+                          if (agentResults.isNotEmpty) ...[
+                            const Text(
+                              'Agents',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.slate700,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            ...agentResults.map((a) {
+                              return ListTile(
+                                dense: true,
+                                leading: const Icon(LucideIcons.user, size: 18, color: AppColors.primary),
+                                title: Text(a['full_name']?.toString() ?? 'Agent', maxLines: 1, overflow: TextOverflow.ellipsis),
+                                subtitle: Text('@${a['username'] ?? ''} - ${a['role'] ?? ''}', style: const TextStyle(fontSize: 11, color: AppColors.slate600)),
+                                onTap: () {
+                                  Navigator.of(context).pop();
+                                  context.push('/users'); // No direct user page, go to users list
+                                },
+                              );
+                            }),
+                          ],
+                        ],
+                      );
+                    },
                   ),
-                  error: (err, _) => Center(
-                    child: Text(
-                      'Error loading tickets: $err',
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: AppColors.error,
-                      ),
-                    ),
-                  ),
-                ),
                 ),
               ),
             ],
@@ -1671,7 +1743,7 @@ class _BottomNav extends ConsumerWidget {
                   ListTile(
                     leading: const Icon(LucideIcons.layoutDashboard, color: Colors.white),
                     title: const Text('Dashboard', style: TextStyle(color: Colors.white)),
-                    onTap: () { Navigator.pop(context); context.go('/'); },
+                    onTap: () { Navigator.pop(context); context.go('/dashboard'); },
                   ),
                 if (isAdmin || isAccountant)
                   ListTile(
@@ -2888,25 +2960,25 @@ class _ChannelsListState extends ConsumerState<_ChannelsList> {
                     ),
                   ),
                 ),
-                // Refresh button
-                InkWell(
-                  onTap: () {
-                    ref.invalidate(agentsListProvider);
+                // Add New DM button
+                IconButton(
+                  icon: Icon(LucideIcons.plus, size: 16, color: textColor70),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  onPressed: () {
+                    showDialog(
+                      context: context,
+                      builder: (_) => const NewDmDialog(),
+                    );
                   },
-                  borderRadius: BorderRadius.circular(4),
-                  child: Padding(
-                    padding: const EdgeInsets.all(4),
-                    child: Icon(Icons.refresh, size: 14, color: textColor54),
-                  ),
                 ),
-                const SizedBox(width: 8),
               ],
             ),
           ),
           // Agents List
           agentsAsync.when(
               data: (agents) {
-                // Filter out specific agents
+                // Filter out specific agents and those without conversations
                 final hiddenAgentIds = const {
                   '2d58eb0a-916a-4cb6-9245-b5b124caa0a3',
                 };
@@ -2917,6 +2989,14 @@ class _ChannelsListState extends ConsumerState<_ChannelsList> {
                   if (isMobile) {
                     final name = (a['full_name'] ?? a['username'] ?? '').toString().toLowerCase();
                     if (name.contains('abhirami') || name.contains('thaness')) return false;
+                  }
+                  
+                  // Only show agents that have an active conversation or are the current user
+                  if (currentUser != null && id != currentUser.id) {
+                    final conv = conversations[id];
+                    if (conv == null || conv.totalMessageCount == 0) {
+                      return false;
+                    }
                   }
                   
                   return true;
@@ -2941,6 +3021,13 @@ class _ChannelsListState extends ConsumerState<_ChannelsList> {
                     final convA = conversations[agentAId];
                     final convB = conversations[agentBId];
                     
+                    final countA = convA?.totalMessageCount ?? 0;
+                    final countB = convB?.totalMessageCount ?? 0;
+                    
+                    if (countA != countB) {
+                      return countB.compareTo(countA); // Sort by highest message count first
+                    }
+
                     final lastA = convA?.lastMessage?.createdAt;
                     final lastB = convB?.lastMessage?.createdAt;
 
@@ -2951,13 +3038,6 @@ class _ChannelsListState extends ConsumerState<_ChannelsList> {
                       return -1;
                     } else if (lastB != null) {
                       return 1;
-                    }
-
-                    final countA = convA?.totalMessageCount ?? 0;
-                    final countB = convB?.totalMessageCount ?? 0;
-                    
-                    if (countA != countB) {
-                      return countB.compareTo(countA);
                     }
 
                     final nameA = (a['full_name'] ?? a['username'] ?? '').toString().toLowerCase();

@@ -385,7 +385,7 @@ class _CallHistoryRow extends ConsumerWidget {
             // Call action
             IconButton(
               icon: Icon(typeIcon, color: theme.primaryColor),
-              onPressed: () => _handleCallAgain(context, ref, partnerId),
+              onPressed: () => _handleCallAgain(context, ref, call),
               tooltip: 'Call Again',
             ),
           ],
@@ -403,23 +403,61 @@ class _CallHistoryRow extends ConsumerWidget {
     return '$direction $type Call';
   }
 
-  Future<void> _handleCallAgain(BuildContext context, WidgetRef ref, String partnerId) async {
+  Future<void> _handleCallAgain(BuildContext context, WidgetRef ref, CallHistoryItem call) async {
     final agentsAsync = ref.read(agentsListProvider);
     final agents = agentsAsync.value ?? [];
-    
+    final currentUser = ref.read(authProvider);
+
+    if (currentUser == null) return;
+
+    final participantIds = call.participants.map((p) => p.agentId).toSet().toList();
+    if (participantIds.isEmpty) {
+      // Fallback if participants are not populated in older records
+      participantIds.add(call.callerId);
+      if (call.callerId != call.receiverId) {
+        participantIds.add(call.receiverId);
+      }
+    }
+
+    final targetIds = participantIds.where((id) => id != currentUser.id).toList();
+
     String? targetZohoId;
     for (final agent in agents) {
-      if (agent['id'] == partnerId) {
-        targetZohoId = agent['zoho_mail_id'] as String?;
-        break;
+      if (targetIds.contains(agent['id'])) {
+        final zohoId = agent['zoho_mail_id'] as String?;
+        if (zohoId != null && zohoId.trim().isNotEmpty) {
+          targetZohoId = zohoId;
+          break;
+        }
       }
     }
 
     if (targetZohoId == null || targetZohoId.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Agent has no Zoho Cliq ID configured.')),
-      );
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Agent has no Zoho Cliq ID configured.')),
+        );
+      }
       return;
+    }
+
+    try {
+      final repo = ref.read(callHistoryRepositoryProvider);
+      
+      final receiverId = targetIds.isNotEmpty ? targetIds.first : currentUser.id;
+      
+      // We must make sure current user is in participants list
+      final Set<String> finalParticipantIds = {...targetIds, currentUser.id};
+
+      await repo.logCall(
+        callerId: currentUser.id,
+        receiverId: receiverId,
+        type: call.callType,
+        direction: CallDirection.outgoing,
+        participantIds: finalParticipantIds.toList(),
+      );
+    } catch (e, st) {
+      debugPrint('Failed to log call history: $e');
     }
 
     await launchZohoCliqUser(targetZohoId.trim());

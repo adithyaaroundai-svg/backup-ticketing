@@ -46,6 +46,7 @@ abstract class TicketRepository {
     String? searchQuery,
     String? currentUserId, // For assignee filters (e.g. 'me')
     DateTime? before,
+    DateTime? after,
     int limit = 50,
   });
 

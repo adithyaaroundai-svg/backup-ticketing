@@ -1,10 +1,14 @@
+import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../data/repositories/call_history_repository.dart';
+import '../../data/repositories/supabase_call_history_repository.dart';
 import '../../domain/models/call_history_item.dart';
+import '../../../auth/presentation/providers/auth_provider.dart';
 
 final callHistoryRepositoryProvider = Provider<CallHistoryRepository>((ref) {
-  // Currently returning EmptyCallHistoryRepository as per Phase 1
-  return EmptyCallHistoryRepository();
+  final currentUserId = ref.watch(authProvider)?.id ?? '';
+  return SupabaseCallHistoryRepository(Supabase.instance.client, currentUserId);
 });
 
 class CallHistorySearchQuery extends Notifier<String> {
@@ -21,9 +25,23 @@ final callHistorySearchQueryProvider = NotifierProvider<CallHistorySearchQuery, 
 );
 
 class CallHistoryController extends AsyncNotifier<List<CallHistoryItem>> {
+  StreamSubscription<List<CallHistoryItem>>? _subscription;
+
   @override
   Future<List<CallHistoryItem>> build() async {
     final repo = ref.watch(callHistoryRepositoryProvider);
+    
+    _subscription?.cancel();
+    _subscription = repo.watchHistory().listen((history) {
+      state = AsyncValue.data(history);
+    }, onError: (error, stackTrace) {
+      state = AsyncValue.error(error, stackTrace);
+    });
+
+    ref.onDispose(() {
+      _subscription?.cancel();
+    });
+
     return await repo.loadHistory();
   }
 
@@ -51,7 +69,6 @@ final filteredCallHistoryProvider = Provider<List<CallHistoryItem>>((ref) {
       return history.where((call) {
         final matchesCaller = call.callerName.toLowerCase().contains(searchQuery);
         final matchesReceiver = call.receiverName.toLowerCase().contains(searchQuery);
-        // We can also format date and status here, but for now simple matches
         final matchesStatus = call.status.name.toLowerCase().contains(searchQuery);
         return matchesCaller || matchesReceiver || matchesStatus;
       }).toList();

@@ -6,6 +6,7 @@ import '../../../../core/design_system/theme/app_colors.dart';
 import '../../domain/entities/chat_message.dart';
 import '../providers/chat_provider.dart';
 import '../../../tickets/presentation/widgets/voice_note_widget.dart';
+import '../../../../core/utils/download_helper.dart';
 
 enum ChatAttachmentType {
   none,
@@ -42,15 +43,7 @@ class ChatAttachmentRenderer extends ConsumerWidget {
   }
 
   Future<void> _downloadFile(String url, String fileName) async {
-    try {
-      final uri = Uri.parse(url);
-      await url_launcher.launchUrl(
-        uri,
-        mode: url_launcher.LaunchMode.externalApplication,
-      );
-    } catch (e) {
-      debugPrint('Could not launch $url: $e');
-    }
+    await downloadFileDirectly(url, fileName);
   }
 
   ChatAttachmentType _getType(String? fileType, String? fileName) {
@@ -84,6 +77,55 @@ class ChatAttachmentRenderer extends ConsumerWidget {
     return 0;
   }
 
+  void _showFullScreenImage(BuildContext context, String url, String fileName) {
+    showDialog(
+      context: context,
+      barrierColor: Colors.black.withOpacity(0.9),
+      builder: (context) {
+        return Material(
+          color: Colors.transparent,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              Center(
+                child: InteractiveViewer(
+                  panEnabled: true,
+                  minScale: 0.5,
+                  maxScale: 4,
+                  child: Image.network(
+                    url,
+                    fit: BoxFit.contain,
+                  ),
+                ),
+              ),
+              Positioned(
+                top: 40,
+                right: 20,
+                child: Row(
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.download, color: Colors.white, size: 30),
+                      onPressed: () {
+                        _downloadFile(url, fileName);
+                      },
+                    ),
+                    const SizedBox(width: 16),
+                    IconButton(
+                      icon: const Icon(Icons.close, color: Colors.white, size: 30),
+                      onPressed: () {
+                        Navigator.of(context).pop();
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     if (message.fileUrl == null || message.fileUrl!.isEmpty) {
@@ -111,35 +153,38 @@ class ChatAttachmentRenderer extends ConsumerWidget {
       case ChatAttachmentType.image:
         contentWidget = Padding(
           padding: const EdgeInsets.only(top: 4, bottom: 4),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: Image.network(
-              message.fileUrl!,
-              width: 200,
-              fit: BoxFit.cover,
-              loadingBuilder: (_, child, progress) => progress == null
-                  ? child
-                  : SizedBox(
-                      width: 200,
-                      height: 120,
-                      child: Center(
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          value: progress.expectedTotalBytes != null
-                              ? progress.cumulativeBytesLoaded / progress.expectedTotalBytes!
-                              : null,
+          child: GestureDetector(
+            onTap: () => _showFullScreenImage(context, message.fileUrl!, message.fileName ?? 'image'),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: Image.network(
+                message.fileUrl!,
+                width: 200,
+                fit: BoxFit.cover,
+                loadingBuilder: (_, child, progress) => progress == null
+                    ? child
+                    : SizedBox(
+                        width: 200,
+                        height: 120,
+                        child: Center(
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            value: progress.expectedTotalBytes != null
+                                ? progress.cumulativeBytesLoaded / progress.expectedTotalBytes!
+                                : null,
+                          ),
                         ),
                       ),
-                    ),
-              errorBuilder: (_, __, ___) => Container(
-                width: 200,
-                height: 80,
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade200,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Center(
-                  child: Icon(Icons.image_not_supported, size: 32, color: AppColors.slate400),
+                errorBuilder: (_, __, ___) => Container(
+                  width: 200,
+                  height: 80,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade200,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Center(
+                    child: Icon(Icons.image_not_supported, size: 32, color: AppColors.slate400),
+                  ),
                 ),
               ),
             ),

@@ -113,6 +113,47 @@ class ChatStream extends _$ChatStream {
     _chatCache[channel] = newList;
   }
 
+  Future<void> loadMoreMessages({int limit = 10}) async {
+    if (!_hasMore || _isLoadingMore) return;
+    
+    final currentList = state.value ?? [];
+    if (currentList.isEmpty) return;
+
+    final oldestMessageDate = currentList.first.createdAt;
+
+    _isLoadingMore = true;
+    state = AsyncData([...currentList]); // Force rebuild to show loading spinner
+
+    try {
+      final repository = ref.read(chatRepositoryProvider);
+      final newMessages = await repository.getPaginatedMessages(
+        channelName: channel,
+        limit: limit,
+        before: oldestMessageDate,
+      );
+
+      _hasMore = newMessages.length == limit;
+      _chatHasMoreCache[channel] = _hasMore;
+      
+      if (newMessages.isNotEmpty) {
+        final updatedList = [...newMessages, ...currentList];
+        
+        final messageIds = newMessages.map((m) => m.id).toList();
+        final receipts = await repository.fetchReceiptsForMessages(messageIds);
+        ReadReceiptsTracker.injectReceipts(receipts);
+        
+        _isLoadingMore = false;
+        _updateState(updatedList);
+        return;
+      }
+    } catch (e) {
+      debugPrint('Error loading more messages: $e');
+    }
+    
+    _isLoadingMore = false;
+    state = AsyncData([...currentList]); // Force rebuild to hide loading spinner
+  }
+
   void _handleReadReceiptEvent(PostgresChangePayload payload) {
     if (payload.eventType == PostgresChangeEvent.insert || payload.eventType == PostgresChangeEvent.update) {
       final record = payload.newRecord;

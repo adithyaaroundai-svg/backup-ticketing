@@ -257,7 +257,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const RootRedirectionWidget(),
       ),
       GoRoute(
-        path: '/',
+        path: '/dashboard',
         builder: (context, state) => const AgentDashboardPage(),
       ),
       GoRoute(
@@ -512,9 +512,9 @@ class RootRedirectionWidget extends ConsumerWidget {
         } else if (authState?.isSales == true) {
           context.go('/sales');
         } else if (authState?.isSupport == true || authState?.isHR == true || authState?.isProjectCoordinator == true) {
-          context.go('/chat');
+          context.go('/support');
         } else {
-          context.go('/chat');
+          context.go('/dashboard');
         }
       }
     });

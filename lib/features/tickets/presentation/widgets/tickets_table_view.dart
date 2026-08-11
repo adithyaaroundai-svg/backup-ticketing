@@ -250,6 +250,9 @@ class _TicketsTableViewState extends ConsumerState<TicketsTableView> {
     final customers = customersAsync.value ?? [];
     final customersMap = {for (final c in customers) c.id.toString(): c};
 
+    final agentsList = agentsAsync.value ?? [];
+    final agentsMapForSearch = {for (final a in agentsList) a['id'].toString(): a};
+
     final globalAssigneeFilter = ref.watch(ticketAssigneeFilterProvider);
     String? dropdownValue;
     if (globalAssigneeFilter.startsWith('agent:')) {
@@ -280,10 +283,16 @@ class _TicketsTableViewState extends ConsumerState<TicketsTableView> {
         final customerName = customer?.companyName.toLowerCase() ?? '';
         final ticketPhone = ticket.contactPhone?.toLowerCase() ?? '';
         final customerPhones = customer?.phoneNumbers.join(' ').toLowerCase() ?? '';
+        
+        final agentId = ticket.assignedTo;
+        final agent = agentId != null ? agentsMapForSearch[agentId] : null;
+        final agentName = (agent?['full_name']?.toString() ?? agent?['username']?.toString() ?? '').toLowerCase();
+
         return ticket.title.toLowerCase().contains(query) || 
                customerName.contains(query) || 
                ticketPhone.contains(query) || 
-               customerPhones.contains(query);
+               customerPhones.contains(query) ||
+               agentName.contains(query);
       }).toList();
     }
 
@@ -340,7 +349,7 @@ class _TicketsTableViewState extends ConsumerState<TicketsTableView> {
                     ),
                     child: TextField(
                       decoration: InputDecoration(
-                        hintText: 'Search customer, task...',
+                        hintText: 'Search customer, task, agent...',
                         hintStyle: TextStyle(fontSize: 13, color: context.adaptiveSlate400),
                         prefixIcon: Icon(LucideIcons.search, size: 16, color: context.adaptiveSlate400),
                         border: InputBorder.none,
