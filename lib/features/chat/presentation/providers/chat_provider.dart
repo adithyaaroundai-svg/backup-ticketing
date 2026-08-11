@@ -1522,6 +1522,9 @@ class DmConversationEngine extends Notifier<Map<String, DmConversationState>> {
 
   @override
   Map<String, DmConversationState> build() {
+    // Watch authProvider so that when the user logs out/in, this engine is destroyed and recreated.
+    ref.watch(authProvider);
+
     ref.onDispose(() {
       _msgSub?.unsubscribe();
       _rcptSub?.unsubscribe();

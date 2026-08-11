@@ -175,19 +175,19 @@ class _TicketDetailPageState extends ConsumerState<TicketDetailPage> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const Text(
+                                Text(
                                   'Assign Ticket',
                                   style: TextStyle(
                                     fontSize: 20,
                                     fontWeight: FontWeight.w700,
-                                    color: AppColors.slate900,
+                                    color: context.adaptiveSlate900,
                                   ),
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
                                   'Choose an agent to hand off this ticket',
                                   style: TextStyle(
-                                    color: AppColors.slate500,
+                                    color: context.adaptiveSlate500,
                                     fontSize: 13,
                                   ),
                                 ),
@@ -196,7 +196,7 @@ class _TicketDetailPageState extends ConsumerState<TicketDetailPage> {
                           ),
                           IconButton(
                             tooltip: 'Close',
-                            icon: const Icon(LucideIcons.x),
+                            icon: Icon(LucideIcons.x),
                             onPressed: () => Navigator.of(dialogContext).pop(),
                           ),
                         ],
@@ -206,22 +206,22 @@ class _TicketDetailPageState extends ConsumerState<TicketDetailPage> {
                         Container(
                           padding: const EdgeInsets.all(16),
                           decoration: BoxDecoration(
-                            color: AppColors.slate50,
+                            color: context.adaptiveSlate50,
                             borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: AppColors.slate200),
+                            border: Border.all(color: context.adaptiveSlate200),
                           ),
-                          child: const Row(
+                          child: Row(
                             children: [
                               Icon(
                                 LucideIcons.info,
-                                color: AppColors.slate500,
+                                color: context.adaptiveSlate500,
                               ),
                               SizedBox(width: 12),
                               Expanded(
                                 child: Text(
                                   'No eligible agents found',
                                   style: TextStyle(
-                                    color: AppColors.slate600,
+                                    color: context.adaptiveSlate600,
                                     fontWeight: FontWeight.w600,
                                   ),
                                 ),
@@ -276,8 +276,8 @@ class _TicketDetailPageState extends ConsumerState<TicketDetailPage> {
                                   padding: const EdgeInsets.all(14),
                                   decoration: BoxDecoration(
                                     borderRadius: BorderRadius.circular(16),
-                                    border: Border.all(color: AppColors.slate200),
-                                    color: Colors.white,
+                                    border: Border.all(color: context.adaptiveSlate200),
+                                    color: context.adaptiveCard,
                                   ),
                                   child: Row(
                                     children: [
@@ -290,10 +290,10 @@ class _TicketDetailPageState extends ConsumerState<TicketDetailPage> {
                                           children: [
                                             Text(
                                               displayName,
-                                              style: const TextStyle(
+                                              style: TextStyle(
                                                 fontSize: 15,
                                                 fontWeight: FontWeight.w600,
-                                                color: AppColors.slate900,
+                                                color: context.adaptiveSlate900,
                                               ),
                                             ),
                                             const SizedBox(height: 4),
@@ -301,7 +301,7 @@ class _TicketDetailPageState extends ConsumerState<TicketDetailPage> {
                                               '$roleLabel • $loadLabel',
                                               style: TextStyle(
                                                 fontSize: 12,
-                                                color: AppColors.slate500,
+                                                color: context.adaptiveSlate500,
                                               ),
                                             ),
                                           ],
@@ -310,7 +310,7 @@ class _TicketDetailPageState extends ConsumerState<TicketDetailPage> {
                                       Icon(
                                         LucideIcons.arrowRight,
                                         size: 18,
-                                        color: AppColors.slate400,
+                                        color: context.adaptiveSlate400,
                                       ),
                                     ],
                                   ),
@@ -361,9 +361,9 @@ class _TicketDetailPageState extends ConsumerState<TicketDetailPage> {
     return MainLayout(
       currentPath: '/ticket/${widget.ticketId}',
       child: Scaffold(
-        backgroundColor: AppColors.slate50,
+        backgroundColor: context.adaptiveSlate50,
         appBar: AppBar(
-          backgroundColor: Colors.white,
+          backgroundColor: context.adaptiveCard,
           elevation: 0,
           leading: IconButton(
             onPressed: () {
@@ -373,10 +373,10 @@ class _TicketDetailPageState extends ConsumerState<TicketDetailPage> {
                 context.go('/tickets');
               }
             },
-            icon: const Icon(Icons.arrow_back),
+            icon: Icon(Icons.arrow_back),
             tooltip: 'Back',
             style: IconButton.styleFrom(
-              foregroundColor: AppColors.slate700,
+              foregroundColor: context.adaptiveSlate700,
             ),
           ),
           centerTitle: false,
@@ -385,24 +385,24 @@ class _TicketDetailPageState extends ConsumerState<TicketDetailPage> {
           title: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
+              Text(
                 'Ticket Details',
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
-                  color: AppColors.slate900,
+                  color: context.adaptiveSlate900,
                 ),
               ),
               Text(
                 'Conversation & history',
-                style: TextStyle(fontSize: 11, color: AppColors.slate500),
+                style: TextStyle(fontSize: 11, color: context.adaptiveSlate500),
               ),
             ],
           ),
           actions: [
             if (canManageAssignment)
               IconButton(
-                icon: const Icon(LucideIcons.userPlus, size: 18),
+                icon: Icon(LucideIcons.userPlus, size: 18),
                 tooltip: 'Assign Support Head',
                 onPressed: _showAssignDialog,
                 constraints: const BoxConstraints(),
@@ -410,7 +410,7 @@ class _TicketDetailPageState extends ConsumerState<TicketDetailPage> {
               ),
             if (isAdmin || currentUser?.isSupportHead == true)
               PopupMenuButton<String>(
-                icon: const Icon(LucideIcons.moreVertical, size: 18),
+                icon: Icon(LucideIcons.moreVertical, size: 18),
                 tooltip: 'Change Status',
                 onSelected: _updateStatus,
                 padding: EdgeInsets.zero,
@@ -499,10 +499,10 @@ class _TicketDetailPageState extends ConsumerState<TicketDetailPage> {
                                   Expanded(
                                     child: Text(
                                       ticket.title,
-                                      style: const TextStyle(
+                                      style: TextStyle(
                                         fontSize: 18,
                                         fontWeight: FontWeight.w600,
-                                        color: AppColors.slate900,
+                                        color: context.adaptiveSlate900,
                                         height: 1.3,
                                       ),
                                     ),
@@ -522,7 +522,7 @@ class _TicketDetailPageState extends ConsumerState<TicketDetailPage> {
                                   Icon(
                                     LucideIcons.user,
                                     size: 14,
-                                    color: AppColors.slate400,
+                                    color: context.adaptiveSlate400,
                                   ),
                                   const SizedBox(width: 6),
                                   Expanded(
@@ -557,7 +557,7 @@ class _TicketDetailPageState extends ConsumerState<TicketDetailPage> {
                                               ticket.createdBy;
                                           return Text(
                                             createdByDisplay,
-                                            style: TextStyle(color: AppColors.slate600, fontSize: 13),
+                                            style: TextStyle(color: context.adaptiveSlate600, fontSize: 13),
                                             overflow: TextOverflow.ellipsis,
                                           );
                                         }
@@ -565,8 +565,8 @@ class _TicketDetailPageState extends ConsumerState<TicketDetailPage> {
                                         // If not an agent, show Company Name
                                         return Text(
                                           customerCompanyName ?? ticket.createdBy,
-                                          style: const TextStyle(
-                                            color: AppColors.slate900,
+                                          style: TextStyle(
+                                            color: context.adaptiveSlate900,
                                             fontWeight: FontWeight.w500,
                                             fontSize: 13,
                                           ),
@@ -575,11 +575,11 @@ class _TicketDetailPageState extends ConsumerState<TicketDetailPage> {
                                       },
                                       loading: () => Text(
                                         ticket.createdBy,
-                                        style: TextStyle(color: AppColors.slate600, fontSize: 13),
+                                        style: TextStyle(color: context.adaptiveSlate600, fontSize: 13),
                                       ),
                                       error: (_, __) => Text(
                                         ticket.createdBy,
-                                        style: TextStyle(color: AppColors.slate600, fontSize: 13),
+                                        style: TextStyle(color: context.adaptiveSlate600, fontSize: 13),
                                       ),
                                     ),
                                   ),
@@ -588,14 +588,14 @@ class _TicketDetailPageState extends ConsumerState<TicketDetailPage> {
                                   Icon(
                                     LucideIcons.clock,
                                     size: 14,
-                                    color: AppColors.slate400,
+                                    color: context.adaptiveSlate400,
                                   ),
                                   const SizedBox(width: 6),
                                   Text(
                                     ticket.createdAt != null
                                         ? timeago.format(ticket.createdAt!.toLocal())
                                         : 'Unknown',
-                                    style: TextStyle(color: AppColors.slate500, fontSize: 13),
+                                    style: TextStyle(color: context.adaptiveSlate500, fontSize: 13),
                                   ),
                                 ],
                               ),
@@ -606,13 +606,13 @@ class _TicketDetailPageState extends ConsumerState<TicketDetailPage> {
                                     Icon(
                                       LucideIcons.phone,
                                       size: 14,
-                                      color: AppColors.slate400,
+                                      color: context.adaptiveSlate400,
                                     ),
                                     const SizedBox(width: 6),
                                     Text(
                                       'Caller:',
                                       style: TextStyle(
-                                        color: AppColors.slate500,
+                                        color: context.adaptiveSlate500,
                                         fontSize: 13,
                                       ),
                                     ),
@@ -620,8 +620,8 @@ class _TicketDetailPageState extends ConsumerState<TicketDetailPage> {
                                     Flexible(
                                       child: SelectableText(
                                         ticket.contactPhone!,
-                                        style: const TextStyle(
-                                          color: AppColors.slate900,
+                                        style: TextStyle(
+                                          color: context.adaptiveSlate900,
                                           fontWeight: FontWeight.w600,
                                           fontSize: 13,
                                         ),
@@ -655,17 +655,17 @@ class _TicketDetailPageState extends ConsumerState<TicketDetailPage> {
                                       Icon(
                                         LucideIcons.userCheck,
                                         size: 14,
-                                        color: AppColors.slate400,
+                                        color: context.adaptiveSlate400,
                                       ),
                                       const SizedBox(width: 6),
                                       Text(
                                         'Assigned to: ',
-                                        style: TextStyle(color: AppColors.slate500, fontSize: 13),
+                                        style: TextStyle(color: context.adaptiveSlate500, fontSize: 13),
                                       ),
                                       Text(
                                         assigneeName,
                                         style: TextStyle(
-                                          color: AppColors.slate700,
+                                          color: context.adaptiveSlate700,
                                           fontSize: 13,
                                           fontWeight: FontWeight.w500,
                                         ),
@@ -728,8 +728,8 @@ class _TicketDetailPageState extends ConsumerState<TicketDetailPage> {
                                               borderRadius: BorderRadius.circular(8),
                                             ),
                                           ),
-                                          icon: const Icon(LucideIcons.hand, size: 16),
-                                          label: const Text(
+                                          icon: Icon(LucideIcons.hand, size: 16),
+                                          label: Text(
                                             'Claim Ticket',
                                             style: TextStyle(
                                               fontWeight: FontWeight.w600,
@@ -758,32 +758,32 @@ class _TicketDetailPageState extends ConsumerState<TicketDetailPage> {
                                     vertical: 2,
                                   ),
                                   decoration: BoxDecoration(
-                                    color: AppColors.slate100,
+                                    color: context.adaptiveSlate100,
                                     borderRadius: BorderRadius.circular(4),
-                                    border: Border.all(color: AppColors.slate200),
+                                    border: Border.all(color: context.adaptiveSlate200),
                                   ),
                                   child: Text(
                                     'Bill Amount: ₹${ticket.billAmount ?? 0}',
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                       fontSize: 12,
                                       fontWeight: FontWeight.w600,
-                                      color: AppColors.slate700,
+                                      color: context.adaptiveSlate700,
                                     ),
                                   ),
                                 ),
                               ],
 
                               const SizedBox(height: 12),
-                              const Divider(height: 1),
+                              Divider(height: 1),
                               const SizedBox(height: 12),
                               
                               // Description
                               if ((ticket.description ?? '').trim().isEmpty)
-                                const Text(
+                                Text(
                                   'No description provided',
                                   style: TextStyle(
                                     fontSize: 14,
-                                    color: AppColors.slate500,
+                                    color: context.adaptiveSlate500,
                                     fontStyle: FontStyle.italic,
                                   ),
                                 )
@@ -794,10 +794,10 @@ class _TicketDetailPageState extends ConsumerState<TicketDetailPage> {
                                       MarkdownStyleSheet.fromTheme(
                                         Theme.of(context),
                                       ).copyWith(
-                                        p: const TextStyle(
+                                        p: TextStyle(
                                           fontSize: 14,
                                           height: 1.5,
-                                          color: AppColors.slate700,
+                                          color: context.adaptiveSlate700,
                                         ),
                                       ),
                                 ),
@@ -834,7 +834,7 @@ class _TicketDetailPageState extends ConsumerState<TicketDetailPage> {
                                           ticket.priority,
                                         ),
                                       ),
-                                      color: AppColors.slate500,
+                                      color: context.adaptiveSlate500,
                                       compact: true,
                                     ),
                                 ],
@@ -878,15 +878,15 @@ class _TicketDetailPageState extends ConsumerState<TicketDetailPage> {
                             final confirmed = await showDialog<bool>(
                               context: context,
                               builder: (dialogContext) => AlertDialog(
-                                title: const Text('Resolve Ticket'),
-                                content: const Text(
+                                title: Text('Resolve Ticket'),
+                                content: Text(
                                   'Are you sure you want to resolve this ticket? This will mark it as completed.',
                                 ),
                                 actions: [
                                   TextButton(
                                     onPressed: () =>
                                         Navigator.pop(dialogContext, false),
-                                    child: const Text('Cancel'),
+                                    child: Text('Cancel'),
                                   ),
                                   ElevatedButton(
                                     onPressed: () =>
@@ -894,7 +894,7 @@ class _TicketDetailPageState extends ConsumerState<TicketDetailPage> {
                                     style: ElevatedButton.styleFrom(
                                       backgroundColor: AppColors.success,
                                     ),
-                                    child: const Text('Resolve'),
+                                    child: Text('Resolve'),
                                   ),
                                 ],
                               ),
@@ -937,7 +937,7 @@ class _TicketDetailPageState extends ConsumerState<TicketDetailPage> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
+                        Text(
                           'In-Charge History',
                           style: TextStyle(
                             fontWeight: FontWeight.w600,
@@ -994,18 +994,18 @@ class _TicketDetailPageState extends ConsumerState<TicketDetailPage> {
                                     final headerRows = <Widget>[
                                       Row(
                                         children: [
-                                          const Icon(
+                                          Icon(
                                             LucideIcons.user,
                                             size: 13,
-                                            color: AppColors.slate600,
+                                            color: context.adaptiveSlate600,
                                           ),
                                           const SizedBox(width: 8),
                                           Expanded(
                                             child: Text(
                                               'Ticket raised by: ${resolveDisplayName(ticket.createdBy)}',
-                                              style: const TextStyle(
+                                              style: TextStyle(
                                                 fontSize: 13,
-                                                color: AppColors.slate700,
+                                                color: context.adaptiveSlate700,
                                               ),
                                             ),
                                           ),
@@ -1026,19 +1026,19 @@ class _TicketDetailPageState extends ConsumerState<TicketDetailPage> {
                                               }
                                               return Row(
                                                 children: [
-                                                  const Icon(
+                                                  Icon(
                                                     LucideIcons.userCheck,
                                                     size: 13,
-                                                    color: AppColors.slate600,
+                                                    color: context.adaptiveSlate600,
                                                   ),
                                                   const SizedBox(width: 8),
                                                   Expanded(
                                                     child: Text(
                                                       'First assigned to: ${resolveDisplayName(firstAssignedId)}',
-                                                      style: const TextStyle(
+                                                      style: TextStyle(
                                                         fontSize: 13,
                                                         color:
-                                                            AppColors.slate700,
+                                                            context.adaptiveSlate700,
                                                       ),
                                                     ),
                                                   ),
@@ -1053,18 +1053,18 @@ class _TicketDetailPageState extends ConsumerState<TicketDetailPage> {
                                       const SizedBox(height: 4),
                                       Row(
                                         children: [
-                                          const Icon(
+                                          Icon(
                                             LucideIcons.userCheck,
                                             size: 13,
-                                            color: AppColors.slate600,
+                                            color: context.adaptiveSlate600,
                                           ),
                                           const SizedBox(width: 8),
                                           Expanded(
                                             child: Text(
                                               'Handled by now: ${currentHandlerName ?? 'Unassigned'}',
-                                              style: const TextStyle(
+                                              style: TextStyle(
                                                 fontSize: 13,
-                                                color: AppColors.slate700,
+                                                color: context.adaptiveSlate700,
                                               ),
                                             ),
                                           ),
@@ -1105,7 +1105,7 @@ class _TicketDetailPageState extends ConsumerState<TicketDetailPage> {
                                       children: [
                                         ...headerRows,
                                         const SizedBox(height: 12),
-                                        const Divider(height: 1),
+                                        Divider(height: 1),
                                         const SizedBox(height: 12),
                                         ...sortedEvents.map((e) {
                                           DateTime? parse(dynamic v) {
@@ -1154,7 +1154,7 @@ class _TicketDetailPageState extends ConsumerState<TicketDetailPage> {
                                                     vertical: 8,
                                                   ),
                                               decoration: BoxDecoration(
-                                                color: AppColors.slate50,
+                                                color: context.adaptiveSlate50,
                                                 borderRadius:
                                                     BorderRadius.circular(6),
                                               ),
@@ -1175,7 +1175,7 @@ class _TicketDetailPageState extends ConsumerState<TicketDetailPage> {
                                                                 fromId ?? 'Unknown',
                                                               ),
                                                               style:
-                                                                  const TextStyle(
+                                                                  TextStyle(
                                                                 fontWeight:
                                                                     FontWeight
                                                                         .w500,
@@ -1203,7 +1203,7 @@ class _TicketDetailPageState extends ConsumerState<TicketDetailPage> {
                                                                 toId ?? 'Unknown',
                                                               ),
                                                               style:
-                                                                  const TextStyle(
+                                                                  TextStyle(
                                                                 fontWeight:
                                                                     FontWeight
                                                                         .w500,
@@ -1219,7 +1219,7 @@ class _TicketDetailPageState extends ConsumerState<TicketDetailPage> {
                                                         Text(
                                                           timeLabel,
                                                           style:
-                                                              const TextStyle(
+                                                              TextStyle(
                                                             fontSize: 11,
                                                             color: AppColors
                                                                 .slate500,
@@ -1230,9 +1230,9 @@ class _TicketDetailPageState extends ConsumerState<TicketDetailPage> {
                                                   const SizedBox(height: 2),
                                                   Text(
                                                     'By ${resolveDisplayName(assignedById ?? 'Unknown')}',
-                                                    style: const TextStyle(
+                                                    style: TextStyle(
                                                       fontSize: 11,
-                                                      color: AppColors.slate500,
+                                                      color: context.adaptiveSlate500,
                                                       fontStyle:
                                                           FontStyle.italic,
                                                     ),
@@ -1272,20 +1272,20 @@ class _TicketDetailPageState extends ConsumerState<TicketDetailPage> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text(
+                          Text(
                             'Recent Activity',
                             style: TextStyle(
                               fontWeight: FontWeight.w600,
                               fontSize: 14,
-                              color: AppColors.slate900,
+                              color: context.adaptiveSlate900,
                             ),
                           ),
                           const SizedBox(height: 12),
                           if (activitiesAsync.value!.isEmpty)
-                            const Text(
+                            Text(
                               'No recent activity',
                               style: TextStyle(
-                                color: AppColors.slate500,
+                                color: context.adaptiveSlate500,
                                 fontSize: 13,
                               ),
                             )
@@ -1313,18 +1313,18 @@ class _TicketDetailPageState extends ConsumerState<TicketDetailPage> {
                                           children: [
                                             Text(
                                               a.subject,
-                                              style: const TextStyle(
+                                              style: TextStyle(
                                                 fontSize: 12,
                                                 fontWeight: FontWeight.w600,
-                                                color: AppColors.slate900,
+                                                color: context.adaptiveSlate900,
                                               ),
                                             ),
                                             const SizedBox(height: 2),
                                             Text(
                                               '${a.type} · ${timeago.format(a.occurredAt.toLocal())}',
-                                              style: const TextStyle(
+                                              style: TextStyle(
                                                 fontSize: 11,
-                                                color: AppColors.slate600,
+                                                color: context.adaptiveSlate600,
                                               ),
                                             ),
                                           ],
@@ -1355,15 +1355,15 @@ class _TicketDetailPageState extends ConsumerState<TicketDetailPage> {
                         final confirmed = await showDialog<bool>(
                           context: context,
                           builder: (dialogContext) => AlertDialog(
-                            title: const Text('Override Resolve'),
-                            content: const Text(
+                            title: Text('Override Resolve'),
+                            content: Text(
                               'This will bypass the normal workflow and send the ticket directly to billing. Are you sure?',
                             ),
                             actions: [
                               TextButton(
                                 onPressed: () =>
                                     Navigator.pop(dialogContext, false),
-                                child: const Text('Cancel'),
+                                child: Text('Cancel'),
                               ),
                               ElevatedButton(
                                 onPressed: () =>
@@ -1371,7 +1371,7 @@ class _TicketDetailPageState extends ConsumerState<TicketDetailPage> {
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: AppColors.warning,
                                 ),
-                                child: const Text('Force Resolve'),
+                                child: Text('Force Resolve'),
                               ),
                             ],
                           ),
@@ -1491,7 +1491,7 @@ class _TicketDetailPageState extends ConsumerState<TicketDetailPage> {
             '$label: ',
             style: TextStyle(
               fontSize: compact ? 11 : 12,
-              color: AppColors.slate600,
+              color: context.adaptiveSlate600,
             ),
           ),
           Text(
@@ -1508,7 +1508,7 @@ class _TicketDetailPageState extends ConsumerState<TicketDetailPage> {
   }
 
   Color _getPriorityColor(String? priority) {
-    if (priority == null) return AppColors.slate400;
+    if (priority == null) return context.adaptiveSlate400;
     switch (priority.toLowerCase()) {
       case 'urgent':
         return AppColors.error;
@@ -1519,7 +1519,7 @@ class _TicketDetailPageState extends ConsumerState<TicketDetailPage> {
       case 'low':
         return AppColors.success;
       default:
-        return AppColors.slate400;
+        return context.adaptiveSlate400;
     }
   }
 
@@ -1527,12 +1527,12 @@ class _TicketDetailPageState extends ConsumerState<TicketDetailPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           'Customer Screenshot',
           style: TextStyle(
             fontWeight: FontWeight.w600,
             fontSize: 14,
-            color: AppColors.slate900,
+            color: context.adaptiveSlate900,
           ),
         ),
         const SizedBox(height: 8),
@@ -1540,9 +1540,9 @@ class _TicketDetailPageState extends ConsumerState<TicketDetailPage> {
           width: double.infinity,
           constraints: const BoxConstraints(maxHeight: 280),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: context.adaptiveCard,
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: AppColors.slate200),
+            border: Border.all(color: context.adaptiveSlate200),
           ),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(8),
@@ -1566,7 +1566,7 @@ class _TicketDetailPageState extends ConsumerState<TicketDetailPage> {
               errorBuilder: (_, __, ___) => Container(
                 alignment: Alignment.center,
                 padding: const EdgeInsets.all(16),
-                child: const Text(
+                child: Text(
                   'Unable to load screenshot',
                   style: TextStyle(color: AppColors.error, fontSize: 13),
                 ),
