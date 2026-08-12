@@ -25,6 +25,7 @@ import '../../data/repositories/chat_repository.dart';
 import '../widgets/markdown_text_editing_controller.dart';
 import '../widgets/chat_voice_recorder.dart';
 import '../../../../core/services/zoho_launcher.dart';
+import '../../../../core/services/zoho_api_service.dart';
 import '../../../../features/calls/domain/models/call_history_item.dart';
 import '../../../../features/calls/presentation/providers/call_history_provider.dart';
 
@@ -694,8 +695,24 @@ class _CustomChannelChatPageState extends ConsumerState<CustomChannelChatPage> {
       debugPrint('Failed to log call history: $e');
     }
 
-    // Uses window.location.href via JS — bypasses Chrome's localhost protocol block
-    launchZohoCliqUser(zohoIds.first);
+    try {
+      // Create or get channel in Zoho
+      final channelName = await ZohoApiService.createChannel(
+        channel.id, 
+        channel.name,
+        participants: zohoIds,
+      );
+      
+      if (channelName != null) {
+        launchZohoCliqChannel(channelName);
+      } else {
+        debugPrint('Failed to create Zoho channel, launching first user DM as fallback.');
+        launchZohoCliqUser(zohoIds.first);
+      }
+    } catch (e) {
+      debugPrint('Error launching Zoho channel: $e');
+      launchZohoCliqUser(zohoIds.first);
+    }
   }
 
   void _showChannelDetailsDialog(CustomChannel channel, List<ChatMessage>? messages) {
