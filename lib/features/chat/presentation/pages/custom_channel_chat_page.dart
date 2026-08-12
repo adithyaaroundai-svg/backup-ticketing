@@ -695,24 +695,9 @@ class _CustomChannelChatPageState extends ConsumerState<CustomChannelChatPage> {
       debugPrint('Failed to log call history: $e');
     }
 
-    try {
-      // Create or get channel in Zoho
-      final channelName = await ZohoApiService.createChannel(
-        channel.id, 
-        channel.name,
-        participants: zohoIds,
-      );
-      
-      if (channelName != null) {
-        launchZohoCliqChannel(channelName);
-      } else {
-        debugPrint('Failed to create Zoho channel, launching Zoho Cliq home page as fallback.');
-        launchZohoCliqHome();
-      }
-    } catch (e) {
-      debugPrint('Error launching Zoho channel: $e');
-      launchZohoCliqHome();
-    }
+    // Temporarily simply launch Zoho Cliq Home for group calls
+    // until the Supabase Edge Function migration is completed.
+    launchZohoCliqHome();
   }
 
   void _showChannelDetailsDialog(CustomChannel channel, List<ChatMessage>? messages) {

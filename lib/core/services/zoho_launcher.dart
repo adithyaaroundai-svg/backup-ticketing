@@ -37,7 +37,6 @@ Future<void> launchZohoCliqChannel(String channelId) async {
         await launchUrl(webUri, mode: LaunchMode.externalApplication);
       } else {
         debugPrint('Could not launch Zoho Cliq Channel URL: $webUrl');
-      }
     }
   }
 }
