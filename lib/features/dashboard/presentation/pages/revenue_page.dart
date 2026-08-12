@@ -203,7 +203,7 @@ class _RevenuePageState extends ConsumerState<RevenuePage> {
         amount: lifetimeTotal,
         caption: 'All time across applied filters',
         icon: LucideIcons.indianRupee,
-        accent: Colors.white,
+        accent: AppColors.primary,
       ),
     ];
   }
@@ -379,6 +379,7 @@ class _SummaryRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return LayoutBuilder(
       builder: (context, constraints) {
         final isWide = constraints.maxWidth > 900;
@@ -410,27 +411,27 @@ class _SummaryRow extends StatelessWidget {
                             children: [
                               Text(
                                 card.label,
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontSize: 14,
-                                  color: Colors.white,
+                                  color: isDark ? Colors.white : AppColors.slate800,
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
                               const SizedBox(height: 6),
                               Text(
                                 _formatCurrency(card.amount),
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontSize: 24,
                                   fontWeight: FontWeight.bold,
-                                  color: Colors.white,
+                                  color: isDark ? Colors.white : AppColors.slate900,
                                 ),
                               ),
                               const SizedBox(height: 4),
                               Text(
                                 card.caption,
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontSize: 12,
-                                  color: Colors.white70,
+                                  color: isDark ? Colors.white70 : AppColors.slate500,
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
@@ -518,14 +519,14 @@ class _FiltersCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
-              children: const [
-                Icon(LucideIcons.filter, color: AppColors.primary),
-                SizedBox(width: 12),
+              children: [
+                const Icon(LucideIcons.filter, color: AppColors.primary),
+                const SizedBox(width: 12),
                 Text(
                   'Filters',
                   style: TextStyle(
                     fontWeight: FontWeight.w600,
-                    color: AppColors.slate900,
+                    color: Theme.of(context).brightness == Brightness.dark ? Colors.white : AppColors.slate900,
                   ),
                 ),
               ],
@@ -536,11 +537,12 @@ class _FiltersCard extends StatelessWidget {
               runSpacing: 8,
               children: roles.map((role) {
                 final isSelected = selectedRole == role;
+                final isDark = Theme.of(context).brightness == Brightness.dark;
                 return FilterChip(
-                  label: Text(role == 'all' ? 'All Roles' : role),
+                  label: Text(role == 'all' ? 'All Roles' : role, style: TextStyle(color: isDark ? Colors.white : AppColors.slate900)),
                   selected: isSelected,
                   onSelected: (_) => onRoleChanged(role),
-                  backgroundColor: Colors.white,
+                  backgroundColor: isDark ? AppColors.slate800 : Colors.white,
                   selectedColor: AppColors.primary.withValues(alpha: 0.12),
                   checkmarkColor: AppColors.primary,
                 );
@@ -619,6 +621,7 @@ class _DropdownFilter extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return DropdownButtonFormField<String>(
+      isExpanded: true,
       initialValue: value,
       decoration: InputDecoration(
         labelText: label,
@@ -628,7 +631,7 @@ class _DropdownFilter extends StatelessWidget {
           .map(
             (item) => DropdownMenuItem<String>(
               value: item.value,
-              child: Text(item.label),
+              child: Text(item.label, overflow: TextOverflow.ellipsis),
             ),
           )
           .toList(),

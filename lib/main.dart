@@ -48,11 +48,13 @@ import 'features/tickets/presentation/pages/ticket_alerts_page.dart';
 
 import 'core/services/local_notification_service.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'features/chat/data/local/hive_chat_message.dart';
 import 'package:ticketing_system/core/design_system/layout/main_layout.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await dotenv.load(fileName: ".env");
   await LocalNotificationService.init();
 
   await Hive.initFlutter();

@@ -34,6 +34,7 @@ _Ticket _$TicketFromJson(Map<String, dynamic> json) => _Ticket(
   completedDate: const UtcDateTimeConverter().fromJson(
     json['completed_at'] as String?,
   ),
+  zohoChannelId: json['zoho_channel_id'] as String?,
 );
 
 Map<String, dynamic> _$TicketToJson(_Ticket instance) => <String, dynamic>{
@@ -58,4 +59,5 @@ Map<String, dynamic> _$TicketToJson(_Ticket instance) => <String, dynamic>{
   'payment_collected': instance.paymentCollected,
   'has_amc': instance.hasAmc,
   'completed_at': const UtcDateTimeConverter().toJson(instance.completedDate),
+  'zoho_channel_id': instance.zohoChannelId,
 };

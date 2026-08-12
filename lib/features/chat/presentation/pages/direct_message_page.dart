@@ -18,6 +18,7 @@ import 'package:intl/intl.dart';
 import 'package:file_picker/file_picker.dart';
 
 import 'package:url_launcher/url_launcher.dart' as url_launcher;
+import 'package:linkify/linkify.dart';
 
 import '../../../../core/design_system/design_system.dart';
 
@@ -3398,9 +3399,8 @@ class _ChatBubble extends ConsumerWidget {
                       ],
                     ),
                     Positioned(
-                      top: -12,
-                      right: isMe ? null : 0,
-                      left: isMe ? 0 : null,
+                      bottom: 20,
+                      right: -4,
                       child: const _HoverableActionMenu(),
                     ),
                   ],
@@ -4355,112 +4355,152 @@ class _HoverableActionMenu extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final hoverContext = _HoverableActionMenuContext.of(context);
-    final isMobile = MediaQuery.of(context).size.width < 900;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return AnimatedOpacity(
       opacity: hoverContext.isHovering ? 1.0 : 0.0,
       duration: const Duration(milliseconds: 150),
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(8),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.15),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-          ],
+      child: PopupMenuButton<String>(
+        position: PopupMenuPosition.under,
+        icon: Container(
+          decoration: BoxDecoration(
+            color: isDark ? Colors.white.withValues(alpha: 0.15) : Colors.black.withValues(alpha: 0.1),
+            shape: BoxShape.circle,
+          ),
+          padding: const EdgeInsets.all(2),
+          child: Icon(
+            Icons.keyboard_arrow_down, 
+            size: 20, 
+            color: isDark ? Colors.white : Colors.black87,
+          ),
         ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Reactions
-            _buildReactionButton(
-              emoji: '👍',
-              tooltip: 'Thumbs up',
-              onTap: () => hoverContext.onAddReaction(
-                context,
-                '👍',
-                hoverContext.messageId,
-              ),
-            ),
-            _buildReactionButton(
-              emoji: '😊',
-              tooltip: 'Smile',
-              onTap: () => hoverContext.onAddReaction(
-                context,
-                '😊',
-                hoverContext.messageId,
-              ),
-            ),
-            _buildReactionButton(
-              emoji: '✅',
-              tooltip: 'Check',
-              onTap: () => hoverContext.onAddReaction(
-                context,
-                '✅',
-                hoverContext.messageId,
-              ),
-            ),
-            // More reactions button
-            _buildMoreReactionsButton(
-              tooltip: 'More reactions',
-              onTap: () => hoverContext.onShowMoreReactions(
-                context,
-                hoverContext.messageId,
-              ),
-            ),
-            const SizedBox(width: 4),
-            // Copy via popup
-            PopupMenuButton<String>(
-              icon: const Icon(Icons.more_vert, size: 16, color: Color(0xFF6B7280)),
-              padding: EdgeInsets.zero,
-              tooltip: 'More options',
-              splashRadius: 16,
-              itemBuilder: (menuCtx) => [
-                PopupMenuItem(
-                  value: 'copy',
-                  onTap: () async {
-                    try {
-                      await Clipboard.setData(ClipboardData(text: hoverContext.messageContent));
-                      if (menuCtx.mounted) {
-                        ScaffoldMessenger.of(menuCtx).showSnackBar(
-                          const SnackBar(
-                            content: Text('Copied to clipboard'),
-                            duration: Duration(seconds: 2),
-                          ),
-                        );
-                      }
-                    } catch (e) {
-                      debugPrint('Copy error: $e');
-                    }
-                  },
-                  child: const Row(
-                    children: [
-                      Icon(Icons.copy, size: 18),
-                      SizedBox(width: 8),
-                      Text('Copy'),
-                    ],
-                  ),
+        splashRadius: 16,
+        padding: EdgeInsets.zero,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(color: isDark ? Colors.grey[800]! : Colors.grey[300]!, width: 1),
+        ),
+        color: isDark ? const Color(0xFF2C2C2C) : Colors.white,
+        surfaceTintColor: Colors.transparent,
+        elevation: 8,
+        itemBuilder: (menuCtx) => [
+          // 1. Reaction Box
+          PopupMenuItem<String>(
+            value: 'reactions',
+            enabled: true,
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+            child: Wrap(
+              alignment: WrapAlignment.spaceEvenly,
+              spacing: 2,
+              runSpacing: 4,
+              children: [
+                _buildReactionButton(
+                  emoji: '👍',
+                  tooltip: 'Thumbs up',
+                  onTap: () {
+                     Navigator.of(menuCtx).pop();
+                     hoverContext.onAddReaction(context, '👍', hoverContext.messageId);
+                  }
+                ),
+                _buildReactionButton(
+                  emoji: '❤️',
+                  tooltip: 'Love',
+                  onTap: () {
+                     Navigator.of(menuCtx).pop();
+                     hoverContext.onAddReaction(context, '❤️', hoverContext.messageId);
+                  }
+                ),
+                _buildReactionButton(
+                  emoji: '😂',
+                  tooltip: 'Laugh',
+                  onTap: () {
+                     Navigator.of(menuCtx).pop();
+                     hoverContext.onAddReaction(context, '😂', hoverContext.messageId);
+                  }
+                ),
+                _buildReactionButton(
+                  emoji: '😮',
+                  tooltip: 'Wow',
+                  onTap: () {
+                     Navigator.of(menuCtx).pop();
+                     hoverContext.onAddReaction(context, '😮', hoverContext.messageId);
+                  }
+                ),
+                _buildReactionButton(
+                  emoji: '😢',
+                  tooltip: 'Sad',
+                  onTap: () {
+                     Navigator.of(menuCtx).pop();
+                     hoverContext.onAddReaction(context, '😢', hoverContext.messageId);
+                  }
+                ),
+                _buildReactionButton(
+                  emoji: '🙏',
+                  tooltip: 'Pray',
+                  onTap: () {
+                     Navigator.of(menuCtx).pop();
+                     hoverContext.onAddReaction(context, '🙏', hoverContext.messageId);
+                  }
+                ),
+                _buildMoreReactionsButton(
+                  tooltip: 'More',
+                  isDark: isDark,
+                  onTap: () {
+                     Navigator.of(menuCtx).pop();
+                     hoverContext.onShowMoreReactions(context, hoverContext.messageId);
+                  }
                 ),
               ],
             ),
-            // Actions
-            _buildIconButton(
-              icon: Icons.reply,
-              tooltip: 'Reply',
-              onTap: hoverContext.onReply,
+          ),
+          const PopupMenuDivider(),
+          PopupMenuItem<String>(
+            value: 'reply',
+            onTap: hoverContext.onReply,
+            child: Row(
+              children: [
+                Icon(Icons.reply, size: 20, color: isDark ? Colors.white70 : Colors.black87),
+                const SizedBox(width: 12),
+                Text('Reply', style: TextStyle(color: isDark ? Colors.white70 : Colors.black87)),
+              ],
             ),
-            if (hoverContext.isMe)
-              _buildIconButton(
-                icon: Icons.delete,
-                tooltip: 'Delete',
-                iconColor: Colors.red,
-                onTap: hoverContext.onDelete,
+          ),
+          PopupMenuItem<String>(
+            value: 'copy',
+            onTap: () async {
+               try {
+                 await Clipboard.setData(ClipboardData(text: hoverContext.messageContent));
+                 if (menuCtx.mounted) {
+                   ScaffoldMessenger.of(menuCtx).showSnackBar(
+                     const SnackBar(
+                       content: Text('Copied to clipboard'),
+                       duration: Duration(seconds: 2),
+                     ),
+                   );
+                 }
+               } catch (e) {}
+            },
+            child: Row(
+              children: [
+                Icon(Icons.copy, size: 20, color: isDark ? Colors.white70 : Colors.black87),
+                const SizedBox(width: 12),
+                Text('Copy', style: TextStyle(color: isDark ? Colors.white70 : Colors.black87)),
+              ],
+            ),
+          ),
+          if (hoverContext.isMe)
+            PopupMenuItem<String>(
+              value: 'delete',
+              onTap: hoverContext.onDelete,
+              child: const Row(
+                children: [
+                  Icon(Icons.delete_outline, size: 20, color: Colors.red),
+                  SizedBox(width: 12),
+                  Text('Delete', style: TextStyle(color: Colors.red)),
+                ],
               ),
-          ],
-        ),
+            ),
+        ],
       ),
     );
   }
@@ -4474,9 +4514,10 @@ class _HoverableActionMenu extends StatelessWidget {
       message: tooltip,
       child: InkWell(
         onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.all(8),
-          child: Text(emoji, style: const TextStyle(fontSize: 16)),
+        borderRadius: BorderRadius.circular(20),
+        child: Padding(
+          padding: const EdgeInsets.all(4),
+          child: Text(emoji, style: const TextStyle(fontSize: 22)),
         ),
       ),
     );
@@ -4484,57 +4525,17 @@ class _HoverableActionMenu extends StatelessWidget {
 
   Widget _buildMoreReactionsButton({
     required String tooltip,
+    required bool isDark,
     required VoidCallback onTap,
   }) {
     return Tooltip(
       message: tooltip,
       child: InkWell(
         onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.all(8),
-          child: SizedBox(
-            width: 24,
-            height: 24,
-            child: Stack(
-              children: [
-                const Center(child: Text('😀', style: TextStyle(fontSize: 16))),
-                Positioned(
-                  top: 0,
-                  right: 0,
-                  child: Container(
-                    padding: const EdgeInsets.all(1),
-                    decoration: const BoxDecoration(
-                      color: Colors.white,
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.add,
-                      size: 10,
-                      color: Color(0xFF6B7280),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildIconButton({
-    required IconData icon,
-    required String tooltip,
-    required VoidCallback onTap,
-    Color iconColor = const Color(0xFF6B7280),
-  }) {
-    return Tooltip(
-      message: tooltip,
-      child: InkWell(
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.all(8),
-          child: Icon(icon, size: 18, color: iconColor),
+        borderRadius: BorderRadius.circular(20),
+        child: Padding(
+          padding: const EdgeInsets.all(4),
+          child: Icon(Icons.add_reaction_outlined, size: 22, color: isDark ? Colors.grey[400] : Colors.grey[700]),
         ),
       ),
     );
@@ -4911,7 +4912,45 @@ class _InlineParser {
     return TextSpan(style: style, children: spans);
   }
 
-  InlineSpan _plain(String t) => TextSpan(text: t, style: _currentStyle());
+  InlineSpan _plain(String t) {
+    final style = _currentStyle();
+    final elements = linkify(t, options: const LinkifyOptions(humanize: false));
+    
+    if (elements.length == 1 && elements.first is TextElement) {
+      return TextSpan(text: t, style: style);
+    }
+    
+    return TextSpan(
+      children: elements.map((element) {
+        if (element is LinkableElement) {
+          return WidgetSpan(
+            alignment: PlaceholderAlignment.baseline,
+            baseline: TextBaseline.alphabetic,
+            child: MouseRegion(
+              cursor: SystemMouseCursors.click,
+              child: GestureDetector(
+                onTap: () async {
+                  final uri = Uri.tryParse(element.url);
+                  if (uri != null && await url_launcher.canLaunchUrl(uri)) {
+                    await url_launcher.launchUrl(uri, mode: url_launcher.LaunchMode.externalApplication);
+                  }
+                },
+                child: Text(
+                  element.text,
+                  style: style.copyWith(
+                    color: Colors.blue,
+                    decoration: TextDecoration.underline,
+                  ),
+                ),
+              ),
+            ),
+          );
+        } else {
+          return TextSpan(text: element.text, style: style);
+        }
+      }).toList(),
+    );
+  }
 
   TextStyle _currentStyle() {
     TextDecoration? deco;

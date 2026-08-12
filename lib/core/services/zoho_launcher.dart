@@ -19,3 +19,25 @@ Future<void> launchZohoCliqUser(String zohoUserId) async {
     }
   }
 }
+
+/// Opens Zoho Cliq to a specific channel.
+Future<void> launchZohoCliqChannel(String channelId) async {
+  final deepLinkUrl = 'zohocliq://channel/$channelId';
+  final webUrl = 'https://cliq.zoho.in/channels/$channelId';
+  
+  if (kIsWeb) {
+    evalJs("window.open('$webUrl', '_blank');");
+  } else {
+    final uri = Uri.parse(deepLinkUrl);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } else {
+      final webUri = Uri.parse(webUrl);
+      if (await canLaunchUrl(webUri)) {
+        await launchUrl(webUri, mode: LaunchMode.externalApplication);
+      } else {
+        debugPrint('Could not launch Zoho Cliq Channel URL: $webUrl');
+      }
+    }
+  }
+}

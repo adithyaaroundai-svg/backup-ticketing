@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:timeago/timeago.dart' as timeago;
-
+import 'package:intl/intl.dart';
 import '../../../../core/design_system/theme/app_colors.dart';
 import '../../../../core/design_system/layout/main_layout.dart';
 import '../../../../core/services/zoho_launcher.dart';
@@ -364,20 +364,31 @@ class _CallHistoryRow extends ConsumerWidget {
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Text(
-                  timeago.format(call.startedAt),
+                  DateFormat('MMM d, h:mm a').format(call.startedAt.toLocal()),
                   style: TextStyle(
                     fontSize: 12,
-                    color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                    fontWeight: FontWeight.w500,
+                    color: theme.colorScheme.onSurface,
                   ),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 2),
                 Text(
-                  durationText,
+                  timeago.format(call.startedAt),
                   style: TextStyle(
-                    fontSize: 13,
+                    fontSize: 11,
                     color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
                   ),
                 ),
+                if (durationText.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    durationText,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                    ),
+                  ),
+                ],
               ],
             ),
             const SizedBox(width: 24),

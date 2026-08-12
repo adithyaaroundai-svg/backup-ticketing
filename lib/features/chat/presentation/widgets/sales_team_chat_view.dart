@@ -8,6 +8,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:url_launcher/url_launcher.dart' as url_launcher;
+import 'package:flutter_linkify/flutter_linkify.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:intl/intl.dart';
@@ -1280,11 +1281,13 @@ class _ChatBubbleState extends ConsumerState<_ChatBubble> {
       child: MouseRegion(
         onEnter: (_) => setState(() => _hovered = true),
         onExit: (_) => setState(() => _hovered = false),
-        child: Container(
+      child: Container(
         margin: const EdgeInsets.only(bottom: 4),
-        child: Stack(
-          clipBehavior: Clip.none,
-          children: [
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
             // Constrain bubble to max 75% of available width
             ConstrainedBox(
                 constraints: BoxConstraints(
@@ -1371,12 +1374,23 @@ class _ChatBubbleState extends ConsumerState<_ChatBubble> {
                                             color: AppColors.slate400,
                                           ),
                                         )
-                                      : SelectableText(message.content,
+                                      : SelectableLinkify(
+                                          text: message.content,
+                                          onOpen: (link) async {
+                                            final uri = Uri.parse(link.url);
+                                            if (await url_launcher.canLaunchUrl(uri)) {
+                                              await url_launcher.launchUrl(uri, mode: url_launcher.LaunchMode.externalApplication);
+                                            }
+                                          },
                                           style: TextStyle(
                                             color: isMe
                                                 ? (context.isDarkMode ? Colors.white : AppColors.primary)
                                                 : (context.isDarkMode ? Colors.white : AppColors.slate800),
                                             fontSize: 14,
+                                          ),
+                                          linkStyle: TextStyle(
+                                            color: isMe ? Colors.white : Colors.blue,
+                                            decoration: TextDecoration.underline,
                                           ),
                                         ),
                                 ),
@@ -1510,58 +1524,96 @@ class _ChatBubbleState extends ConsumerState<_ChatBubble> {
                       ),
                   ],
                 ),
-              ),
+              ), // Add comma here to separate ConstrainedBox and Positioned
             // Hover action bar
             if (!isDeleted)
               Positioned(
-                top: 0,
-                right: 0,
+                right: -4,
+                bottom: 20,
                 child: IgnorePointer(
-                ignoring: !_hovered,
-                child: AnimatedOpacity(
-                  opacity: _hovered ? 1.0 : 0.0,
-                  duration: const Duration(milliseconds: 150),
-                  child: Container(
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(24),
-                  boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.10), blurRadius: 8, offset: const Offset(0, 2))],
-                ),
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Quick reactions
-                    for (final emoji in ['👍', '❤️', '😂', '😮', '😢'])
-                      GestureDetector(
-                        onTap: () => _sendReaction(emoji),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 3),
-                          child: Text(emoji, style: const TextStyle(fontSize: 18)),
+                  ignoring: !_hovered,
+                  child: AnimatedOpacity(
+                    opacity: _hovered ? 1.0 : 0.0,
+                    duration: const Duration(milliseconds: 150),
+                    child: PopupMenuButton<String>(
+                      position: PopupMenuPosition.under,
+                      icon: Container(
+                        decoration: BoxDecoration(
+                          color: context.isDarkMode ? Colors.white.withValues(alpha: 0.15) : Colors.black.withValues(alpha: 0.1),
+                          shape: BoxShape.circle,
+                        ),
+                        padding: const EdgeInsets.all(2),
+                        child: Icon(
+                          Icons.keyboard_arrow_down,
+                          size: 20,
+                          color: context.isDarkMode ? Colors.white : Colors.black87,
                         ),
                       ),
-                    // More reactions
-                    Tooltip(
-                      message: 'More reactions',
-                      child: InkWell(
-                        onTap: () => _showAllReactions(context),
-                        borderRadius: BorderRadius.circular(12),
-                        child: const Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                          child: Icon(Icons.add, size: 16, color: AppColors.slate500),
-                        ),
-                      ),
-                    ),
-                    Container(width: 1, height: 18, color: AppColors.slate200, margin: const EdgeInsets.symmetric(horizontal: 4)),
-                    // Reply
-                    _ActionBtn(icon: Icons.reply, tooltip: 'Reply', onTap: widget.onReply),
-                    
-                    PopupMenuButton<String>(
-                      icon: const Icon(Icons.more_vert, size: 16, color: AppColors.slate500),
+                      splashRadius: 16,
                       padding: EdgeInsets.zero,
-                      tooltip: 'More options',
-                      itemBuilder: (menuContext) => [
-                        PopupMenuItem(
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        side: BorderSide(color: context.isDarkMode ? Colors.grey[800]! : Colors.grey[300]!, width: 1),
+                      ),
+                      color: context.isDarkMode ? const Color(0xFF2C2C2C) : Colors.white,
+                      surfaceTintColor: Colors.transparent,
+                      elevation: 8,
+                      itemBuilder: (menuCtx) => [
+                        // Reactions
+                        PopupMenuItem<String>(
+                          value: 'reactions',
+                          enabled: true,
+                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                          child: Wrap(
+                            alignment: WrapAlignment.spaceEvenly,
+                            spacing: 2,
+                            runSpacing: 4,
+                            children: [
+                              for (final emoji in ['👍', '❤️', '😂', '😮', '😢', '🙏'])
+                                Tooltip(
+                                  message: emoji,
+                                  child: InkWell(
+                                    onTap: () {
+                                      Navigator.of(menuCtx).pop();
+                                      _sendReaction(emoji);
+                                    },
+                                    borderRadius: BorderRadius.circular(20),
+                                    child: Padding(
+                                      padding: const EdgeInsets.all(4),
+                                      child: Text(emoji, style: const TextStyle(fontSize: 22)),
+                                    ),
+                                  ),
+                                ),
+                              Tooltip(
+                                message: 'More',
+                                child: InkWell(
+                                  onTap: () {
+                                    Navigator.of(menuCtx).pop();
+                                    _showAllReactions(context);
+                                  },
+                                  borderRadius: BorderRadius.circular(20),
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(4),
+                                    child: Icon(Icons.add_reaction_outlined, size: 22, color: context.isDarkMode ? Colors.grey[400] : Colors.grey[700]),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const PopupMenuDivider(),
+                        PopupMenuItem<String>(
+                          value: 'reply',
+                          onTap: widget.onReply,
+                          child: Row(
+                            children: [
+                              Icon(Icons.reply, size: 20, color: context.isDarkMode ? Colors.white70 : Colors.black87),
+                              const SizedBox(width: 12),
+                              Text('Reply', style: TextStyle(color: context.isDarkMode ? Colors.white70 : Colors.black87)),
+                            ],
+                          ),
+                        ),
+                        PopupMenuItem<String>(
                           value: 'copy',
                           onTap: () async {
                             try {
@@ -1569,44 +1621,18 @@ class _ChatBubbleState extends ConsumerState<_ChatBubble> {
                               if (context.mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Copied to clipboard')));
                               }
-                            } catch (e) {
-                              debugPrint('Error copying: $e');
-                            }
+                            } catch (e) {}
                           },
-                          child: const Row(
+                          child: Row(
                             children: [
-                              Icon(Icons.copy, size: 18, color: AppColors.slate600),
-                              SizedBox(width: 8),
-                              Text('Copy'),
-                            ],
-                          ),
-                        ),
-                        PopupMenuItem(
-                          value: 'paste',
-                          onTap: () async {
-                             try {
-                               final clipboardData = await Clipboard.getData(Clipboard.kTextPlain);
-                               if (context.mounted) {
-                                 if (clipboardData != null && clipboardData.text != null && clipboardData.text!.isNotEmpty) {
-                                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Clipboard: ${clipboardData.text}')));
-                                 } else {
-                                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Nothing to paste')));
-                                 }
-                               }
-                             } catch (e) {
-                               debugPrint('Error pasting: $e');
-                             }
-                          },
-                          child: const Row(
-                            children: [
-                              Icon(Icons.paste, size: 18, color: AppColors.slate600),
-                              SizedBox(width: 8),
-                              Text('Paste'),
+                              Icon(Icons.copy, size: 20, color: context.isDarkMode ? Colors.white70 : Colors.black87),
+                              const SizedBox(width: 12),
+                              Text('Copy', style: TextStyle(color: context.isDarkMode ? Colors.white70 : Colors.black87)),
                             ],
                           ),
                         ),
                         if (isMe)
-                          PopupMenuItem(
+                          PopupMenuItem<String>(
                             value: 'delete',
                             onTap: () {
                               Future.delayed(const Duration(milliseconds: 100), () {
@@ -1617,23 +1643,20 @@ class _ChatBubbleState extends ConsumerState<_ChatBubble> {
                             },
                             child: const Row(
                               children: [
-                                Icon(Icons.delete_outline, size: 18, color: Colors.red),
-                                SizedBox(width: 8),
+                                Icon(Icons.delete_outline, size: 20, color: Colors.red),
+                                SizedBox(width: 12),
                                 Text('Delete', style: TextStyle(color: Colors.red)),
                               ],
                             ),
                           ),
                       ],
                     ),
-
-                  ],
+                  ),
                 ),
               ),
-            ),
-          ),
+          ],
         ),
-      ],
-    ),
+        ),
         ),
       ),
     );

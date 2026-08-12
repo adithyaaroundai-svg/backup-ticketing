@@ -220,7 +220,7 @@ final class PaginatedTicketsProvider
   PaginatedTickets create() => PaginatedTickets();
 }
 
-String _$paginatedTicketsHash() => r'ebd62e9b44ccf5abd784702ace1ea3f6036af5df';
+String _$paginatedTicketsHash() => r'298a0949f69f0223e1a62eb5b46e7bcdec0d0148';
 
 abstract class _$PaginatedTickets extends $AsyncNotifier<List<Ticket>> {
   FutureOr<List<Ticket>> build();
@@ -328,7 +328,7 @@ final class TicketAssigneeFilterProvider
 }
 
 String _$ticketAssigneeFilterHash() =>
-    r'195d73e1d5236d92ec1dfb59de31e6920b7d040a';
+    r'd0b69b4490a4ed5eb330e1edd59a8ed45f768364';
 
 abstract class _$TicketAssigneeFilter extends $Notifier<String> {
   String build();
@@ -729,7 +729,7 @@ final class AgentsListProvider
   }
 }
 
-String _$agentsListHash() => r'f5ba0a42e3dc2fbc79df6b966eed3d01fefbc0d0';
+String _$agentsListHash() => r'c5b3daba596303dfd6e7b35ad403f282116e0512';
 
 @ProviderFor(ticketAssignedAgent)
 const ticketAssignedAgentProvider = TicketAssignedAgentFamily._();

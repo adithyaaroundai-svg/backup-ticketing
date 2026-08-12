@@ -50,7 +50,7 @@ final class ChatStreamProvider
   }
 }
 
-String _$chatStreamHash() => r'a3f4244db66dd40d5ed07d063a7f2ae8e6ceed7a';
+String _$chatStreamHash() => r'f7f44294ecda9ca4eb9b44c800e7aaf0492d6c72';
 
 final class ChatStreamFamily extends $Family
     with
@@ -522,7 +522,7 @@ final class ChatControllerProvider
   ChatController create() => ChatController();
 }
 
-String _$chatControllerHash() => r'6d16fa8e82ed5e444918f7069b6a4485501b8a94';
+String _$chatControllerHash() => r'c18d7c03fef9dc4740695ceddde85c263032d37a';
 
 abstract class _$ChatController extends $AsyncNotifier<void> {
   FutureOr<void> build();

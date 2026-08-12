@@ -12,6 +12,7 @@ import '../../../customers/presentation/providers/customer_provider.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
 import '../../../dashboard/presentation/providers/app_settings_provider.dart';
 import '../../../tickets/domain/entities/ticket.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../providers/ticket_provider.dart';
 import '../widgets/comments_section.dart';

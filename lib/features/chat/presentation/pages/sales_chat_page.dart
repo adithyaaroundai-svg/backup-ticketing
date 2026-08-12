@@ -13,6 +13,7 @@ import '../widgets/sales_team_chat_view.dart';
 import '../../../sales/presentation/widgets/lead_search_dialog.dart';
 import '../widgets/add_members_page.dart';
 import '../../../../core/services/zoho_launcher.dart';
+import '../../../../core/services/zoho_api_service.dart';
 
 class SalesChatPage extends ConsumerStatefulWidget {
   final int initialTab;
@@ -55,8 +56,25 @@ class _SalesChatPageState extends ConsumerState<SalesChatPage> {
       }
       return;
     }
-    final id = zohoIds.first;
-    launchZohoCliqUser(id);
+    
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Creating Zoho Channel...')),
+      );
+    }
+    
+    // Create or get the Sales Channel
+    final channelId = await ZohoApiService.createChannel('sales', 'Sales Channel');
+    
+    if (channelId != null && channelId.isNotEmpty) {
+      await launchZohoCliqChannel(channelId);
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to create or open Zoho Channel'), backgroundColor: Colors.red),
+        );
+      }
+    }
 
     /* KEEPING FOR FUTURE REFERENCE:
     if (!mounted) return;

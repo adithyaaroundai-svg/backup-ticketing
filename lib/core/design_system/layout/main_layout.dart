@@ -859,45 +859,51 @@ class _TopNav extends ConsumerWidget {
               child: Row(children: mainNavItems),
             ),
           ),
-
-          // Right side navigation items
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-            child: Row(mainAxisSize: MainAxisSize.min, children: rightNavItems),
+          Flexible(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    child: Row(mainAxisSize: MainAxisSize.min, children: rightNavItems),
+                  ),
+                  Consumer(
+                    builder: (context, ref, child) {
+                      return IconButton(
+                        icon: const Icon(
+                          LucideIcons.refreshCw,
+                          color: Colors.white,
+                          size: 18,
+                        ),
+                        onPressed: () {
+                          // Invalidate all data providers to refresh without page reload
+                          ref.invalidate(rawTicketsStreamProvider);
+                          ref.invalidate(paginatedTicketsProvider);
+                          ref.invalidate(allTicketsStreamProvider);
+                          ref.invalidate(rawAllTicketsStreamProvider);
+                          ref.invalidate(ticketStatsProvider);
+                          ref.invalidate(customersListProvider);
+                          ref.invalidate(agentsListProvider);
+                          ref.invalidate(chatStreamProvider('support-chat'));
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Data refreshed'),
+                              duration: Duration(seconds: 1),
+                            ),
+                          );
+                        },
+                        tooltip: 'Refresh Data',
+                        padding: const EdgeInsets.all(12),
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ),
           ),
-
-          // Refresh button - invalidate providers instead of full page reload
-          Consumer(
-            builder: (context, ref, child) {
-              return IconButton(
-                icon: const Icon(
-                  LucideIcons.refreshCw,
-                  color: Colors.white,
-                  size: 18,
-                ),
-                onPressed: () {
-                  // Invalidate all data providers to refresh without page reload
-                  ref.invalidate(rawTicketsStreamProvider);
-                  ref.invalidate(paginatedTicketsProvider);
-                  ref.invalidate(allTicketsStreamProvider);
-                  ref.invalidate(rawAllTicketsStreamProvider);
-                  ref.invalidate(ticketStatsProvider);
-                  ref.invalidate(customersListProvider);
-                  ref.invalidate(agentsListProvider);
-                  ref.invalidate(chatStreamProvider('support-chat'));
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Data refreshed'),
-                      duration: Duration(seconds: 1),
-                    ),
-                  );
-                },
-                tooltip: 'Refresh Data',
-                padding: const EdgeInsets.all(12),
-              );
-            },
-          ),
-
+          const SizedBox(width: 8),
           const SizedBox(width: 56, child: _UserProfile()),
         ],
       ),

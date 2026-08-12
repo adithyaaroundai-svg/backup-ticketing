@@ -49,6 +49,7 @@ abstract class Ticket with _$Ticket {
     @JsonKey(name: 'payment_collected') bool? paymentCollected,
     @JsonKey(name: 'has_amc') bool? hasAmc,
     @JsonKey(name: 'completed_at') @UtcDateTimeConverter() DateTime? completedDate,
+    @JsonKey(name: 'zoho_channel_id') String? zohoChannelId,
   }) = _Ticket;
 
   factory Ticket.fromJson(Map<String, dynamic> json) => _$TicketFromJson(json);
