@@ -706,12 +706,12 @@ class _CustomChannelChatPageState extends ConsumerState<CustomChannelChatPage> {
       if (channelName != null) {
         launchZohoCliqChannel(channelName);
       } else {
-        debugPrint('Failed to create Zoho channel, launching first user DM as fallback.');
-        launchZohoCliqUser(zohoIds.first);
+        debugPrint('Failed to create Zoho channel, launching Zoho Cliq home page as fallback.');
+        launchZohoCliqHome();
       }
     } catch (e) {
       debugPrint('Error launching Zoho channel: $e');
-      launchZohoCliqUser(zohoIds.first);
+      launchZohoCliqHome();
     }
   }
 

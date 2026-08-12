@@ -41,3 +41,19 @@ Future<void> launchZohoCliqChannel(String channelId) async {
     }
   }
 }
+
+/// Opens the Zoho Cliq home page.
+Future<void> launchZohoCliqHome() async {
+  final url = 'https://cliq.zoho.in/';
+  
+  if (kIsWeb) {
+    evalJs("window.open('$url', '_blank');");
+  } else {
+    final uri = Uri.parse(url);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } else {
+      debugPrint('Could not launch Zoho Cliq URL: $url');
+    }
+  }
+}
