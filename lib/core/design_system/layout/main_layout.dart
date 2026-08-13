@@ -859,52 +859,44 @@ class _TopNav extends ConsumerWidget {
               child: Row(children: mainNavItems),
             ),
           ),
-          Flexible(
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    child: Row(mainAxisSize: MainAxisSize.min, children: rightNavItems),
-                  ),
-                  Consumer(
-                    builder: (context, ref, child) {
-                      return IconButton(
-                        icon: const Icon(
-                          LucideIcons.refreshCw,
-                          color: Colors.white,
-                          size: 18,
-                        ),
-                        onPressed: () {
-                          // Invalidate all data providers to refresh without page reload
-                          ref.invalidate(rawTicketsStreamProvider);
-                          ref.invalidate(paginatedTicketsProvider);
-                          ref.invalidate(allTicketsStreamProvider);
-                          ref.invalidate(rawAllTicketsStreamProvider);
-                          ref.invalidate(ticketStatsProvider);
-                          ref.invalidate(customersListProvider);
-                          ref.invalidate(agentsListProvider);
-                          ref.invalidate(chatStreamProvider('support-chat'));
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Data refreshed'),
-                              duration: Duration(seconds: 1),
-                            ),
-                          );
-                        },
-                        tooltip: 'Refresh Data',
-                        padding: const EdgeInsets.all(12),
-                      );
-                    },
-                  ),
-                ],
-              ),
-            ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: Row(mainAxisSize: MainAxisSize.min, children: rightNavItems),
           ),
-          const SizedBox(width: 8),
-          const SizedBox(width: 56, child: _UserProfile()),
+          Consumer(
+            builder: (context, ref, child) {
+              return IconButton(
+                icon: const Icon(
+                  LucideIcons.refreshCw,
+                  color: Colors.white,
+                  size: 18,
+                ),
+                onPressed: () {
+                  // Invalidate all data providers to refresh without page reload
+                  ref.invalidate(rawTicketsStreamProvider);
+                  ref.invalidate(paginatedTicketsProvider);
+                  ref.invalidate(allTicketsStreamProvider);
+                  ref.invalidate(rawAllTicketsStreamProvider);
+                  ref.invalidate(ticketStatsProvider);
+                  ref.invalidate(customersListProvider);
+                  ref.invalidate(agentsListProvider);
+                  ref.invalidate(chatStreamProvider('support-chat'));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Data refreshed'),
+                      duration: Duration(seconds: 1),
+                    ),
+                  );
+                },
+                tooltip: 'Refresh Data',
+                padding: const EdgeInsets.all(12),
+              );
+            },
+          ),
+          const Padding(
+            padding: EdgeInsets.only(right: 16.0, left: 8.0),
+            child: _UserProfile(),
+          ),
         ],
       ),
     );
@@ -1228,11 +1220,15 @@ class _TopNavItemState extends State<_TopNavItem> {
               ? Colors.white.withValues(alpha: 0.08)
               : Colors.transparent);
 
-    return MouseRegion(
+    final showLabel = widget.label.toLowerCase().contains('ticket') ||
+        widget.label.toLowerCase() == 'chat' ||
+        widget.label.toLowerCase() == 'dashboard';
+
+    Widget content = MouseRegion(
       onEnter: (_) => setState(() => _isHovered = true),
       onExit: (_) => setState(() => _isHovered = false),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 10),
+        padding: EdgeInsets.symmetric(horizontal: showLabel ? 3 : 8, vertical: 10),
         child: Material(
           color: Colors.transparent,
           child: InkWell(
@@ -1259,21 +1255,23 @@ class _TopNavItemState extends State<_TopNavItem> {
                     size: 17,
                     color: widget.isActive ? activeColor : inactiveColor,
                   ),
-                  const SizedBox(width: 6),
-                  Text(
-                    widget.label,
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: widget.isActive
-                          ? FontWeight.w600
-                          : FontWeight.w500,
-                      color: widget.isActive ? Colors.white : inactiveColor,
+                  if (showLabel) ...[
+                    const SizedBox(width: 6),
+                    Text(
+                      widget.label,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: widget.isActive
+                            ? FontWeight.w600
+                            : FontWeight.w500,
+                        color: widget.isActive ? Colors.white : inactiveColor,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
+                  ],
                   if (widget.badgeCount > 0) ...[
-                    const SizedBox(width: 5),
+                    SizedBox(width: showLabel ? 5 : 6),
                     Container(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 5,
@@ -1304,6 +1302,15 @@ class _TopNavItemState extends State<_TopNavItem> {
         ),
       ),
     );
+
+    if (!showLabel) {
+      content = Tooltip(
+        message: widget.label,
+        child: content,
+      );
+    }
+
+    return content;
   }
 }
 
@@ -1322,8 +1329,12 @@ class _TopNavButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 10),
+    final showLabel = label.toLowerCase().contains('ticket') ||
+        label.toLowerCase() == 'chat' ||
+        label.toLowerCase() == 'dashboard';
+
+    Widget content = Padding(
+      padding: EdgeInsets.symmetric(horizontal: showLabel ? 3 : 8, vertical: 10),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
@@ -1343,19 +1354,21 @@ class _TopNavButton extends StatelessWidget {
                   size: 17,
                   color: Colors.white.withValues(alpha: 0.72),
                 ),
-                const SizedBox(width: 6),
-                Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                    color: Colors.white.withValues(alpha: 0.72),
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                if (badgeCount > 0) ...[
+                if (showLabel) ...[
                   const SizedBox(width: 6),
+                  Text(
+                    label,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      color: Colors.white.withValues(alpha: 0.72),
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+                if (badgeCount > 0) ...[
+                  SizedBox(width: showLabel ? 6 : 6),
                   Badge(
                     label: Text(badgeCount.toString()),
                   ),
@@ -1366,6 +1379,15 @@ class _TopNavButton extends StatelessWidget {
         ),
       ),
     );
+
+    if (!showLabel) {
+      content = Tooltip(
+        message: label,
+        child: content,
+      );
+    }
+
+    return content;
   }
 }
 
@@ -1589,7 +1611,7 @@ class _TopNavHoverMenuState extends State<_TopNavHoverMenu>
     }
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
       child: MouseRegion(
         onEnter: (_) {
           _isHovered = true;

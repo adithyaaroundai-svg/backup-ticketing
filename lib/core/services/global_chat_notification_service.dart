@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:audioplayers/audioplayers.dart';
@@ -53,6 +54,11 @@ class GlobalChatNotificationService {
         .play(AssetSource('sounds/reminder.wav'))
         .timeout(const Duration(seconds: 2))
         .catchError((e) {
+      if (e is TimeoutException) {
+        // Browser autoplay policy might block audio before interaction.
+        // Timeout is expected in this case, ignore to prevent log spam.
+        return;
+      }
       debugPrint('Error playing notification sound: $e');
     });
 

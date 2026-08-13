@@ -602,7 +602,16 @@ class _SalesTeamChatViewState extends ConsumerState<SalesTeamChatView> {
         children: [
           Expanded(
             child: messagesAsync.when(
-              data: (messages) {
+              data: (rawMessages) {
+                var messages = rawMessages;
+                const restrictedAgentIds = {
+                  '0a5aeeb8-9544-4dc8-920f-e26c192b0dd3',
+                  'f3b54de6-0372-4648-ad87-3e98089efc2d',
+                };
+                if (currentUser != null && restrictedAgentIds.contains(currentUser.id)) {
+                  messages = rawMessages.where((m) => m.senderId == currentUser.id).toList();
+                }
+
                 if (messages.isEmpty) {
                   return Center(
                     child: Column(
