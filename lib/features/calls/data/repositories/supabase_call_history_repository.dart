@@ -103,7 +103,7 @@ class SupabaseCallHistoryRepository implements CallHistoryRepository {
         final direction = _parseDirection(call['direction'] as String?);
         
         String? avatarUrl;
-        if (direction == CallDirection.outgoing) {
+        if (callerId == _currentUserId) {
           avatarUrl = receiverAgent?['avatar_url']?.toString();
         } else {
           avatarUrl = callerAgent?['avatar_url']?.toString();
