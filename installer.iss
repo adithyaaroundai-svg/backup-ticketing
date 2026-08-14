@@ -30,3 +30,4 @@ Name: "{autodesktop}\Ticketing System"; Filename: "{app}\ticketing_system.exe"; 
 
 [Run]
 Filename: "{app}\ticketing_system.exe"; Description: "{cm:LaunchProgram,Ticketing System}"; Flags: nowait postinstall skipifsilent
+

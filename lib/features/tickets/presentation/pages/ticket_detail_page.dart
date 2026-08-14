@@ -18,6 +18,8 @@ import '../providers/ticket_provider.dart';
 import '../widgets/comments_section.dart';
 import '../widgets/ticket_remarks_section.dart';
 import '../widgets/resolve_bill_dialog.dart';
+import '../../../chat/presentation/widgets/video_message_widget.dart';
+import '../../../../core/utils/download_helper.dart';
 
 class TicketDetailPage extends ConsumerStatefulWidget {
   final String ticketId;
@@ -101,12 +103,25 @@ class _TicketDetailPageState extends ConsumerState<TicketDetailPage> {
 
 
   Future<void> _openScreenshot(String url) async {
+    final lower = url.toLowerCase();
+    final isVideo = lower.contains('.mp4') || lower.contains('.mov') || lower.contains('.webm') || lower.contains('.mkv') || lower.contains('.avi');
+
+    if (isVideo) {
+      FullScreenVideoDialog.show(
+        context,
+        videoUrl: url,
+        fileName: 'Ticket Video',
+        onDownload: () => downloadFileDirectly(url, 'ticket_video.mp4'),
+      );
+      return;
+    }
+
     final uri = Uri.tryParse(url);
     if (uri == null) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Invalid screenshot URL'),
+          content: Text('Invalid media URL'),
           backgroundColor: AppColors.error,
         ),
       );
@@ -118,7 +133,7 @@ class _TicketDetailPageState extends ConsumerState<TicketDetailPage> {
     if (!launched && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Unable to open screenshot'),
+          content: Text('Unable to open media'),
           backgroundColor: AppColors.error,
         ),
       );

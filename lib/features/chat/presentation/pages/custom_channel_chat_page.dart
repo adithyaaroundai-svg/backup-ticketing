@@ -24,6 +24,8 @@ import '../../domain/entities/custom_channel.dart';
 import '../../data/repositories/chat_repository.dart';
 import '../widgets/markdown_text_editing_controller.dart';
 import '../widgets/chat_voice_recorder.dart';
+import '../widgets/video_message_widget.dart';
+import '../../../../core/utils/download_helper.dart';
 import '../../../../core/services/zoho_launcher.dart';
 import '../../../../core/services/zoho_api_service.dart';
 import '../../../../features/calls/domain/models/call_history_item.dart';
@@ -1874,6 +1876,15 @@ class _ChatBubbleState extends ConsumerState<_ChatBubble> {
                                     ),
                                   ),
                                 )
+                               else if (['mp4', 'mov', 'avi', 'mkv'].contains(message.fileType?.toLowerCase()))
+                                 Padding(
+                                   padding: const EdgeInsets.only(top: 4),
+                                   child: VideoMessageWidget(
+                                     videoUrl: message.fileUrl!,
+                                     fileName: message.fileName ?? 'video',
+                                     onDownload: () => downloadFileDirectly(message.fileUrl!, message.fileName ?? 'video'),
+                                   ),
+                                 )
                               else
                                 GestureDetector(
                                   onTap: () async {

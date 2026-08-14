@@ -20,6 +20,8 @@ import '../providers/chat_provider.dart';
 import '../../domain/entities/chat_message.dart';
 import 'markdown_text_editing_controller.dart';
 import 'chat_voice_recorder.dart';
+import 'video_message_widget.dart';
+import '../../../../core/utils/download_helper.dart';
 
 IconData _getFileIcon(String? fileType) {
   if (fileType == null) return Icons.insert_drive_file;
@@ -1450,8 +1452,17 @@ class _ChatBubbleState extends ConsumerState<_ChatBubble> {
                                     ),
                                   ),
                                 )
-                              else
-                                GestureDetector(
+                               else if (['mp4', 'mov', 'avi', 'mkv'].contains(message.fileType?.toLowerCase()))
+                                 Padding(
+                                   padding: const EdgeInsets.only(top: 4),
+                                   child: VideoMessageWidget(
+                                     videoUrl: message.fileUrl!,
+                                     fileName: message.fileName ?? 'video',
+                                     onDownload: () => downloadFileDirectly(message.fileUrl!, message.fileName ?? 'video'),
+                                   ),
+                                 )
+                               else
+                                 GestureDetector(
                                   onTap: () async {
                                     final uri = Uri.parse(message.fileUrl!);
                                     try {

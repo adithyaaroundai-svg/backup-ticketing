@@ -24,6 +24,7 @@ import '../../../../core/utils/download_helper.dart';
 import '../../domain/entities/chat_message.dart';
 import '../../../tickets/presentation/providers/ticket_provider.dart';
 import '../widgets/chat_voice_recorder.dart';
+import '../widgets/video_message_widget.dart';
 
 IconData _getFileIcon(String? fileType) {
   if (fileType == null) return Icons.insert_drive_file;
@@ -1367,37 +1368,90 @@ class _ChatBubbleState extends ConsumerState<_ChatBubble> {
                               ],
                             ),
                             if (message.fileUrl != null && !isDeleted)
-                              if (message.fileType?.toLowerCase() == 'gif')
-                                // Render GIF as animated inline image
-                                ClipRRect(
-                                  borderRadius: BorderRadius.circular(8),
-                                  child: Image.network(
-                                    message.fileUrl!,
-                                    width: 200,
-                                    fit: BoxFit.cover,
-                                    loadingBuilder: (_, child, progress) => progress == null
-                                        ? child
-                                        : SizedBox(
-                                            width: 200,
-                                            height: 120,
-                                            child: Center(
-                                              child: CircularProgressIndicator(
-                                                strokeWidth: 2,
-                                                value: progress.expectedTotalBytes != null
-                                                    ? progress.cumulativeBytesLoaded / progress.expectedTotalBytes!
-                                                    : null,
+                              if (message.fileType?.toLowerCase() == 'gif' || ['jpg', 'jpeg', 'png', 'webp', 'heic'].contains(message.fileType?.toLowerCase()) || (message.fileName?.toLowerCase().endsWith('.jpg') == true) || (message.fileName?.toLowerCase().endsWith('.png') == true) || (message.fileName?.toLowerCase().endsWith('.jpeg') == true))
+                                // Render image/gif
+                                GestureDetector(
+                                  onTap: () {
+                                    showDialog(
+                                      context: context,
+                                      barrierColor: Colors.black.withValues(alpha: 0.9),
+                                      builder: (context) => Material(
+                                        color: Colors.transparent,
+                                        child: Stack(
+                                          fit: StackFit.expand,
+                                          children: [
+                                            Center(
+                                              child: InteractiveViewer(
+                                                panEnabled: true,
+                                                minScale: 0.5,
+                                                maxScale: 4,
+                                                child: Image.network(
+                                                  message.fileUrl!,
+                                                  fit: BoxFit.contain,
+                                                ),
                                               ),
                                             ),
-                                          ),
-                                    errorBuilder: (_, __, ___) => Container(
-                                      width: 200,
-                                      height: 80,
-                                      decoration: BoxDecoration(
-                                        color: Colors.grey.shade200,
-                                        borderRadius: BorderRadius.circular(8),
+                                            Positioned(
+                                              top: 40,
+                                              right: 20,
+                                              child: Row(
+                                                children: [
+                                                  IconButton(
+                                                    icon: const Icon(Icons.download, color: Colors.white, size: 30),
+                                                    onPressed: () => _downloadFile(message.fileUrl!, message.fileName ?? 'image'),
+                                                  ),
+                                                  const SizedBox(width: 16),
+                                                  IconButton(
+                                                    icon: const Icon(Icons.close, color: Colors.white, size: 30),
+                                                    onPressed: () => Navigator.of(context).pop(),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ],
+                                        ),
                                       ),
-                                      child: const Center(child: Icon(Icons.gif, size: 32, color: AppColors.slate400)),
+                                    );
+                                  },
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(8),
+                                    child: Image.network(
+                                      message.fileUrl!,
+                                      width: 200,
+                                      fit: BoxFit.cover,
+                                      loadingBuilder: (_, child, progress) => progress == null
+                                          ? child
+                                          : SizedBox(
+                                              width: 200,
+                                              height: 120,
+                                              child: Center(
+                                                child: CircularProgressIndicator(
+                                                  strokeWidth: 2,
+                                                  value: progress.expectedTotalBytes != null
+                                                      ? progress.cumulativeBytesLoaded / progress.expectedTotalBytes!
+                                                      : null,
+                                                ),
+                                              ),
+                                            ),
+                                      errorBuilder: (_, __, ___) => Container(
+                                        width: 200,
+                                        height: 80,
+                                        decoration: BoxDecoration(
+                                          color: Colors.grey.shade200,
+                                          borderRadius: BorderRadius.circular(8),
+                                        ),
+                                        child: const Center(child: Icon(Icons.image_not_supported, size: 32, color: AppColors.slate400)),
+                                      ),
                                     ),
+                                  ),
+                                )
+                              else if (['mp4', 'mov', 'avi', 'mkv'].contains(message.fileType?.toLowerCase()))
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 4),
+                                  child: VideoMessageWidget(
+                                    videoUrl: message.fileUrl!,
+                                    fileName: message.fileName ?? 'video',
+                                    onDownload: () => _downloadFile(message.fileUrl!, message.fileName ?? 'video'),
                                   ),
                                 )
                               else

@@ -913,6 +913,13 @@ class _GlobalSearchDialog extends ConsumerStatefulWidget {
 
 class _GlobalSearchDialogState extends ConsumerState<_GlobalSearchDialog> {
   String _query = '';
+  Timer? _debounceTimer;
+
+  @override
+  void dispose() {
+    _debounceTimer?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -921,266 +928,342 @@ class _GlobalSearchDialogState extends ConsumerState<_GlobalSearchDialog> {
     final dealsAsync = ref.watch(dealsProvider);
     final leadsAsync = ref.watch(leadsProvider);
     final agentsAsync = ref.watch(agentsListProvider);
+    final chatSearchAsync = ref.watch(globalMessageSearchProvider(_query));
 
-    return Dialog(
-      insetPadding: const EdgeInsets.all(24),
-      child: SizedBox(
-        width: 640,
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Global Search',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.slate900,
-                ),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                autofocus: true,
-                decoration: InputDecoration(
-                  hintText: 'Search tickets or customers...',
-                  prefixIcon: const Icon(Icons.search),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
+    return DefaultTabController(
+      length: 3,
+      child: Dialog(
+        insetPadding: const EdgeInsets.all(24),
+        child: SizedBox(
+          width: 640,
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Global Search',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.slate900,
                   ),
                 ),
-                onChanged: (value) {
-                  setState(() {
-                    _query = value.trim();
-                  });
-                },
-              ),
-              const SizedBox(height: 16),
-              Flexible(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxHeight: 360),
-                  child: Builder(
-                    builder: (context) {
-                      final isLoading = ticketsAsync.isLoading ||
-                          customersAsync.isLoading ||
-                          dealsAsync.isLoading ||
-                          leadsAsync.isLoading ||
-                          agentsAsync.isLoading;
+                const SizedBox(height: 8),
+                TextField(
+                  autofocus: true,
+                  decoration: InputDecoration(
+                    hintText: 'Search tickets or customers...',
+                    prefixIcon: const Icon(Icons.search),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  onChanged: (value) {
+                    _debounceTimer?.cancel();
+                    _debounceTimer = Timer(const Duration(milliseconds: 300), () {
+                      setState(() {
+                        _query = value.trim();
+                      });
+                    });
+                  },
+                ),
+                const SizedBox(height: 12),
+                const TabBar(
+                  labelColor: AppColors.primary,
+                  unselectedLabelColor: AppColors.slate500,
+                  indicatorColor: AppColors.primary,
+                  labelStyle: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                  tabs: [
+                    Tab(text: 'Tickets'),
+                    Tab(text: 'Chats'),
+                    Tab(text: 'Others'),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Flexible(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxHeight: 360),
+                    child: Builder(
+                      builder: (context) {
+                        final isLoading = ticketsAsync.isLoading ||
+                            customersAsync.isLoading ||
+                            dealsAsync.isLoading ||
+                            leadsAsync.isLoading ||
+                            agentsAsync.isLoading ||
+                            chatSearchAsync.isLoading;
 
-                      if (isLoading && _query.isEmpty) {
-                        return const Center(
-                          child: CircularProgressIndicator(strokeWidth: 2),
+                        if (isLoading && _query.isEmpty) {
+                          return const Center(
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          );
+                        }
+
+                        final tickets = ticketsAsync.asData?.value ?? [];
+                        final customers = customersAsync.asData?.value ?? [];
+                        final deals = dealsAsync.asData?.value ?? [];
+                        final leads = leadsAsync.asData?.value ?? [];
+                        final agents = agentsAsync.asData?.value ?? [];
+                        final chatResults = chatSearchAsync.asData?.value ?? [];
+
+                        final q = _query.toLowerCase();
+
+                        String getAgentName(String? id) {
+                          if (id == null || id.isEmpty) return '';
+                          for (final a in agents) {
+                            if (a['id'] == id) {
+                              return (a['full_name']?.toString() ?? '').toLowerCase();
+                            }
+                          }
+                          return '';
+                        }
+
+                        String getCustomerName(String? id) {
+                          if (id == null || id.isEmpty) return '';
+                          for (final c in customers) {
+                            if (c.id == id) {
+                              return c.companyName.toLowerCase();
+                            }
+                          }
+                          return '';
+                        }
+
+                        final ticketResults = q.isEmpty
+                            ? <dynamic>[]
+                            : tickets
+                                .where((t) {
+                                  final title = t.title.toLowerCase();
+                                  final id = t.ticketId.toLowerCase();
+                                  final desc = (t.description ?? '').toString().toLowerCase();
+                                  final creatorName = getAgentName(t.createdBy);
+                                  final assigneeName = getAgentName(t.assignedTo);
+                                  final custName = getCustomerName(t.customerId);
+                                  return title.contains(q) || id.contains(q) || desc.contains(q) || creatorName.contains(q) || assigneeName.contains(q) || custName.contains(q);
+                                })
+                                .take(15)
+                                .toList();
+
+                        final customerResults = q.isEmpty
+                            ? <dynamic>[]
+                            : customers
+                                .where((c) {
+                                  final name = c.companyName.toLowerCase();
+                                  final apiKey = c.apiKey.toLowerCase();
+                                  final contactName = c.contactPerson?.toLowerCase() ?? '';
+                                  return name.contains(q) || apiKey.contains(q) || contactName.contains(q);
+                                })
+                                .take(10)
+                                .toList();
+
+                        final dealResults = q.isEmpty
+                            ? <dynamic>[]
+                            : deals
+                                .where((d) {
+                                  final name = d.name.toLowerCase();
+                                  final remark = d.remark.toLowerCase();
+                                  return name.contains(q) || remark.contains(q);
+                                })
+                                .take(10)
+                                .toList();
+
+                        final leadResults = q.isEmpty
+                            ? <dynamic>[]
+                            : leads
+                                .where((l) {
+                                  final name = l.companyName.toLowerCase();
+                                  return name.contains(q);
+                                })
+                                .take(10)
+                                .toList();
+
+                        final agentResults = q.isEmpty
+                            ? <dynamic>[]
+                            : agents
+                                .where((a) {
+                                  final name = (a['full_name']?.toString() ?? '').toLowerCase();
+                                  final username = (a['username']?.toString() ?? '').toLowerCase();
+                                  return name.contains(q) || username.contains(q);
+                                })
+                                .take(10)
+                                .toList();
+
+                        if (_query.isEmpty) {
+                          return const Center(
+                            child: Text(
+                              'Type to search tickets, chats, or other items',
+                              style: TextStyle(fontSize: 13, color: AppColors.slate500),
+                            ),
+                          );
+                        }
+
+                        return TabBarView(
+                          children: [
+                            // TAB 1: TICKETS
+                            ticketResults.isEmpty
+                                ? const Center(child: Text('No tickets found', style: TextStyle(color: AppColors.slate500)))
+                                : ListView(
+                                    children: ticketResults.map((t) {
+                                      return ListTile(
+                                        dense: true,
+                                        leading: const Icon(LucideIcons.ticket, size: 18, color: AppColors.primary),
+                                        title: Text(t.title ?? 'Ticket', maxLines: 1, overflow: TextOverflow.ellipsis),
+                                        subtitle: Text('ID: ${t.ticketId}', style: const TextStyle(fontSize: 11, color: AppColors.slate600)),
+                                        onTap: () {
+                                          Navigator.of(context).pop();
+                                          context.push('/ticket/${t.ticketId}');
+                                        },
+                                      );
+                                    }).toList(),
+                                  ),
+
+                            // TAB 2: CHATS
+                            chatResults.isEmpty
+                                ? const Center(child: Text('No chat messages found', style: TextStyle(color: AppColors.slate500)))
+                                : ListView(
+                                    children: chatResults.map((m) {
+                                      return ListTile(
+                                        dense: true,
+                                        leading: const Icon(LucideIcons.messageCircle, size: 18, color: AppColors.primary),
+                                        title: Text(m.content ?? 'Attachment', maxLines: 1, overflow: TextOverflow.ellipsis),
+                                        subtitle: Text('${m.senderName} • ${m.channel}', style: const TextStyle(fontSize: 11, color: AppColors.slate600)),
+                                        onTap: () {
+                                          Navigator.of(context).pop();
+                                          if (m.channel == 'support-chat') {
+                                            context.push('/chat?highlightMsgId=${m.id}');
+                                          } else if (m.channel == 'sales-team') {
+                                            context.push('/sales-channel?highlightMsgId=${m.id}');
+                                          } else if (m.channel == 'all-aroundtally') {
+                                            context.push('/channel/all-aroundtally?highlightMsgId=${m.id}');
+                                          } else if (m.channel == 'dm') {
+                                            final myId = ref.read(authProvider)?.id;
+                                            final partnerId = m.senderId == myId ? m.receiverId : m.senderId;
+                                            context.push('/chat/dm/$partnerId?highlightMsgId=${m.id}');
+                                          } else {
+                                            context.push('/c/${m.channel}?highlightMsgId=${m.id}');
+                                          }
+                                        },
+                                      );
+                                    }).toList(),
+                                  ),
+
+                            // TAB 3: OTHERS
+                            (customerResults.isEmpty && dealResults.isEmpty && leadResults.isEmpty && agentResults.isEmpty)
+                                ? const Center(child: Text('No other items found', style: TextStyle(color: AppColors.slate500)))
+                                : ListView(
+                                    children: [
+                                      if (customerResults.isNotEmpty) ...[
+                                        Padding(
+                                          padding: const EdgeInsets.only(bottom: 8.0, top: 4.0),
+                                          child: Row(
+                                            children: [
+                                              const Icon(LucideIcons.users, size: 14, color: AppColors.slate500),
+                                              const SizedBox(width: 6),
+                                              const Text('CUSTOMERS', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 0.5, color: AppColors.slate500)),
+                                            ],
+                                          ),
+                                        ),
+                                        ...customerResults.map((c) {
+                                          return ListTile(
+                                            dense: true,
+                                            leading: const Icon(LucideIcons.users, size: 18, color: AppColors.slate700),
+                                            title: Text(c.companyName, maxLines: 1, overflow: TextOverflow.ellipsis),
+                                            subtitle: Text(c.apiKey, style: const TextStyle(fontSize: 11, color: AppColors.slate600)),
+                                            onTap: () {
+                                              Navigator.of(context).pop();
+                                              context.push('/customer/${c.id}');
+                                            },
+                                          );
+                                        }),
+                                        const SizedBox(height: 12),
+                                      ],
+                                      if (dealResults.isNotEmpty) ...[
+                                        if (customerResults.isNotEmpty) const Divider(height: 24),
+                                        Padding(
+                                          padding: EdgeInsets.only(bottom: 8.0, top: customerResults.isNotEmpty ? 0 : 4.0),
+                                          child: Row(
+                                            children: [
+                                              const Icon(LucideIcons.briefcase, size: 14, color: AppColors.slate500),
+                                              const SizedBox(width: 6),
+                                              const Text('DEALS', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 0.5, color: AppColors.slate500)),
+                                            ],
+                                          ),
+                                        ),
+                                        ...dealResults.map((d) {
+                                          return ListTile(
+                                            dense: true,
+                                            leading: const Icon(LucideIcons.briefcase, size: 18, color: AppColors.success),
+                                            title: Text(d.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+                                            subtitle: Text(d.remark, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11, color: AppColors.slate600)),
+                                            onTap: () {
+                                              Navigator.of(context).pop();
+                                              context.push('/deals');
+                                            },
+                                          );
+                                        }),
+                                        const SizedBox(height: 12),
+                                      ],
+                                      if (leadResults.isNotEmpty) ...[
+                                        if (customerResults.isNotEmpty || dealResults.isNotEmpty) const Divider(height: 24),
+                                        Padding(
+                                          padding: EdgeInsets.only(bottom: 8.0, top: (customerResults.isNotEmpty || dealResults.isNotEmpty) ? 0 : 4.0),
+                                          child: Row(
+                                            children: [
+                                              const Icon(LucideIcons.target, size: 14, color: AppColors.slate500),
+                                              const SizedBox(width: 6),
+                                              const Text('LEADS', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 0.5, color: AppColors.slate500)),
+                                            ],
+                                          ),
+                                        ),
+                                        ...leadResults.map((l) {
+                                          return ListTile(
+                                            dense: true,
+                                            leading: const Icon(LucideIcons.target, size: 18, color: AppColors.warning),
+                                            title: Text(l.companyName, maxLines: 1, overflow: TextOverflow.ellipsis),
+                                            subtitle: Text('Amount: ${l.amount}', style: const TextStyle(fontSize: 11, color: AppColors.slate600)),
+                                            onTap: () {
+                                              Navigator.of(context).pop();
+                                              context.push('/leads');
+                                            },
+                                          );
+                                        }),
+                                        const SizedBox(height: 12),
+                                      ],
+                                      if (agentResults.isNotEmpty) ...[
+                                        if (customerResults.isNotEmpty || dealResults.isNotEmpty || leadResults.isNotEmpty) const Divider(height: 24),
+                                        Padding(
+                                          padding: EdgeInsets.only(bottom: 8.0, top: (customerResults.isNotEmpty || dealResults.isNotEmpty || leadResults.isNotEmpty) ? 0 : 4.0),
+                                          child: Row(
+                                            children: [
+                                              const Icon(LucideIcons.user, size: 14, color: AppColors.slate500),
+                                              const SizedBox(width: 6),
+                                              const Text('AGENTS & USERS', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 0.5, color: AppColors.slate500)),
+                                            ],
+                                          ),
+                                        ),
+                                        ...agentResults.map((a) {
+                                          return ListTile(
+                                            dense: true,
+                                            leading: const Icon(LucideIcons.user, size: 18, color: AppColors.primary),
+                                            title: Text(a['full_name']?.toString() ?? 'Agent', maxLines: 1, overflow: TextOverflow.ellipsis),
+                                            subtitle: Text('@${a['username'] ?? ''} - ${a['role'] ?? ''}', style: const TextStyle(fontSize: 11, color: AppColors.slate600)),
+                                            onTap: () {
+                                              Navigator.of(context).pop();
+                                              context.push('/users'); // No direct user page, go to users list
+                                            },
+                                          );
+                                        }),
+                                      ],
+                                    ],
+                                  ),
+                          ],
                         );
-                      }
-
-                      final tickets = ticketsAsync.asData?.value ?? [];
-                      final customers = customersAsync.asData?.value ?? [];
-                      final deals = dealsAsync.asData?.value ?? [];
-                      final leads = leadsAsync.asData?.value ?? [];
-                      final agents = agentsAsync.asData?.value ?? [];
-
-                      final q = _query.toLowerCase();
-
-                      final ticketResults = q.isEmpty
-                          ? <dynamic>[]
-                          : tickets
-                              .where((t) {
-                                final title = t.title.toLowerCase();
-                                final id = t.ticketId.toLowerCase();
-                                final desc = (t.description ?? '').toString().toLowerCase();
-                                return title.contains(q) || id.contains(q) || desc.contains(q);
-                              })
-                              .take(10)
-                              .toList();
-
-                      final customerResults = q.isEmpty
-                          ? <dynamic>[]
-                          : customers
-                              .where((c) {
-                                final name = c.companyName.toLowerCase();
-                                final apiKey = c.apiKey.toLowerCase();
-                                return name.contains(q) || apiKey.contains(q);
-                              })
-                              .take(10)
-                              .toList();
-
-                      final dealResults = q.isEmpty
-                          ? <dynamic>[]
-                          : deals
-                              .where((d) {
-                                final name = d.name.toLowerCase();
-                                final remark = d.remark.toLowerCase();
-                                return name.contains(q) || remark.contains(q);
-                              })
-                              .take(10)
-                              .toList();
-
-                      final leadResults = q.isEmpty
-                          ? <dynamic>[]
-                          : leads
-                              .where((l) {
-                                final name = l.companyName.toLowerCase();
-                                return name.contains(q);
-                              })
-                              .take(10)
-                              .toList();
-
-                      final agentResults = q.isEmpty
-                          ? <dynamic>[]
-                          : agents
-                              .where((a) {
-                                final name = (a['full_name']?.toString() ?? '').toLowerCase();
-                                final username = (a['username']?.toString() ?? '').toLowerCase();
-                                return name.contains(q) || username.contains(q);
-                              })
-                              .take(10)
-                              .toList();
-
-                      if (ticketResults.isEmpty &&
-                          customerResults.isEmpty &&
-                          dealResults.isEmpty &&
-                          leadResults.isEmpty &&
-                          agentResults.isEmpty) {
-                        return const Center(
-                          child: Text(
-                            'Type to search tickets, customers, deals, leads, or agents',
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: AppColors.slate500,
-                            ),
-                          ),
-                        );
-                      }
-
-                      return ListView(
-                        children: [
-                          if (ticketResults.isNotEmpty) ...[
-                            const Text(
-                              'Tickets',
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                color: AppColors.slate700,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            ...ticketResults.map((t) {
-                              return ListTile(
-                                dense: true,
-                                leading: const Icon(LucideIcons.ticket, size: 18, color: AppColors.primary),
-                                title: Text(t.title ?? 'Ticket', maxLines: 1, overflow: TextOverflow.ellipsis),
-                                subtitle: Text('ID: ${t.ticketId}', style: const TextStyle(fontSize: 11, color: AppColors.slate600)),
-                                onTap: () {
-                                  Navigator.of(context).pop();
-                                  context.push('/ticket/${t.ticketId}');
-                                },
-                              );
-                            }),
-                            const SizedBox(height: 12),
-                          ],
-                          if (customerResults.isNotEmpty) ...[
-                            const Text(
-                              'Customers',
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                color: AppColors.slate700,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            ...customerResults.map((c) {
-                              return ListTile(
-                                dense: true,
-                                leading: const Icon(LucideIcons.users, size: 18, color: AppColors.slate700),
-                                title: Text(c.companyName, maxLines: 1, overflow: TextOverflow.ellipsis),
-                                subtitle: Text(c.apiKey, style: const TextStyle(fontSize: 11, color: AppColors.slate600)),
-                                onTap: () {
-                                  Navigator.of(context).pop();
-                                  context.push('/customer/${c.id}');
-                                },
-                              );
-                            }),
-                            const SizedBox(height: 12),
-                          ],
-                          if (dealResults.isNotEmpty) ...[
-                            const Text(
-                              'Deals',
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                color: AppColors.slate700,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            ...dealResults.map((d) {
-                              return ListTile(
-                                dense: true,
-                                leading: const Icon(LucideIcons.briefcase, size: 18, color: AppColors.success),
-                                title: Text(d.name, maxLines: 1, overflow: TextOverflow.ellipsis),
-                                subtitle: Text(d.remark, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11, color: AppColors.slate600)),
-                                onTap: () {
-                                  Navigator.of(context).pop();
-                                  context.push('/deals');
-                                },
-                              );
-                            }),
-                            const SizedBox(height: 12),
-                          ],
-                          if (leadResults.isNotEmpty) ...[
-                            const Text(
-                              'Leads',
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                color: AppColors.slate700,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            ...leadResults.map((l) {
-                              return ListTile(
-                                dense: true,
-                                leading: const Icon(LucideIcons.target, size: 18, color: AppColors.warning),
-                                title: Text(l.companyName, maxLines: 1, overflow: TextOverflow.ellipsis),
-                                subtitle: Text('Amount: ${l.amount}', style: const TextStyle(fontSize: 11, color: AppColors.slate600)),
-                                onTap: () {
-                                  Navigator.of(context).pop();
-                                  context.push('/leads');
-                                },
-                              );
-                            }),
-                            const SizedBox(height: 12),
-                          ],
-                          if (agentResults.isNotEmpty) ...[
-                            const Text(
-                              'Agents',
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                color: AppColors.slate700,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            ...agentResults.map((a) {
-                              return ListTile(
-                                dense: true,
-                                leading: const Icon(LucideIcons.user, size: 18, color: AppColors.primary),
-                                title: Text(a['full_name']?.toString() ?? 'Agent', maxLines: 1, overflow: TextOverflow.ellipsis),
-                                subtitle: Text('@${a['username'] ?? ''} - ${a['role'] ?? ''}', style: const TextStyle(fontSize: 11, color: AppColors.slate600)),
-                                onTap: () {
-                                  Navigator.of(context).pop();
-                                  context.push('/users'); // No direct user page, go to users list
-                                },
-                              );
-                            }),
-                          ],
-                        ],
-                      );
-                    },
+                      },
+                    ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -1807,16 +1890,18 @@ class _BottomNav extends ConsumerWidget {
                   title: const Text('Customers', style: TextStyle(color: Colors.white)),
                   onTap: () { Navigator.pop(context); context.go('/customers'); },
                 ),
-                ListTile(
-                  leading: const Icon(LucideIcons.barChart3, color: Colors.white),
-                  title: const Text('Reports', style: TextStyle(color: Colors.white)),
-                  onTap: () { Navigator.pop(context); context.go('/reports'); },
-                ),
-                ListTile(
-                  leading: const Icon(LucideIcons.fileText, color: Colors.white),
-                  title: const Text('Proposals', style: TextStyle(color: Colors.white)),
-                  onTap: () { Navigator.pop(context); context.go('/proposal-generator'); },
-                ),
+                if (currentUser?.isTeleCaller != true)
+                  ListTile(
+                    leading: const Icon(LucideIcons.barChart3, color: Colors.white),
+                    title: const Text('Reports', style: TextStyle(color: Colors.white)),
+                    onTap: () { Navigator.pop(context); context.go('/reports'); },
+                  ),
+                if (currentUser?.isTeleCaller != true)
+                  ListTile(
+                    leading: const Icon(LucideIcons.fileText, color: Colors.white),
+                    title: const Text('Proposals', style: TextStyle(color: Colors.white)),
+                    onTap: () { Navigator.pop(context); context.go('/proposal-generator'); },
+                  ),
               ],
             ),
           ),

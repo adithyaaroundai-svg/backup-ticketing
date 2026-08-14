@@ -7,6 +7,7 @@ import '../../domain/entities/chat_message.dart';
 import '../providers/chat_provider.dart';
 import '../../../tickets/presentation/widgets/voice_note_widget.dart';
 import '../../../../core/utils/download_helper.dart';
+import 'video_message_widget.dart';
 
 enum ChatAttachmentType {
   none,
@@ -192,6 +193,15 @@ class ChatAttachmentRenderer extends ConsumerWidget {
         );
         break;
       case ChatAttachmentType.video:
+        contentWidget = Padding(
+          padding: const EdgeInsets.only(top: 4, bottom: 4),
+          child: VideoMessageWidget(
+            videoUrl: message.fileUrl!,
+            fileName: message.fileName ?? 'video',
+            onDownload: () => _downloadFile(message.fileUrl!, message.fileName ?? 'video'),
+          ),
+        );
+        break;
       case ChatAttachmentType.document:
       case ChatAttachmentType.file:
       case ChatAttachmentType.none:

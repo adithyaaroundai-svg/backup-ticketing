@@ -78,6 +78,8 @@ dependencies:
   hive_flutter: ^1.1.0
   flutter_dotenv: ^6.0.1
   flutter_linkify: ^6.0.0
+  video_player: ^2.11.1
+  chewie: ^1.13.1
 
 dev_dependencies:
   flutter_test:

@@ -9,6 +9,84 @@ part of 'chat_provider.dart';
 // GENERATED CODE - DO NOT MODIFY BY HAND
 // ignore_for_file: type=lint, type=warning
 
+@ProviderFor(globalMessageSearch)
+const globalMessageSearchProvider = GlobalMessageSearchFamily._();
+
+final class GlobalMessageSearchProvider
+    extends
+        $FunctionalProvider<
+          AsyncValue<List<ChatMessage>>,
+          List<ChatMessage>,
+          FutureOr<List<ChatMessage>>
+        >
+    with
+        $FutureModifier<List<ChatMessage>>,
+        $FutureProvider<List<ChatMessage>> {
+  const GlobalMessageSearchProvider._({
+    required GlobalMessageSearchFamily super.from,
+    required String super.argument,
+  }) : super(
+         retry: null,
+         name: r'globalMessageSearchProvider',
+         isAutoDispose: true,
+         dependencies: null,
+         $allTransitiveDependencies: null,
+       );
+
+  @override
+  String debugGetCreateSourceHash() => _$globalMessageSearchHash();
+
+  @override
+  String toString() {
+    return r'globalMessageSearchProvider'
+        ''
+        '($argument)';
+  }
+
+  @$internal
+  @override
+  $FutureProviderElement<List<ChatMessage>> $createElement(
+    $ProviderPointer pointer,
+  ) => $FutureProviderElement(pointer);
+
+  @override
+  FutureOr<List<ChatMessage>> create(Ref ref) {
+    final argument = this.argument as String;
+    return globalMessageSearch(ref, argument);
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return other is GlobalMessageSearchProvider && other.argument == argument;
+  }
+
+  @override
+  int get hashCode {
+    return argument.hashCode;
+  }
+}
+
+String _$globalMessageSearchHash() =>
+    r'ecd39f789abcef059e658aeb6ced5dfdb6ad2335';
+
+final class GlobalMessageSearchFamily extends $Family
+    with $FunctionalFamilyOverride<FutureOr<List<ChatMessage>>, String> {
+  const GlobalMessageSearchFamily._()
+    : super(
+        retry: null,
+        name: r'globalMessageSearchProvider',
+        dependencies: null,
+        $allTransitiveDependencies: null,
+        isAutoDispose: true,
+      );
+
+  GlobalMessageSearchProvider call(String query) =>
+      GlobalMessageSearchProvider._(argument: query, from: this);
+
+  @override
+  String toString() => r'globalMessageSearchProvider';
+}
+
 @ProviderFor(ChatStream)
 const chatStreamProvider = ChatStreamFamily._();
 

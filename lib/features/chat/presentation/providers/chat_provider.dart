@@ -17,6 +17,37 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 part 'chat_provider.g.dart';
 
+@riverpod
+Future<List<ChatMessage>> globalMessageSearch(Ref ref, String query) async {
+  if (query.isEmpty) return [];
+
+  // Debounce for 300ms
+  await Future.delayed(const Duration(milliseconds: 300));
+
+  
+  // We can just rely on Riverpod's built-in FutureProvider behavior which throws on unmount, or just let it query.
+  
+  final currentUserId = ref.read(authProvider)?.id;
+  final client = Supabase.instance.client;
+  
+  // Escape query for ILIKE if needed, or just use %query%
+  final q = query.replaceAll('%', '\\%').replaceAll('_', '\\_');
+  
+  var dbQuery = client.from('chat_messages').select()
+      .or('content.ilike.%$q%,sender_name.ilike.%$q%');
+      
+  if (currentUserId != null) {
+    // Only return messages where the user is allowed
+    // E.g., public channels or DMs involving the user
+    // We assume any message with receiver_id == null is public, or we explicitly allow sender/receiver matches.
+    dbQuery = dbQuery.or('receiver_id.is.null,sender_id.eq.$currentUserId,receiver_id.eq.$currentUserId');
+  }
+
+  final response = await dbQuery.order('created_at', ascending: false).limit(10);
+  
+  return response.map((json) => ChatMessage.fromJson(json)).toList();
+}
+
 enum AttachmentUploadStatus { idle, uploading, sent, failed }
 
 class AttachmentUploadState {
