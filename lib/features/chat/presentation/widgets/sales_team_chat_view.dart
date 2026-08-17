@@ -22,6 +22,7 @@ import 'markdown_text_editing_controller.dart';
 import 'chat_voice_recorder.dart';
 import 'video_message_widget.dart';
 import '../../../../core/utils/download_helper.dart';
+import '../../../sales/presentation/providers/lead_provider.dart';
 
 IconData _getFileIcon(String? fileType) {
   if (fileType == null) return Icons.insert_drive_file;
@@ -1298,6 +1299,11 @@ class _ChatBubbleState extends ConsumerState<_ChatBubble> {
       return _CallActivityCard(content: message.content, createdAt: message.createdAt);
     }
 
+    // Lead creation messages — rendered as a live-status card
+    if (message.content.startsWith('🎯 New Lead') && !isDeleted) {
+      return _LeadChatCard(message: message, showSender: showSender);
+    }
+
     return GestureDetector(
       onLongPress: () {
         final isMobile = MediaQuery.of(context).size.width < 900;
@@ -1818,5 +1824,294 @@ class _CallInfo {
   final Color color;
   final String? duration;
   const _CallInfo({required this.icon, required this.label, required this.color, this.duration});
+}
+
+// ── Lead Chat Card ─────────────────────────────────────────────────────────────
+// Parses a "🎯 New Lead" message and renders a rich card with live pipeline status.
+class _LeadChatCard extends ConsumerWidget {
+  final ChatMessage message;
+  final bool showSender;
+
+  const _LeadChatCard({required this.message, required this.showSender});
+
+  // Extract [LeadID:uuid] tag from message content
+  static String? _extractLeadId(String content) {
+    final match = RegExp(r'\[LeadID:([^\]]+)\]').firstMatch(content);
+    return match?.group(1);
+  }
+
+  // Remove the hidden tag from display text
+  static String _displayContent(String content) {
+    return content.replaceAll(RegExp(r'\[LeadID:[^\]]+\]\n?'), '').trim();
+  }
+
+  // Parse lines like "Company: Acme" into a map
+  static Map<String, String> _parseLines(String content) {
+    final map = <String, String>{};
+    for (final line in content.split('\n')) {
+      final idx = line.indexOf(':');
+      if (idx > 0) {
+        final key = line.substring(0, idx).trim();
+        final val = line.substring(idx + 1).trim();
+        if (key.isNotEmpty && val.isNotEmpty) map[key] = val;
+      }
+    }
+    return map;
+  }
+
+  static Color _statusColor(String status) {
+    switch (status.toLowerCase()) {
+      case 'new lead':
+      case 'new':
+      case 'pending':
+        return Colors.orange;
+      case 'contacted':
+        return Colors.blue;
+      case 'qualified':
+        return Colors.cyan;
+      case 'proposal':
+        return Colors.purple;
+      case 'negotiation':
+        return Colors.deepOrange;
+      case 'won':
+      case 'win':
+        return Colors.green;
+      case 'lost':
+      case 'loss':
+        return Colors.red;
+      default:
+        return Colors.grey;
+    }
+  }
+
+  static String _statusLabel(String status) {
+    switch (status.toLowerCase()) {
+      case 'new':
+      case 'pending':
+        return 'New Lead';
+      case 'win':
+        return 'Won';
+      case 'loss':
+        return 'Lost';
+      default:
+        // Capitalise first letter of each word
+        return status.split(' ').map((w) => w.isEmpty ? '' : '${w[0].toUpperCase()}${w.substring(1)}').join(' ');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isDark = context.isDarkMode;
+    final timeStr = DateFormat('h:mm a').format(message.createdAt.toLocal());
+
+    final leadId = _extractLeadId(message.content);
+    final displayText = _displayContent(message.content);
+    final lines = _parseLines(displayText);
+
+    final companyName = lines['Company'] ?? '';
+    final customerName = lines['Customer'];
+    final phone = lines['Phone'] ?? '';
+    final source = lines['Source'];
+    final product = lines['Product'];
+    final owner = lines['Owner'] ?? '';
+
+    // Look up live status from leadsProvider if we have a lead ID
+    String liveStatus = lines['Status'] ?? 'New Lead';
+    if (leadId != null) {
+      final leadsAsync = ref.watch(leadsProvider);
+      leadsAsync.whenData((leads) {
+        for (final l in leads) {
+          if (l.id == leadId) {
+            liveStatus = l.status;
+            break;
+          }
+        }
+      });
+      // Use a local variable so we can use it in build (whenData is side-effect only)
+      final leads = leadsAsync.asData?.value ?? [];
+      for (final l in leads) {
+        if (l.id == leadId) {
+          liveStatus = l.status;
+          break;
+        }
+      }
+    }
+
+    final statusColor = _statusColor(liveStatus);
+    final statusLabel = _statusLabel(liveStatus);
+
+    final cardBg = isDark ? const Color(0xFF1E2D3D) : const Color(0xFFF0F7FF);
+    final borderColor = isDark ? Colors.blue.shade800 : Colors.blue.shade100;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxWidth: MediaQuery.of(context).size.width * 0.78,
+            minWidth: 220,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (showSender)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 4, left: 2),
+                  child: Text(
+                    message.senderName,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 12,
+                      color: _senderColor(message.senderName),
+                    ),
+                  ),
+                ),
+              Container(
+                decoration: BoxDecoration(
+                  color: cardBg,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: borderColor, width: 1.5),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.blue.withValues(alpha: isDark ? 0.08 : 0.06),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Header bar
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: isDark ? Colors.blue.shade900.withValues(alpha: 0.5) : Colors.blue.shade50,
+                        borderRadius: const BorderRadius.vertical(top: Radius.circular(11)),
+                      ),
+                      child: Row(
+                        children: [
+                          const Text('🎯', style: TextStyle(fontSize: 16)),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'New Lead',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w700,
+                                fontSize: 14,
+                                color: isDark ? Colors.blue.shade200 : Colors.blue.shade800,
+                              ),
+                            ),
+                          ),
+                          // Live status badge
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: statusColor.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: statusColor.withValues(alpha: 0.4)),
+                            ),
+                            child: Text(
+                              statusLabel,
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                color: statusColor,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    // Body
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Company name
+                          Text(
+                            companyName,
+                            style: TextStyle(
+                              fontWeight: FontWeight.w800,
+                              fontSize: 16,
+                              color: isDark ? Colors.white : AppColors.slate900,
+                            ),
+                          ),
+                          if (customerName != null && customerName.isNotEmpty) ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              customerName,
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: isDark ? Colors.white70 : AppColors.slate600,
+                              ),
+                            ),
+                          ],
+                          const SizedBox(height: 10),
+                          // Info rows
+                          _InfoRow(icon: LucideIcons.phone, text: phone, isDark: isDark),
+                          if (product != null && product.isNotEmpty)
+                            _InfoRow(icon: LucideIcons.box, text: product, isDark: isDark),
+                          if (source != null && source.isNotEmpty)
+                            _InfoRow(icon: LucideIcons.globe, text: source, isDark: isDark),
+                          _InfoRow(icon: LucideIcons.user, text: owner, isDark: isDark),
+                          // Timestamp
+                          const SizedBox(height: 6),
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: Text(
+                              timeStr,
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: isDark ? Colors.white38 : AppColors.slate400,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _InfoRow extends StatelessWidget {
+  final IconData icon;
+  final String text;
+  final bool isDark;
+  const _InfoRow({required this.icon, required this.text, required this.isDark});
+
+  @override
+  Widget build(BuildContext context) {
+    if (text.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 5),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 13, color: isDark ? Colors.white54 : AppColors.slate400),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(
+                fontSize: 13,
+                color: isDark ? Colors.white70 : AppColors.slate700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 

@@ -311,17 +311,13 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
               
               if (channelResponse == null) return; // Channel not found
               
-              final isPrivate = channelResponse['is_private'] as bool? ?? false;
+              // Check if current user is a member
+              final members = channelResponse['channel_members'] as List<dynamic>? ?? [];
+              final isMember = members.any((m) => m['user_id'] == myId);
+              final isCreator = channelResponse['created_by'] == myId;
               
-              if (isPrivate) {
-                // Check if current user is a member
-                final members = channelResponse['channel_members'] as List<dynamic>? ?? [];
-                final isMember = members.any((m) => m['user_id'] == myId);
-                final isCreator = channelResponse['created_by'] == myId;
-                
-                if (!isMember && !isCreator) {
-                  return; // User is not a member, don't show notification
-                }
+              if (!isMember && !isCreator) {
+                return; // User is not a member, don't show notification
               }
 
               // Build ChatMessage and fire the notification

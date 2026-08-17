@@ -127,8 +127,31 @@ class _CustomChannelChatPageState extends ConsumerState<CustomChannelChatPage> {
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _scrollToBottom();
+      ReadReceiptsTracker.preload();
       // Mark channel as read when first opening the page
       markCustomChannelAsRead(ref, widget.channelId);
+    });
+  }
+
+  DateTime? _lastMarkedReadAt;
+
+  void _markVisibleMessagesRead(List<ChatMessage> messages) {
+    if (messages.isEmpty) return;
+
+    final validMessages = messages.where((m) => !m.id.startsWith('temp_')).toList();
+    if (validMessages.isEmpty) return;
+
+    final newestMessageAt = validMessages.last.createdAt.toUtc();
+
+    if (_lastMarkedReadAt != null && !newestMessageAt.isAfter(_lastMarkedReadAt!)) {
+      return;
+    }
+
+    _lastMarkedReadAt = newestMessageAt;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      markCustomChannelAsRead(ref, widget.channelId, timestamp: newestMessageAt);
     });
   }
 
@@ -1195,7 +1218,7 @@ class _CustomChannelChatPageState extends ConsumerState<CustomChannelChatPage> {
           });
         }
         // Mark channel as read whenever we receive new messages while viewing it
-        markCustomChannelAsRead(ref, widget.channelId);
+        _markVisibleMessagesRead(next.value);
       }
     });
 
@@ -1292,6 +1315,7 @@ class _CustomChannelChatPageState extends ConsumerState<CustomChannelChatPage> {
             Expanded(
               child: messagesAsync.when(
                 data: (messages) {
+                  _markVisibleMessagesRead(messages);
                   if (messages.isEmpty) {
                     return Center(
                       child: Column(
@@ -2083,6 +2107,22 @@ class _ChatBubbleState extends ConsumerState<_ChatBubble> {
                                         : (context.isDarkMode ? Colors.white54 : AppColors.slate400),
                                   ),
                                 ),
+                                if (isMe && !isDeleted) ...[
+                                  const SizedBox(width: 4),
+                                  Builder(
+                                    builder: (context) {
+                                      final readBy = ReadReceiptsTracker.getReadBy(message.id);
+                                      final isRead = readBy.any((id) => id != message.senderId.trim().toLowerCase());
+                                      return Icon(
+                                        isRead ? LucideIcons.checkCheck : LucideIcons.check,
+                                        size: 13,
+                                        color: isRead
+                                            ? (context.isDarkMode ? const Color(0xFF60A5FA) : const Color(0xFF2563EB))
+                                            : (context.isDarkMode ? Colors.white60 : AppColors.primary.withValues(alpha: 0.6)),
+                                      );
+                                    },
+                                  ),
+                                ],
                               ],
                             ),
                             if (message.fileUrl != null && !isDeleted)

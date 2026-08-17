@@ -143,7 +143,21 @@ class _CreateLeadDialogState extends ConsumerState<CreateLeadDialog> {
       // Invalidate the leads provider so the pipeline updates
       container.invalidate(leadsProvider);
 
-      // Prepare chat content
+      // Prepare chat content — embed lead ID so the chat bubble can show live status
+      // We fetch the ID by querying after insert (using company_name + created_by match)
+      String? newLeadId;
+      try {
+        final inserted = await Supabase.instance.client
+            .from('leads')
+            .select('id')
+            .eq('company_name', leadData['company_name'] as String)
+            .eq('created_by', currentUser?.id ?? '')
+            .order('created_at', ascending: false)
+            .limit(1)
+            .single();
+        newLeadId = inserted['id']?.toString();
+      } catch (_) {}
+
       String chatContent = [
         '🎯 New Lead (Demo Requested)',
         'Company: ${leadData['company_name'] ?? 'Not provided'}',
@@ -153,6 +167,7 @@ class _CreateLeadDialogState extends ConsumerState<CreateLeadDialog> {
         if (leadData['product'] != null) 'Product: ${leadData['product']}',
         'Owner: ${leadData['owner']}',
         'Status: New Lead',
+        if (newLeadId != null) '[LeadID:$newLeadId]',
       ].join('\n');
 
       // Close dialog immediately

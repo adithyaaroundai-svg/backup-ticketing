@@ -547,15 +547,24 @@ class ChatLastSeen extends _$ChatLastSeen {
     // First login — treat everything currently in the DB as already read
     // by setting lastSeen to the latest message timestamp (or now if no
     // messages). This prevents the badge and toasts from firing for all
-    // historical messages on first login.
-    final messages = ref.read(chatStreamProvider('support-chat')).asData?.value;
+    // First login — treat everything currently in the DB as already read so
+    // the badge and toasts don't fire for all historical messages.
+    var messages = ref.read(chatStreamProvider('support-chat')).asData?.value;
+    if (messages == null) {
+      try {
+        messages = await ref.read(chatStreamProvider('support-chat').future);
+      } catch (_) {
+        messages = [];
+      }
+    }
+
     final DateTime baseline;
     if (messages != null && messages.isNotEmpty) {
       baseline = messages.last.createdAt.toUtc().add(
         const Duration(milliseconds: 500),
       );
     } else {
-      baseline = DateTime.now().toUtc();
+      baseline = DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
     }
     await prefs.setString(key, baseline.toIso8601String());
     return baseline;
@@ -775,15 +784,23 @@ class AllAroundTallyLastSeen extends _$AllAroundTallyLastSeen {
 
     // First login — treat everything currently in the DB as already read so
     // the badge and toasts don't fire for all historical messages.
-    final messages =
+    var messages =
         ref.read(chatStreamProvider(kAllAroundTallyChannel)).asData?.value;
+    if (messages == null) {
+      try {
+        messages = await ref.read(chatStreamProvider(kAllAroundTallyChannel).future);
+      } catch (_) {
+        messages = [];
+      }
+    }
+
     final DateTime baseline;
     if (messages != null && messages.isNotEmpty) {
       baseline = messages.last.createdAt.toUtc().add(
         const Duration(milliseconds: 500),
       );
     } else {
-      baseline = DateTime.now().toUtc();
+      baseline = DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
     }
     await prefs.setString(key, baseline.toIso8601String());
     return baseline;
@@ -957,44 +974,70 @@ class _CustomChannelLastSeenNotifier extends Notifier<Map<String, DateTime>> {
       return dt;
     }
 
-    // First time — baseline to avoid false unread on first open
-    final messages = ref.read(chatStreamProvider(channelId)).asData?.value;
+    // First time — wait for initial messages to load to set an accurate baseline
+    var messages = ref.read(chatStreamProvider(channelId)).asData?.value;
+    if (messages == null) {
+      try {
+        messages = await ref.read(chatStreamProvider(channelId).future);
+      } catch (_) {
+        messages = [];
+      }
+    }
+
     final DateTime baseline;
     if (messages != null && messages.isNotEmpty) {
       baseline = messages.last.createdAt.toUtc().add(const Duration(milliseconds: 500));
     } else {
-      baseline = DateTime.now().toUtc();
+      // Channel is empty. Use epoch so the first incoming message is correctly marked unread.
+      baseline = DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
     }
+    
     await prefs.setString(key, baseline.toIso8601String());
     state = {...state, channelId: baseline};
     return baseline;
   }
 
-  Future<void> markAsRead(String channelId) async {
+  Future<void> markAsRead(String channelId, {DateTime? timestamp}) async {
     final myId = ref.read(authProvider)?.id;
     if (myId == null) return;
+    final normalizedMyId = myId.trim().toLowerCase();
 
-    final messages = ref.read(chatStreamProvider(channelId)).asData?.value;
-    final DateTime ts;
-    if (messages != null && messages.isNotEmpty) {
-      ts = messages.last.createdAt.toUtc().add(const Duration(milliseconds: 500));
+    final messages = ref.read(chatStreamProvider(channelId)).asData?.value ?? [];
+    
+    DateTime effectiveTimestamp;
+    if (timestamp != null) {
+      effectiveTimestamp = timestamp;
+    } else if (messages.isNotEmpty) {
+      effectiveTimestamp = messages.last.createdAt.toUtc();
     } else {
-      ts = DateTime.now().toUtc();
+      effectiveTimestamp = DateTime.now().toUtc();
     }
 
-    final current = state[channelId] ?? DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
-    if (ts.isAfter(current)) {
-      state = {...state, channelId: ts};
-    }
+    final safeTimestamp = effectiveTimestamp.toUtc().add(const Duration(milliseconds: 500));
+
+    state = {...state, channelId: safeTimestamp};
 
     try {
       final prefs = await SharedPreferences.getInstance();
       final key = '${_keyPrefix}_${channelId}_$myId';
-      final existing = prefs.getString(key);
-      if (existing == null || ts.isAfter(DateTime.parse(existing).toUtc())) {
-        await prefs.setString(key, ts.toIso8601String());
-      }
+      await prefs.setString(key, safeTimestamp.toIso8601String());
     } catch (_) {}
+
+    // Mark messages as read in ReadReceiptsTracker & Supabase
+    if (messages.isNotEmpty) {
+      final unreadIds = <String>[];
+      for (final message in messages) {
+        if (message.senderId.trim().toLowerCase() != normalizedMyId) {
+          final readBy = ReadReceiptsTracker.getReadBy(message.id);
+          if (!readBy.contains(normalizedMyId)) {
+            unreadIds.add(message.id);
+          }
+        }
+      }
+      if (unreadIds.isNotEmpty) {
+        await ReadReceiptsTracker.markMultipleAsRead(unreadIds, myId);
+      }
+    }
   }
 }
 
@@ -1013,6 +1056,11 @@ final customChannelUnreadCountProvider =
   // Watch the whole map so we rebuild when any channel's lastSeen changes
   final lastSeenMap = ref.watch(customChannelLastSeenNotifierProvider);
 
+  // Re-run whenever ReadReceiptsTracker changes
+  ReadReceiptsTracker.setOnChangeCallback(() {
+    ref.invalidateSelf();
+  });
+
   // If this channel's last-seen hasn't been loaded yet, trigger load and return 0
   if (!lastSeenMap.containsKey(channelId)) {
     // Fire-and-forget load — will update state and trigger a rebuild
@@ -1022,15 +1070,19 @@ final customChannelUnreadCountProvider =
   }
 
   final lastSeen = lastSeenMap[channelId];
+  final normalizedMyId = myId.trim().toLowerCase();
 
   return messagesAsync.maybeWhen(
     data: (messages) {
       if (messages.isEmpty) return 0;
-      final normalizedMyId = myId.trim().toLowerCase();
       return messages.where((m) {
         if (m.senderId.trim().toLowerCase() == normalizedMyId) return false;
         if (m.isDeleted) return false;
+        // Primary: messages older than or equal to lastSeen are read
         if (lastSeen != null && !m.createdAt.toUtc().isAfter(lastSeen)) return false;
+        // Secondary: explicit per-message read receipt
+        final readBy = ReadReceiptsTracker.getReadBy(m.id);
+        if (readBy.contains(normalizedMyId)) return false;
         return true;
       }).length;
     },
@@ -1046,8 +1098,8 @@ final totalCustomChannelUnreadProvider =
 });
 
 /// Call this when the user opens a custom channel page to reset its badge.
-Future<void> markCustomChannelAsRead(WidgetRef ref, String channelId) async {
-  await ref.read(customChannelLastSeenNotifierProvider.notifier).markAsRead(channelId);
+Future<void> markCustomChannelAsRead(WidgetRef ref, String channelId, {DateTime? timestamp}) async {
+  await ref.read(customChannelLastSeenNotifierProvider.notifier).markAsRead(channelId, timestamp: timestamp);
 }
 
 // ── Read receipts tracking (client-side) ─────────────────────────────────────
