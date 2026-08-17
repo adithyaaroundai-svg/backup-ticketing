@@ -34,8 +34,18 @@
 
   <title>ticketing_system</title>
   <link rel="manifest" href="manifest.json">
-</head>
-<body>
+  <script>
+    // Prevent browser default behavior of opening dropped files in a new tab/window
+    window.addEventListener('dragover', function(e) {
+      e.preventDefault();
+      if (e.dataTransfer) {
+        e.dataTransfer.dropEffect = 'copy';
+      }
+    }, false);
+    window.addEventListener('drop', function(e) {
+      e.preventDefault();
+    }, false);
+  </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

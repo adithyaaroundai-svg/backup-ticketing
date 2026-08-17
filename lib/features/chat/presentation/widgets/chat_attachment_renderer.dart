@@ -79,48 +79,162 @@ class ChatAttachmentRenderer extends ConsumerWidget {
   }
 
   void _showFullScreenImage(BuildContext context, String url, String fileName) {
+    final screenSize = MediaQuery.sizeOf(context);
+    final maxW = screenSize.width < 700
+        ? screenSize.width * 0.96
+        : (screenSize.width * 0.90).clamp(600.0, 1280.0);
+    final maxH = screenSize.height < 700
+        ? screenSize.height * 0.94
+        : (screenSize.height * 0.88).clamp(600.0, 920.0);
+
     showDialog(
       context: context,
-      barrierColor: Colors.black.withOpacity(0.9),
-      builder: (context) {
-        return Material(
-          color: Colors.transparent,
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              Center(
-                child: InteractiveViewer(
-                  panEnabled: true,
-                  minScale: 0.5,
-                  maxScale: 4,
-                  child: Image.network(
-                    url,
-                    fit: BoxFit.contain,
+      barrierColor: Colors.black.withValues(alpha: 0.65),
+      builder: (ctx) {
+        return GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => Navigator.of(ctx).pop(),
+          child: Material(
+            color: Colors.transparent,
+            child: Center(
+              child: GestureDetector(
+                onTap: () {}, // Prevent click inside dialog from closing
+                child: Container(
+                  width: maxW,
+                  height: maxH,
+                  margin: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0F172A),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.15),
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.5),
+                        blurRadius: 24,
+                        offset: const Offset(0, 8),
+                      ),
+                    ],
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: Column(
+                    children: [
+                      // Header bar
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 10,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF1E293B),
+                          border: Border(
+                            bottom: BorderSide(
+                              color: Colors.white.withValues(alpha: 0.08),
+                            ),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(
+                              Icons.image,
+                              size: 18,
+                              color: AppColors.primary,
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                fileName,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            IconButton(
+                              icon: const Icon(
+                                Icons.download,
+                                color: Colors.white70,
+                                size: 20,
+                              ),
+                              tooltip: 'Download',
+                              constraints: const BoxConstraints(),
+                              padding: const EdgeInsets.all(6),
+                              onPressed: () => _downloadFile(url, fileName),
+                            ),
+                            const SizedBox(width: 8),
+                            IconButton(
+                              icon: const Icon(
+                                Icons.close,
+                                color: Colors.white70,
+                                size: 20,
+                              ),
+                              tooltip: 'Close',
+                              constraints: const BoxConstraints(),
+                              padding: const EdgeInsets.all(6),
+                              onPressed: () => Navigator.of(ctx).pop(),
+                            ),
+                          ],
+                        ),
+                      ),
+                      // Image body
+                      Expanded(
+                        child: Container(
+                          color: const Color(0xFF090D16),
+                          padding: const EdgeInsets.all(12),
+                          child: Center(
+                            child: InteractiveViewer(
+                              panEnabled: true,
+                              minScale: 0.5,
+                              maxScale: 4.0,
+                              child: Image.network(
+                                url,
+                                fit: BoxFit.contain,
+                                loadingBuilder: (_, child, progress) =>
+                                    progress == null
+                                        ? child
+                                        : const Center(
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                              valueColor:
+                                                  AlwaysStoppedAnimation<Color>(
+                                                Colors.white70,
+                                              ),
+                                            ),
+                                          ),
+                                errorBuilder: (_, __, ___) => const Center(
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        Icons.broken_image,
+                                        color: Colors.white38,
+                                        size: 48,
+                                      ),
+                                      SizedBox(height: 8),
+                                      Text(
+                                        'Failed to load image',
+                                        style: TextStyle(
+                                          color: Colors.white54,
+                                          fontSize: 13,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
-              Positioned(
-                top: 40,
-                right: 20,
-                child: Row(
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.download, color: Colors.white, size: 30),
-                      onPressed: () {
-                        _downloadFile(url, fileName);
-                      },
-                    ),
-                    const SizedBox(width: 16),
-                    IconButton(
-                      icon: const Icon(Icons.close, color: Colors.white, size: 30),
-                      onPressed: () {
-                        Navigator.of(context).pop();
-                      },
-                    ),
-                  ],
-                ),
-              ),
-            ],
+            ),
           ),
         );
       },

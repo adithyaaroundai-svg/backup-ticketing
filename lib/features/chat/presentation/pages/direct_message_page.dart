@@ -36,6 +36,8 @@ import '../../../tickets/domain/entities/ticket.dart';
 import '../../../tickets/presentation/providers/ticket_provider.dart';
 import '../widgets/chat_attachment_renderer.dart';
 import '../widgets/chat_voice_recorder.dart';
+import '../widgets/chat_drop_overlay.dart';
+import '../../../../core/services/chat_drag_drop_paste_helper.dart';
 
 import '../../../dashboard/presentation/widgets/create_ticket_dialog.dart';
 
@@ -106,6 +108,8 @@ class _DirectMessagePageState extends ConsumerState<DirectMessagePage> {
   bool _isUploadingFile = false;
   bool _isRecordingVoice = false;
   bool _isTextEmpty = true;
+  ChatDragDropPasteSubscription? _dragDropPasteSub;
+  bool _isDragging = false;
 
   void _insertFormatting(String prefix, String suffix) {
     final text = _textCtrl.text;
@@ -283,6 +287,22 @@ class _DirectMessagePageState extends ConsumerState<DirectMessagePage> {
     _textCtrl.addListener(_onTextChanged);
     _scrollCtrl.addListener(_onScroll);
 
+    _dragDropPasteSub = registerChatDragDropAndPaste(
+      onFileReceived: (file) {
+        if (!mounted) return;
+        setState(() {
+          _selectedFile = file;
+        });
+        _messageFocusNode.requestFocus();
+      },
+      onDragStateChanged: (isDragging) {
+        if (!mounted) return;
+        if (_isDragging != isDragging) {
+          setState(() => _isDragging = isDragging);
+        }
+      },
+    );
+
     // Mark conversation as read and set currently open conversation
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted && (ModalRoute.of(context)?.isCurrent ?? false)) {
@@ -361,6 +381,7 @@ class _DirectMessagePageState extends ConsumerState<DirectMessagePage> {
 
   @override
   void dispose() {
+    _dragDropPasteSub?.cancel();
     try {
       if (ref.read(currentOpenConversationProvider) == widget.partnerId) {
         ref.read(currentOpenConversationProvider.notifier).state = null;
@@ -412,7 +433,8 @@ class _DirectMessagePageState extends ConsumerState<DirectMessagePage> {
         return;
       }
       fileName = _selectedFile!.name;
-      fileType = _selectedFile!.extension;
+      fileType = _selectedFile!.extension ??
+          (fileName.contains('.') ? fileName.split('.').last : 'png');
     }
 
     ref
@@ -941,157 +963,153 @@ class _DirectMessagePageState extends ConsumerState<DirectMessagePage> {
             child: Container(color: AppColors.slate200, height: 1),
           ),
         ),
-
-        body: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+        body: Stack(
           children: [
-            Expanded(
-              child: Column(
-                children: [
-                  Expanded(
-                    child: messagesAsync.when(
-                      data: (messages) {
-                        if (messages.isEmpty) {
-                          return Center(
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  LucideIcons.messageSquare,
-                                  size: 48,
-                                  color: AppColors.slate300,
-                                ),
-                                const SizedBox(height: 16),
-                                const Text(
-                                  'No messages yet',
-                                  style: TextStyle(
-                                    color: AppColors.slate500,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                                const Text(
-                                  'Start the conversation with your team!',
-                                  style: TextStyle(
-                                    color: AppColors.slate400,
-                                    fontSize: 13,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          );
-                        }
-
-                        if (!_capturedEntryUnread && currentUser != null) {
-                          _capturedEntryUnread = true;
-                          _entryFirstUnreadMessageId =
-                              _findFirstUnreadMessageId(
-                                messages,
-                                currentUser.id,
-                              );
-                        }
-
-                        if (!_hasInitialScrolled && messages.isNotEmpty) {
-                          _hasInitialScrolled = true;
-                          WidgetsBinding.instance.addPostFrameCallback((_) {
-                            if (!mounted) return;
-                            if (_entryFirstUnreadMessageId != null &&
-                                _unreadKey.currentContext != null) {
-                              Scrollable.ensureVisible(
-                                _unreadKey.currentContext!,
-                                alignment: 0.0,
-                                duration: const Duration(milliseconds: 300),
-                                curve: Curves.easeOut,
-                              );
-                            }
-                          });
-                        }
-
-                        _markVisibleMessagesRead(messages);
-                        
-                        final hasMore = ref.watch(dmStreamProvider(widget.partnerId).notifier).hasMore;
-
-                        return SelectionArea(
-                          child: ListView.builder(
-                            controller: _scrollCtrl,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 20,
-                          ),
-                          reverse: true,
-                          physics: const ClampingScrollPhysics(),
-                          itemCount: messages.length + (hasMore ? 1 : 0),
-                          cacheExtent: 500,
-                          itemBuilder: (context, rawIndex) {
-                            if (hasMore && rawIndex == messages.length) {
-                              return Padding(
-                                padding: const EdgeInsets.symmetric(vertical: 20),
-                                child: Center(
-                                  child: SizedBox(
-                                    width: 24, height: 24,
-                                    child: CircularProgressIndicator(strokeWidth: 2),
-                                  ),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(
+                  child: Column(
+                    children: [
+                      Expanded(
+                        child: messagesAsync.when(
+                          data: (messages) {
+                            if (messages.isEmpty) {
+                              return Center(
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      LucideIcons.messageSquare,
+                                      size: 48,
+                                      color: AppColors.slate300,
+                                    ),
+                                    const SizedBox(height: 16),
+                                    const Text(
+                                      'No messages yet',
+                                      style: TextStyle(
+                                        color: AppColors.slate500,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                    const Text(
+                                      'Start the conversation with your team!',
+                                      style: TextStyle(
+                                        color: AppColors.slate400,
+                                        fontSize: 13,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               );
                             }
 
-                            final index = messages.length - 1 - rawIndex;
-                            final msg = messages[index];
-                            final isMe = msg.senderId == currentUser?.id;
-                            bool showDateHeader = false;
-                            if (index == 0) {
-                              showDateHeader = true;
-                            } else {
-                              final prevMsg = messages[index - 1];
-                              if (!_isSameDay(
-                                msg.createdAt,
-                                prevMsg.createdAt,
-                              )) {
-                                showDateHeader = true;
-                              }
-                            }
-                            bool showSender = true;
-                            if (!showDateHeader && index > 0) {
-                              final prevMsg = messages[index - 1];
-                              if (prevMsg.senderId == msg.senderId) {
-                                showSender = false;
-                              }
-                            }
-                            final showUnreadLabel =
-                                msg.id == _entryFirstUnreadMessageId;
-                            return Column(
-                              children: [
-                                if (showDateHeader)
-                                  _DateHeader(date: msg.createdAt),
-                                if (showUnreadLabel)
-                                  _UnreadLabel(key: _unreadKey),
-                                _ChatBubble(
-                                  key: ValueKey(msg.id),
-                                  message: msg,
-                                  isMe: isMe,
-                                  showSender: showSender,
-                                  onDelete: () {
-                                    _confirmDelete(context, msg.id);
-                                  },
-                                  onReply: () {
-                                    _handleReply(msg);
-                                  },
-                                ),
-                              ],
+                            final hasMore = ref.watch(dmStreamProvider(widget.partnerId).notifier).hasMore;
+
+                            return SelectionArea(
+                              child: ListView.builder(
+                                controller: _scrollCtrl,
+                                padding: const EdgeInsets.all(16),
+                                reverse: true,
+                                itemCount: messages.length + (hasMore ? 1 : 0),
+                                itemBuilder: (context, rawIndex) {
+                                  if (hasMore && rawIndex == messages.length) {
+                                    final isLoadingMore = ref.read(dmStreamProvider(widget.partnerId).notifier).isLoadingMore;
+                                    return Padding(
+                                      padding: const EdgeInsets.symmetric(vertical: 20),
+                                      child: Center(
+                                        child: isLoadingMore
+                                            ? const SizedBox(
+                                                width: 24,
+                                                height: 24,
+                                                child: CircularProgressIndicator(strokeWidth: 2),
+                                              )
+                                            : const SizedBox.shrink(),
+                                      ),
+                                    );
+                                  }
+
+                                  final index = messages.length - 1 - rawIndex;
+                                  final msg = messages[index];
+                                  final isMe = msg.senderId == currentUser?.id;
+                                  final prevMsg = index > 0 ? messages[index - 1] : null;
+
+                                  final showSender = prevMsg == null ||
+                                      prevMsg.senderId != msg.senderId ||
+                                      msg.createdAt.difference(prevMsg.createdAt).inMinutes > 5;
+
+                                  final showDateHeader = prevMsg == null ||
+                                      !_isSameDay(prevMsg.createdAt, msg.createdAt);
+
+                                  final isEntryFirstUnread = _entryFirstUnreadMessageId != null &&
+                                      msg.id == _entryFirstUnreadMessageId;
+
+                                  return Column(
+                                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                                    children: [
+                                      if (showDateHeader) _DateHeader(date: msg.createdAt),
+                                      if (isEntryFirstUnread)
+                                        Container(
+                                          key: _unreadKey,
+                                          margin: const EdgeInsets.symmetric(vertical: 12),
+                                          child: Row(
+                                            children: [
+                                              Expanded(
+                                                child: Container(
+                                                  height: 1,
+                                                  color: Colors.red.shade300,
+                                                ),
+                                              ),
+                                              Padding(
+                                                padding: const EdgeInsets.symmetric(horizontal: 12),
+                                                child: Text(
+                                                  'Unread messages',
+                                                  style: TextStyle(
+                                                    color: Colors.red.shade400,
+                                                    fontSize: 12,
+                                                    fontWeight: FontWeight.w600,
+                                                  ),
+                                                ),
+                                              ),
+                                              Expanded(
+                                                child: Container(
+                                                  height: 1,
+                                                  color: Colors.red.shade300,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      _ChatBubble(
+                                        message: msg,
+                                        isMe: isMe,
+                                        showSender: showSender,
+                                        onDelete: () {
+                                          _confirmDelete(context, msg.id);
+                                        },
+                                        onReply: () {
+                                          _handleReply(msg);
+                                        },
+                                      ),
+                                    ],
+                                  );
+                                },
+                              ),
                             );
                           },
+                          loading: () =>
+                              const Center(child: CircularProgressIndicator()),
+                          error: (err, stack) => Center(child: Text('Error: $err')),
                         ),
-                        );
-                      },
-                      loading: () =>
-                          const Center(child: CircularProgressIndicator()),
-                      error: (err, stack) => Center(child: Text('Error: $err')),
-                    ),
+                      ),
+                      if (_showMentions) _buildMentionsList(),
+                      _buildInputArea(),
+                    ],
                   ),
-                  if (_showMentions) _buildMentionsList(),
-                  _buildInputArea(),
-                ],
-              ),
+                ),
+              ],
             ),
+            ChatDropOverlay(isVisible: _isDragging),
           ],
         ),
       ),
@@ -1449,9 +1467,9 @@ class _DirectMessagePageState extends ConsumerState<DirectMessagePage> {
                 margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: context.adaptiveCard,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.grey.shade300),
+                  border: Border.all(color: context.adaptiveBorder),
                   boxShadow: [
                     BoxShadow(
                       color: Colors.black.withValues(alpha: 0.05),
@@ -1462,11 +1480,23 @@ class _DirectMessagePageState extends ConsumerState<DirectMessagePage> {
                 ),
                 child: Row(
                   children: [
-                    Icon(
-                      _getFileIcon(_selectedFile!.extension),
-                      size: 32,
-                      color: AppColors.primary,
-                    ),
+                    if (_selectedFile!.bytes != null &&
+                        ['png', 'jpg', 'jpeg', 'webp', 'gif'].contains((_selectedFile!.extension ?? (_selectedFile!.name.contains('.') ? _selectedFile!.name.split('.').last : '')).toLowerCase()))
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Image.memory(
+                          _selectedFile!.bytes!,
+                          width: 44,
+                          height: 44,
+                          fit: BoxFit.cover,
+                        ),
+                      )
+                    else
+                      Icon(
+                        _getFileIcon(_selectedFile!.extension ?? (_selectedFile!.name.contains('.') ? _selectedFile!.name.split('.').last : null)),
+                        size: 32,
+                        color: AppColors.primary,
+                      ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Column(
@@ -1474,9 +1504,10 @@ class _DirectMessagePageState extends ConsumerState<DirectMessagePage> {
                         children: [
                           Text(
                             _selectedFile!.name,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontWeight: FontWeight.w600,
                               fontSize: 14,
+                              color: context.adaptiveSlate900,
                             ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
@@ -1484,9 +1515,9 @@ class _DirectMessagePageState extends ConsumerState<DirectMessagePage> {
                           if (_selectedFile!.size > 0)
                             Text(
                               '${(_selectedFile!.size / 1024).toStringAsFixed(1)} KB',
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 12,
-                                color: AppColors.slate500,
+                                color: context.adaptiveSlate500,
                               ),
                             ),
                         ],
@@ -1500,9 +1531,9 @@ class _DirectMessagePageState extends ConsumerState<DirectMessagePage> {
                       )
                     else
                       IconButton(
-                        icon: const Icon(
+                        icon: Icon(
                           Icons.close,
-                          color: AppColors.slate500,
+                          color: context.adaptiveSlate500,
                         ),
                         onPressed: _clearFile,
                         padding: EdgeInsets.zero,
@@ -1836,7 +1867,7 @@ class _DirectMessagePageState extends ConsumerState<DirectMessagePage> {
             filePath,
             fileBytes,
             fileOptions: FileOptions(
-              contentType: _getMimeType(file.extension),
+              contentType: _getMimeType(file.extension, file.name),
               upsert: false,
             ),
           );
@@ -1851,10 +1882,14 @@ class _DirectMessagePageState extends ConsumerState<DirectMessagePage> {
     }
   }
 
-  String _getMimeType(String? extension) {
-    if (extension == null) return 'application/octet-stream';
-    final ext = extension.toLowerCase();
-    switch (ext) {
+  String _getMimeType(String? extension, [String? fileName]) {
+    String? ext = extension;
+    if ((ext == null || ext.isEmpty) && fileName != null && fileName.contains('.')) {
+      ext = fileName.split('.').last;
+    }
+    if (ext == null) return 'application/octet-stream';
+    final cleanExt = ext.toLowerCase().replaceFirst('.', '');
+    switch (cleanExt) {
       case 'pdf': return 'application/pdf';
       case 'jpg':
       case 'jpeg': return 'image/jpeg';

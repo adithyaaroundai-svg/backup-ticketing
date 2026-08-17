@@ -34,6 +34,8 @@ import '../../../tickets/domain/entities/ticket.dart';
 import '../../../tickets/presentation/providers/ticket_provider.dart';
 import '../widgets/chat_attachment_renderer.dart';
 import '../widgets/chat_voice_recorder.dart';
+import '../widgets/chat_drop_overlay.dart';
+import '../../../../core/services/chat_drag_drop_paste_helper.dart';
 
 import '../../../dashboard/presentation/widgets/create_ticket_dialog.dart';
 
@@ -109,6 +111,8 @@ class _GlobalChatPageState extends ConsumerState<GlobalChatPage>
   bool _isUploadingFile = false;
   bool _isRecordingVoice = false;
   bool _isTextEmpty = true;
+  bool _isDragging = false;
+  ChatDragDropPasteSubscription? _dragDropPasteSub;
 
   void _insertFormatting(String prefix, String suffix) {
     final text = _messageCtrl.text;
@@ -280,7 +284,6 @@ class _GlobalChatPageState extends ConsumerState<GlobalChatPage>
     super.initState();
 
     // Preload read receipts cache for instant access
-
     ReadReceiptsTracker.preload();
 
     _messageCtrl.addListener(_onTextChanged);
@@ -293,6 +296,22 @@ class _GlobalChatPageState extends ConsumerState<GlobalChatPage>
     )..repeat(reverse: true);
     _breathingAnimation = Tween<double>(begin: 1.0, end: 1.1).animate(
       CurvedAnimation(parent: _breathingController, curve: Curves.easeInOut),
+    );
+
+    _dragDropPasteSub = registerChatDragDropAndPaste(
+      onFileReceived: (file) {
+        if (!mounted) return;
+        setState(() {
+          _selectedFile = file;
+        });
+        _messageFocusNode.requestFocus();
+      },
+      onDragStateChanged: (isDragging) {
+        if (!mounted) return;
+        if (_isDragging != isDragging) {
+          setState(() => _isDragging = isDragging);
+        }
+      },
     );
   }
 
@@ -352,14 +371,11 @@ class _GlobalChatPageState extends ConsumerState<GlobalChatPage>
 
   @override
   void dispose() {
+    _dragDropPasteSub?.cancel();
     _messageCtrl.dispose();
     _messageFocusNode.dispose();
-
     _scrollCtrl.dispose();
-
-
     _breathingController.dispose();
-
     super.dispose();
   }
 
@@ -780,14 +796,16 @@ class _GlobalChatPageState extends ConsumerState<GlobalChatPage>
           ),
         ),
 
-        body: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+        body: Stack(
           children: [
-            Expanded(
-              child: Column(
-                children: [
-                  Expanded(
-                    child: messagesAsync.when(
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(
+                  child: Column(
+                    children: [
+                      Expanded(
+                        child: messagesAsync.when(
                       data: (messages) {
                         if (messages.isEmpty) {
                           return Center(
@@ -973,8 +991,11 @@ class _GlobalChatPageState extends ConsumerState<GlobalChatPage>
             ),
           ],
         ),
-      ),
-    );
+        ChatDropOverlay(isVisible: _isDragging),
+      ],
+    ),
+  ),
+);
   }
 
   bool _isSameDay(DateTime d1, DateTime d2) {
@@ -1327,11 +1348,23 @@ class _GlobalChatPageState extends ConsumerState<GlobalChatPage>
                 ),
                 child: Row(
                   children: [
-                    Icon(
-                      _getFileIcon(_selectedFile!.extension),
-                      size: 32,
-                      color: AppColors.primary,
-                    ),
+                    if (_selectedFile!.bytes != null &&
+                        ['png', 'jpg', 'jpeg', 'webp', 'gif'].contains((_selectedFile!.extension ?? '').toLowerCase()))
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Image.memory(
+                          _selectedFile!.bytes!,
+                          width: 44,
+                          height: 44,
+                          fit: BoxFit.cover,
+                        ),
+                      )
+                    else
+                      Icon(
+                        _getFileIcon(_selectedFile!.extension),
+                        size: 32,
+                        color: AppColors.primary,
+                      ),
                     SizedBox(width: 12),
                     Expanded(
                       child: Column(
@@ -1617,8 +1650,8 @@ class _GlobalChatPageState extends ConsumerState<GlobalChatPage>
                         ),
                 ),
                 ],
-            ],
-          ),
+              ],
+            ),
           ],
         ),
       ),

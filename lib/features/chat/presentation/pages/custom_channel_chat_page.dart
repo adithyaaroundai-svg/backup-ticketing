@@ -27,6 +27,9 @@ import '../widgets/markdown_text_editing_controller.dart';
 import '../widgets/add_members_page.dart';
 import '../widgets/chat_voice_recorder.dart';
 import '../widgets/video_message_widget.dart';
+import '../widgets/chat_attachment_renderer.dart';
+import '../widgets/chat_drop_overlay.dart';
+import '../../../../core/services/chat_drag_drop_paste_helper.dart';
 import '../../../../core/utils/download_helper.dart';
 import '../../../../core/services/zoho_launcher.dart';
 import '../../../../core/services/zoho_api_service.dart';
@@ -70,6 +73,8 @@ class _CustomChannelChatPageState extends ConsumerState<CustomChannelChatPage> {
   // File attachment state
   PlatformFile? _selectedFile;
   bool _isUploading = false;
+  bool _isDragging = false;
+  ChatDragDropPasteSubscription? _dragDropPasteSub;
 
   // Emoji / GIF picker state
   bool _showEmojiPicker = false;
@@ -131,6 +136,22 @@ class _CustomChannelChatPageState extends ConsumerState<CustomChannelChatPage> {
       // Mark channel as read when first opening the page
       markCustomChannelAsRead(ref, widget.channelId);
     });
+
+    _dragDropPasteSub = registerChatDragDropAndPaste(
+      onFileReceived: (file) {
+        if (!mounted) return;
+        setState(() {
+          _selectedFile = file;
+        });
+        _focusNode.requestFocus();
+      },
+      onDragStateChanged: (isDragging) {
+        if (!mounted) return;
+        if (_isDragging != isDragging) {
+          setState(() => _isDragging = isDragging);
+        }
+      },
+    );
   }
 
   DateTime? _lastMarkedReadAt;
@@ -157,6 +178,7 @@ class _CustomChannelChatPageState extends ConsumerState<CustomChannelChatPage> {
 
   @override
   void dispose() {
+    _dragDropPasteSub?.cancel();
     _messageCtrl.dispose();
     _scrollCtrl.dispose();
     _focusNode.dispose();
@@ -1310,10 +1332,12 @@ class _CustomChannelChatPageState extends ConsumerState<CustomChannelChatPage> {
             ]
           ],
         ),
-        body: Column(
+        body: Stack(
           children: [
-            Expanded(
-              child: messagesAsync.when(
+            Column(
+              children: [
+                Expanded(
+                  child: messagesAsync.when(
                 data: (messages) {
                   _markVisibleMessagesRead(messages);
                   if (messages.isEmpty) {
@@ -1593,7 +1617,19 @@ class _CustomChannelChatPageState extends ConsumerState<CustomChannelChatPage> {
                 ),
                 child: Row(
                   children: [
-                    Icon(_getFileIcon(_selectedFile!.extension), size: 32, color: AppColors.primary),
+                    if (_selectedFile!.bytes != null &&
+                        ['png', 'jpg', 'jpeg', 'webp', 'gif'].contains((_selectedFile!.extension ?? '').toLowerCase()))
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Image.memory(
+                          _selectedFile!.bytes!,
+                          width: 44,
+                          height: 44,
+                          fit: BoxFit.cover,
+                        ),
+                      )
+                    else
+                      Icon(_getFileIcon(_selectedFile!.extension), size: 32, color: AppColors.primary),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Column(
@@ -1784,8 +1820,11 @@ class _CustomChannelChatPageState extends ConsumerState<CustomChannelChatPage> {
             ),
           ],
         ),
-      ),
-    );
+        ChatDropOverlay(isVisible: _isDragging),
+      ],
+    ),
+  ),
+);
   }
 }
 
@@ -2126,90 +2165,13 @@ class _ChatBubbleState extends ConsumerState<_ChatBubble> {
                               ],
                             ),
                             if (message.fileUrl != null && !isDeleted)
-                              if (message.fileType?.toLowerCase() == 'gif')
-                                // Render GIF as animated inline image
-                                ClipRRect(
-                                  borderRadius: BorderRadius.circular(8),
-                                  child: Image.network(
-                                    message.fileUrl!,
-                                    width: 200,
-                                    fit: BoxFit.cover,
-                                    loadingBuilder: (_, child, progress) => progress == null
-                                        ? child
-                                        : SizedBox(
-                                            width: 200,
-                                            height: 120,
-                                            child: Center(
-                                              child: CircularProgressIndicator(
-                                                strokeWidth: 2,
-                                                value: progress.expectedTotalBytes != null
-                                                    ? progress.cumulativeBytesLoaded / progress.expectedTotalBytes!
-                                                    : null,
-                                              ),
-                                            ),
-                                          ),
-                                    errorBuilder: (_, __, ___) => Container(
-                                      width: 200,
-                                      height: 80,
-                                      decoration: BoxDecoration(
-                                        color: Colors.grey.shade200,
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                      child: const Center(child: Icon(Icons.gif, size: 32, color: AppColors.slate400)),
-                                    ),
-                                  ),
-                                )
-                               else if (['mp4', 'mov', 'avi', 'mkv'].contains(message.fileType?.toLowerCase()))
-                                 Padding(
-                                   padding: const EdgeInsets.only(top: 4),
-                                   child: VideoMessageWidget(
-                                     videoUrl: message.fileUrl!,
-                                     fileName: message.fileName ?? 'video',
-                                     onDownload: () => downloadFileDirectly(message.fileUrl!, message.fileName ?? 'video'),
-                                   ),
-                                 )
-                              else
-                                GestureDetector(
-                                  onTap: () async {
-                                    final uri = Uri.parse(message.fileUrl!);
-                                    try {
-                                      await url_launcher.launchUrl(
-                                        uri,
-                                        mode: url_launcher.LaunchMode.externalApplication,
-                                      );
-                                    } catch (e) {
-                                      debugPrint('Could not launch ${message.fileUrl}: $e');
-                                    }
-                                  },
-                                  child: Container(
-                                    margin: const EdgeInsets.only(top: 4),
-                                    padding: const EdgeInsets.all(8),
-                                    decoration: BoxDecoration(
-                                      color: Colors.white,
-                                      borderRadius: BorderRadius.circular(6),
-                                      border: Border.all(color: Colors.grey.shade300),
-                                    ),
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Icon(_getFileIcon(message.fileType),
-                                            size: 16, color: AppColors.slate500),
-                                        const SizedBox(width: 6),
-                                        Flexible(
-                                          child: Text(
-                                            message.fileName ?? 'File',
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: const TextStyle(fontSize: 12),
-                                          ),
-                                        ),
-                                        const SizedBox(width: 6),
-                                        Icon(LucideIcons.download,
-                                            size: 14, color: AppColors.slate500),
-                                      ],
-                                    ),
-                                  ),
+                              Padding(
+                                padding: const EdgeInsets.only(top: 4),
+                                child: ChatAttachmentRenderer(
+                                  message: message,
+                                  isMe: isMe,
                                 ),
+                              ),
                           ],
                         ),
                       ),

@@ -28,6 +28,7 @@ import '../../../features/deals/presentation/providers/deals_provider.dart';
 import '../../../features/sales/presentation/providers/lead_provider.dart';
 import '../../services/reminder_sound_service.dart';
 import '../../services/chat_sound_service.dart';
+import '../../constants/app_version.dart';
 // -- Layout State Providers ---------------------------------------------------
 class TicketPaneOpenNotifier extends Notifier<bool> {
   @override
@@ -941,13 +942,31 @@ class _TopNav extends ConsumerWidget {
                   ),
                 ),
                 const SizedBox(width: 8),
-                const Text(
-                  'TallyCare',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                  ),
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Text(
+                      'TallyCare',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.bold,
+                        height: 1.1,
+                      ),
+                    ),
+                    Text(
+                      AppVersion.version,
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.65),
+                        fontSize: 9.5,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 0.3,
+                        height: 1.1,
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),

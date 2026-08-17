@@ -21,8 +21,9 @@ class GlobalChatNotificationService {
       requestWebNotificationPermission();
     }
 
+    final channelName = 'public:chat_messages_global_${currentUserId}_${DateTime.now().millisecondsSinceEpoch}';
     _subscription = Supabase.instance.client
-        .channel('public:chat_messages_global')
+        .channel(channelName)
         .onPostgresChanges(
           event: PostgresChangeEvent.insert,
           schema: 'public',
@@ -31,7 +32,12 @@ class GlobalChatNotificationService {
             _handleNewMessage(payload.newRecord, ref);
           },
         )
-        .subscribe();
+        .subscribe((status, [error]) {
+          debugPrint('GlobalChatNotificationService Realtime status: $status');
+          if (error != null) {
+            debugPrint('GlobalChatNotificationService Realtime error: $error');
+          }
+        });
   }
 
   static void dispose() {
@@ -47,6 +53,8 @@ class GlobalChatNotificationService {
     final content = record['content']?.toString() ?? 'New Message';
     final senderName = record['sender_name']?.toString() ?? 'Someone';
 
+    debugPrint('GlobalChatNotificationService received message in channel: $channel from: $senderName');
+
     // Don't notify if the user is the sender
     if (senderId == _currentUserId) return;
     
@@ -59,11 +67,21 @@ class GlobalChatNotificationService {
         channel != 'all-aroundtally' && 
         channel != 'dm') {
       try {
-        final response = await Supabase.instance.client
-            .from('custom_channels')
-            .select('is_private, created_by, channel_members(user_id)')
-            .or('id.eq.$channel,name.eq.$channel')
-            .maybeSingle();
+        final isUuid = RegExp(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$').hasMatch(channel);
+        final dynamic response;
+        if (isUuid) {
+          response = await Supabase.instance.client
+              .from('custom_channels')
+              .select('id, is_private, created_by, channel_members(user_id)')
+              .eq('id', channel)
+              .maybeSingle();
+        } else {
+          response = await Supabase.instance.client
+              .from('custom_channels')
+              .select('id, is_private, created_by, channel_members(user_id)')
+              .eq('name', channel)
+              .maybeSingle();
+        }
             
         if (response != null) {
           final isPrivate = response['is_private'] as bool? ?? false;
@@ -75,11 +93,9 @@ class GlobalChatNotificationService {
               if (!isMember) return;
             }
           }
-        } else {
-          return; // Channel not found, don't notify
         }
       } catch (e) {
-        return; // Safe side: if error, don't notify
+        debugPrint('GlobalChatNotificationService channel check error: $e');
       }
     }
 

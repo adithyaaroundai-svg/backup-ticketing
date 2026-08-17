@@ -25,6 +25,8 @@ import '../../domain/entities/chat_message.dart';
 import '../../../tickets/presentation/providers/ticket_provider.dart';
 import '../widgets/chat_voice_recorder.dart';
 import '../widgets/video_message_widget.dart';
+import '../widgets/chat_drop_overlay.dart';
+import '../../../../core/services/chat_drag_drop_paste_helper.dart';
 
 IconData _getFileIcon(String? fileType) {
   if (fileType == null) return Icons.insert_drive_file;
@@ -65,6 +67,8 @@ class _AllAroundTallyChatPageState extends ConsumerState<AllAroundTallyChatPage>
   // File attachment state
   PlatformFile? _selectedFile;
   bool _isUploading = false;
+  bool _isDragging = false;
+  ChatDragDropPasteSubscription? _dragDropPasteSub;
 
   // Emoji / GIF picker state
   bool _showEmojiPicker = false;
@@ -123,12 +127,29 @@ class _AllAroundTallyChatPageState extends ConsumerState<AllAroundTallyChatPage>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _scrollToBottom();
     });
+
+    _dragDropPasteSub = registerChatDragDropAndPaste(
+      onFileReceived: (file) {
+        if (!mounted) return;
+        setState(() {
+          _selectedFile = file;
+        });
+        _focusNode.requestFocus();
+      },
+      onDragStateChanged: (isDragging) {
+        if (!mounted) return;
+        if (_isDragging != isDragging) {
+          setState(() => _isDragging = isDragging);
+        }
+      },
+    );
   }
 
   DateTime? _lastMarkedReadAt;
 
   @override
   void dispose() {
+    _dragDropPasteSub?.cancel();
     _ctrl.dispose();
     _scrollCtrl.dispose();
     _focusNode.dispose();
@@ -608,10 +629,12 @@ class _AllAroundTallyChatPageState extends ConsumerState<AllAroundTallyChatPage>
           elevation: 0,
 
         ),
-        body: Column(
+        body: Stack(
           children: [
-            Expanded(
-              child: messagesAsync.when(
+            Column(
+              children: [
+                Expanded(
+                  child: messagesAsync.when(
                 data: (messages) {
                   _markVisibleMessagesRead(messages);
                   if (messages.isEmpty) {
@@ -899,6 +922,67 @@ class _AllAroundTallyChatPageState extends ConsumerState<AllAroundTallyChatPage>
             // Mentions List
             if (_showMentions) _buildMentionsList(),
             
+            // Selected File Preview
+            if (_selectedFile != null)
+              Container(
+                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: context.isDarkMode ? context.adaptiveCard : Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: context.isDarkMode ? context.adaptiveSlate800 : Colors.grey.shade300),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.05),
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    if (_selectedFile!.bytes != null &&
+                        ['png', 'jpg', 'jpeg', 'webp', 'gif'].contains((_selectedFile!.extension ?? '').toLowerCase()))
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Image.memory(
+                          _selectedFile!.bytes!,
+                          width: 44,
+                          height: 44,
+                          fit: BoxFit.cover,
+                        ),
+                      )
+                    else
+                      Icon(_getFileIcon(_selectedFile!.extension), size: 32, color: AppColors.primary),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _selectedFile!.name,
+                            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          if (_selectedFile!.size > 0)
+                            Text(
+                              '${(_selectedFile!.size / 1024).toStringAsFixed(1)} KB',
+                              style: TextStyle(fontSize: 12, color: context.adaptiveSlate500),
+                            ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      icon: Icon(Icons.close, color: context.adaptiveSlate500),
+                      onPressed: () => setState(() => _selectedFile = null),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                    ),
+                  ],
+                ),
+              ),
+
             // Input area
             Container(
               padding: EdgeInsets.symmetric(
@@ -1055,8 +1139,11 @@ class _AllAroundTallyChatPageState extends ConsumerState<AllAroundTallyChatPage>
             ),
           ],
         ),
-      ),
-    );
+        ChatDropOverlay(isVisible: _isDragging),
+      ],
+    ),
+  ),
+);
   }
 }
 
@@ -1397,43 +1484,166 @@ class _ChatBubbleState extends ConsumerState<_ChatBubble> {
                                   onTap: () {
                                     showDialog(
                                       context: context,
-                                      barrierColor: Colors.black.withValues(alpha: 0.9),
-                                      builder: (context) => Material(
-                                        color: Colors.transparent,
-                                        child: Stack(
-                                          fit: StackFit.expand,
-                                          children: [
-                                            Center(
-                                              child: InteractiveViewer(
-                                                panEnabled: true,
-                                                minScale: 0.5,
-                                                maxScale: 4,
-                                                child: Image.network(
-                                                  message.fileUrl!,
-                                                  fit: BoxFit.contain,
+                                      barrierColor: Colors.black.withValues(alpha: 0.65),
+                                      builder: (ctx) {
+                                        final screenSize = MediaQuery.sizeOf(ctx);
+                                        final maxW = screenSize.width < 700
+                                            ? screenSize.width * 0.96
+                                            : (screenSize.width * 0.90).clamp(600.0, 1280.0);
+                                        final maxH = screenSize.height < 700
+                                            ? screenSize.height * 0.94
+                                            : (screenSize.height * 0.88).clamp(600.0, 920.0);
+
+                                        return GestureDetector(
+                                          behavior: HitTestBehavior.opaque,
+                                          onTap: () => Navigator.of(ctx).pop(),
+                                          child: Material(
+                                            color: Colors.transparent,
+                                            child: Center(
+                                              child: GestureDetector(
+                                                onTap: () {},
+                                                child: Container(
+                                                  width: maxW,
+                                                  height: maxH,
+                                                  margin: const EdgeInsets.all(24),
+                                                  decoration: BoxDecoration(
+                                                    color: const Color(0xFF0F172A),
+                                                    borderRadius: BorderRadius.circular(16),
+                                                    border: Border.all(
+                                                      color: Colors.white.withValues(alpha: 0.15),
+                                                    ),
+                                                    boxShadow: [
+                                                      BoxShadow(
+                                                        color: Colors.black.withValues(alpha: 0.5),
+                                                        blurRadius: 24,
+                                                        offset: const Offset(0, 8),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                  clipBehavior: Clip.antiAlias,
+                                                  child: Column(
+                                                    children: [
+                                                      // Header bar
+                                                      Container(
+                                                        padding: const EdgeInsets.symmetric(
+                                                          horizontal: 16,
+                                                          vertical: 10,
+                                                        ),
+                                                        decoration: BoxDecoration(
+                                                          color: const Color(0xFF1E293B),
+                                                          border: Border(
+                                                            bottom: BorderSide(
+                                                              color: Colors.white.withValues(alpha: 0.08),
+                                                            ),
+                                                          ),
+                                                        ),
+                                                        child: Row(
+                                                          children: [
+                                                            const Icon(
+                                                              Icons.image,
+                                                              size: 18,
+                                                              color: AppColors.primary,
+                                                            ),
+                                                            const SizedBox(width: 10),
+                                                            Expanded(
+                                                              child: Text(
+                                                                message.fileName ?? 'Image Preview',
+                                                                style: const TextStyle(
+                                                                  color: Colors.white,
+                                                                  fontSize: 13,
+                                                                  fontWeight: FontWeight.w600,
+                                                                ),
+                                                                maxLines: 1,
+                                                                overflow: TextOverflow.ellipsis,
+                                                              ),
+                                                            ),
+                                                            IconButton(
+                                                              icon: const Icon(
+                                                                Icons.download,
+                                                                color: Colors.white70,
+                                                                size: 20,
+                                                              ),
+                                                              tooltip: 'Download',
+                                                              constraints: const BoxConstraints(),
+                                                              padding: const EdgeInsets.all(6),
+                                                              onPressed: () => _downloadFile(
+                                                                message.fileUrl!,
+                                                                message.fileName ?? 'image',
+                                                              ),
+                                                            ),
+                                                            const SizedBox(width: 8),
+                                                            IconButton(
+                                                              icon: const Icon(
+                                                                Icons.close,
+                                                                color: Colors.white70,
+                                                                size: 20,
+                                                              ),
+                                                              tooltip: 'Close',
+                                                              constraints: const BoxConstraints(),
+                                                              padding: const EdgeInsets.all(6),
+                                                              onPressed: () => Navigator.of(ctx).pop(),
+                                                            ),
+                                                          ],
+                                                        ),
+                                                      ),
+                                                      // Image body
+                                                      Expanded(
+                                                        child: Container(
+                                                          color: const Color(0xFF090D16),
+                                                          padding: const EdgeInsets.all(12),
+                                                          child: Center(
+                                                            child: InteractiveViewer(
+                                                              panEnabled: true,
+                                                              minScale: 0.5,
+                                                              maxScale: 4.0,
+                                                              child: Image.network(
+                                                                message.fileUrl!,
+                                                                fit: BoxFit.contain,
+                                                                loadingBuilder: (_, child, progress) =>
+                                                                    progress == null
+                                                                        ? child
+                                                                        : const Center(
+                                                                            child: CircularProgressIndicator(
+                                                                              strokeWidth: 2,
+                                                                              valueColor:
+                                                                                  AlwaysStoppedAnimation<Color>(
+                                                                                Colors.white70,
+                                                                              ),
+                                                                            ),
+                                                                          ),
+                                                                errorBuilder: (_, __, ___) => const Center(
+                                                                  child: Column(
+                                                                    mainAxisSize: MainAxisSize.min,
+                                                                    children: [
+                                                                      Icon(
+                                                                        Icons.broken_image,
+                                                                        color: Colors.white38,
+                                                                        size: 48,
+                                                                      ),
+                                                                      SizedBox(height: 8),
+                                                                      Text(
+                                                                        'Failed to load image',
+                                                                        style: TextStyle(
+                                                                          color: Colors.white54,
+                                                                          fontSize: 13,
+                                                                        ),
+                                                                      ),
+                                                                    ],
+                                                                  ),
+                                                                ),
+                                                              ),
+                                                            ),
+                                                          ),
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
                                                 ),
                                               ),
                                             ),
-                                            Positioned(
-                                              top: 40,
-                                              right: 20,
-                                              child: Row(
-                                                children: [
-                                                  IconButton(
-                                                    icon: const Icon(Icons.download, color: Colors.white, size: 30),
-                                                    onPressed: () => _downloadFile(message.fileUrl!, message.fileName ?? 'image'),
-                                                  ),
-                                                  const SizedBox(width: 16),
-                                                  IconButton(
-                                                    icon: const Icon(Icons.close, color: Colors.white, size: 30),
-                                                    onPressed: () => Navigator.of(context).pop(),
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
+                                          ),
+                                        );
+                                      },
                                     );
                                   },
                                   child: ClipRRect(
