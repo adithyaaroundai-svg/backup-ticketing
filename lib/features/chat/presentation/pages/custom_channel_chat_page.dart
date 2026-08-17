@@ -22,7 +22,9 @@ import '../providers/custom_channel_provider.dart';
 import '../../domain/entities/chat_message.dart';
 import '../../domain/entities/custom_channel.dart';
 import '../../data/repositories/chat_repository.dart';
+import '../../data/repositories/custom_channel_repository.dart';
 import '../widgets/markdown_text_editing_controller.dart';
+import '../widgets/add_members_page.dart';
 import '../widgets/chat_voice_recorder.dart';
 import '../widgets/video_message_widget.dart';
 import '../../../../core/utils/download_helper.dart';
@@ -125,6 +127,8 @@ class _CustomChannelChatPageState extends ConsumerState<CustomChannelChatPage> {
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _scrollToBottom();
+      // Mark channel as read when first opening the page
+      markCustomChannelAsRead(ref, widget.channelId);
     });
   }
 
@@ -458,7 +462,7 @@ class _CustomChannelChatPageState extends ConsumerState<CustomChannelChatPage> {
     if (currentUser == null) return;
 
     _messageCtrl.clear();
-    _focusNode.unfocus();
+    _focusNode.requestFocus();
 
     String? fileUrl;
     String? fileName;
@@ -542,22 +546,38 @@ class _CustomChannelChatPageState extends ConsumerState<CustomChannelChatPage> {
       case 'jpeg': return 'image/jpeg';
       case 'png': return 'image/png';
       case 'gif': return 'image/gif';
+      case 'webp': return 'image/webp';
       case 'mp4': return 'video/mp4';
       case 'mov': return 'video/quicktime';
       case 'avi': return 'video/x-msvideo';
+      case 'mkv': return 'video/x-matroska';
+      case 'webm': return 'video/webm';
       case 'mp3': return 'audio/mpeg';
       case 'wav': return 'audio/wav';
+      case 'm4a': return 'audio/mp4';
+      case 'ogg': return 'audio/ogg';
       case 'doc': return 'application/msword';
       case 'docx': return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
       case 'xls': return 'application/vnd.ms-excel';
       case 'xlsx': return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+      case 'ppt': return 'application/vnd.ms-powerpoint';
+      case 'pptx': return 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
+      case 'txt': return 'text/plain';
+      case 'csv': return 'text/csv';
       case 'zip': return 'application/zip';
       case 'rar': return 'application/vnd.rar';
+      case '7z': return 'application/x-7z-compressed';
+      case 'tar': return 'application/x-tar';
+      case 'apk': return 'application/vnd.android.package-archive';
+      case 'exe': return 'application/x-msdownload';
+      case 'dmg': return 'application/x-apple-diskimage';
+      case 'json': return 'application/json';
+      case 'xml': return 'application/xml';
+      case 'html': return 'text/html';
+      case 'svg': return 'image/svg+xml';
       default: return 'application/octet-stream';
     }
   }
-
-  /// Shows platform picker then calls Teams or Zoho Cliq for a channel group call.
   Future<void> _launchGroupCall(CustomChannel channel, {required bool video}) async {
     final agentsAsync = ref.read(agentsListProvider);
     final agents = agentsAsync.maybeWhen(
@@ -881,52 +901,264 @@ class _CustomChannelChatPageState extends ConsumerState<CustomChannelChatPage> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          '${members.length} Members',
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.slate800,
-                          ),
+                        // Header row: member count + Add Members button
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              '${members.length} Members',
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.slate800,
+                              ),
+                            ),
+                            TextButton.icon(
+                              style: TextButton.styleFrom(
+                                foregroundColor: AppColors.primary,
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                  side: const BorderSide(color: AppColors.primary),
+                                ),
+                              ),
+                              icon: const Icon(Icons.person_add_outlined, size: 16),
+                              label: const Text('Add Members', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                              onPressed: () async {
+                                final existingIds = Set<String>.from(channel.memberIds);
+                                final selected = await Navigator.push<Set<String>>(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => AddMembersPage(
+                                      existingMemberIds: existingIds,
+                                    ),
+                                  ),
+                                );
+                                if (selected != null && selected.isNotEmpty) {
+                                  try {
+                                    await ref
+                                        .read(customChannelRepositoryProvider)
+                                        .addMembersToChannel(channel.id, selected.toList());
+                                    ref.invalidate(customChannelsProvider);
+                                    if (context.mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Text('${selected.length} member${selected.length == 1 ? '' : 's'} added'),
+                                          backgroundColor: Colors.green,
+                                        ),
+                                      );
+                                      Navigator.pop(context); // close info page so it refreshes
+                                    }
+                                  } catch (e) {
+                                    if (context.mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Text('Failed to add members: $e'),
+                                          backgroundColor: Colors.red,
+                                        ),
+                                      );
+                                    }
+                                  }
+                                }
+                              },
+                            ),
+                          ],
                         ),
-                        const SizedBox(height: 16),
-                        ListView.builder(
+                        const SizedBox(height: 12),
+                        ListView.separated(
                           shrinkWrap: true,
                           physics: const NeverScrollableScrollPhysics(),
                           itemCount: members.length,
+                          separatorBuilder: (_, __) => const Divider(height: 1, color: AppColors.border),
                           itemBuilder: (context, index) {
                             final member = members[index];
+                            final memberId = member['id'] as String;
+                            final memberName = member['name'] as String;
+                            final memberRole = member['role'] as String;
+                            final isCreator = memberId == channel.createdBy;
+                            final currentUserId = ref.read(authProvider)?.id ?? '';
+                            final isCurrentUserAdmin = ref.read(authProvider)?.isAdmin == true;
+                            final canRemove = (isCurrentUserAdmin || currentUserId == channel.createdBy) && !isCreator;
+
                             return ListTile(
                               contentPadding: EdgeInsets.zero,
                               leading: CircleAvatar(
                                 backgroundColor: AppColors.primary.withAlpha(26),
                                 child: Text(
-                                  (member['name'] as String)[0].toUpperCase(),
+                                  memberName[0].toUpperCase(),
                                   style: const TextStyle(
                                     color: AppColors.primary,
                                     fontWeight: FontWeight.bold,
                                   ),
                                 ),
                               ),
-                              title: Text(
-                                member['name'] as String,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w500,
-                                  fontSize: 14,
-                                ),
+                              title: Row(
+                                children: [
+                                  Text(
+                                    memberName,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w500,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                  if (isCreator) ...[
+                                    const SizedBox(width: 6),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: AppColors.primary.withAlpha(20),
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: const Text(
+                                        'Creator',
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w600,
+                                          color: AppColors.primary,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ],
                               ),
-                              subtitle: (member['role'] as String).isNotEmpty
-                                ? Text(
-                                    member['role'] as String,
-                                    style: const TextStyle(fontSize: 12, color: AppColors.slate500),
-                                  )
-                                : null,
+                              subtitle: memberRole.isNotEmpty
+                                  ? Text(
+                                      memberRole,
+                                      style: const TextStyle(fontSize: 12, color: AppColors.slate500),
+                                    )
+                                  : null,
+                              trailing: canRemove
+                                  ? IconButton(
+                                      icon: const Icon(Icons.remove_circle_outline, color: Colors.redAccent, size: 20),
+                                      tooltip: 'Remove member',
+                                      onPressed: () async {
+                                        final confirm = await showDialog<bool>(
+                                          context: context,
+                                          builder: (ctx) => AlertDialog(
+                                            title: const Text('Remove Member'),
+                                            content: Text('Remove $memberName from this channel?'),
+                                            actions: [
+                                              TextButton(
+                                                onPressed: () => Navigator.pop(ctx, false),
+                                                child: const Text('Cancel'),
+                                              ),
+                                              TextButton(
+                                                onPressed: () => Navigator.pop(ctx, true),
+                                                child: const Text('Remove', style: TextStyle(color: Colors.red)),
+                                              ),
+                                            ],
+                                          ),
+                                        );
+                                        if (confirm == true) {
+                                          try {
+                                            await ref
+                                                .read(customChannelRepositoryProvider)
+                                                .removeMemberFromChannel(channel.id, memberId);
+                                            ref.invalidate(customChannelsProvider);
+                                            if (context.mounted) {
+                                              ScaffoldMessenger.of(context).showSnackBar(
+                                                SnackBar(
+                                                  content: Text('$memberName removed'),
+                                                  backgroundColor: Colors.orange,
+                                                ),
+                                              );
+                                              Navigator.pop(context);
+                                            }
+                                          } catch (e) {
+                                            if (context.mounted) {
+                                              ScaffoldMessenger.of(context).showSnackBar(
+                                                SnackBar(
+                                                  content: Text('Failed to remove: $e'),
+                                                  backgroundColor: Colors.red,
+                                                ),
+                                              );
+                                            }
+                                          }
+                                        }
+                                      },
+                                    )
+                                  : null,
                             );
                           },
                         ),
                       ],
                     ),
                   ),
+                  // Leave Channel button (not shown to the channel creator)
+                  Builder(builder: (ctx) {
+                    final currentUserId = ref.read(authProvider)?.id ?? '';
+                    final isCreator = currentUserId == channel.createdBy;
+                    if (isCreator) return const SizedBox.shrink();
+                    return Column(
+                      children: [
+                        const SizedBox(height: 8),
+                        Container(
+                          color: Colors.white,
+                          width: double.infinity,
+                          child: ListTile(
+                            onTap: () async {
+                              final confirm = await showDialog<bool>(
+                                context: ctx,
+                                builder: (dlgCtx) => AlertDialog(
+                                  title: const Text('Leave Channel'),
+                                  content: Text(
+                                    'Are you sure you want to leave "${channel.name}"? You will no longer receive messages from this channel.',
+                                  ),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () => Navigator.pop(dlgCtx, false),
+                                      child: const Text('Cancel'),
+                                    ),
+                                    TextButton(
+                                      onPressed: () => Navigator.pop(dlgCtx, true),
+                                      child: const Text(
+                                        'Leave',
+                                        style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                              if (confirm == true) {
+                                try {
+                                  await ref
+                                      .read(customChannelRepositoryProvider)
+                                      .removeMemberFromChannel(channel.id, currentUserId);
+                                  ref.invalidate(customChannelsProvider);
+                                  if (ctx.mounted) {
+                                    Navigator.pop(ctx); // close info page
+                                  }
+                                  if (context.mounted) {
+                                    Navigator.pop(context); // close channel chat page
+                                    context.go('/chat');    // go to global chat
+                                  }
+                                } catch (e) {
+                                  if (ctx.mounted) {
+                                    ScaffoldMessenger.of(ctx).showSnackBar(
+                                      SnackBar(
+                                        content: Text('Failed to leave channel: $e'),
+                                        backgroundColor: Colors.red,
+                                      ),
+                                    );
+                                  }
+                                }
+                              }
+                            },
+                            leading: const Icon(Icons.exit_to_app_rounded, color: Colors.red),
+                            title: const Text(
+                              'Leave Channel',
+                              style: TextStyle(
+                                color: Colors.red,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 15,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                      ],
+                    );
+                  }),
                 ],
               ),
             ),
@@ -962,6 +1194,8 @@ class _CustomChannelChatPageState extends ConsumerState<CustomChannelChatPage> {
             }
           });
         }
+        // Mark channel as read whenever we receive new messages while viewing it
+        markCustomChannelAsRead(ref, widget.channelId);
       }
     });
 
@@ -1400,14 +1634,18 @@ class _CustomChannelChatPageState extends ConsumerState<CustomChannelChatPage> {
                         child: Row(
                           children: [
                             Expanded(
-                              child: KeyboardListener(
-                                focusNode: FocusNode(),
-                                onKeyEvent: (event) {
+                              child: Focus(
+                                onKeyEvent: (node, event) {
                                   if (event is KeyDownEvent &&
-                                      event.logicalKey == LogicalKeyboardKey.enter &&
-                                      !HardwareKeyboard.instance.isShiftPressed) {
-                                    _sendMessage();
+                                      event.logicalKey == LogicalKeyboardKey.enter) {
+                                    if (HardwareKeyboard.instance.isShiftPressed) {
+                                      return KeyEventResult.ignored; // Shift+Enter = newline
+                                    } else {
+                                      _sendMessage();
+                                      return KeyEventResult.handled; // consume — no newline inserted
+                                    }
                                   }
+                                  return KeyEventResult.ignored;
                                 },
                                 child: TextField(
                                   controller: _messageCtrl,
@@ -1716,11 +1954,11 @@ class _ChatBubbleState extends ConsumerState<_ChatBubble> {
         child: MouseRegion(
           onEnter: (_) => setState(() => _hovered = true),
           onExit: (_) => setState(() => _hovered = false),
-        child: Container(
-        margin: const EdgeInsets.only(bottom: 4),
-        child: Align(
-          alignment: Alignment.centerLeft,
-          child: Stack(
+          child: Container(
+          margin: const EdgeInsets.only(bottom: 4),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: Stack(
             clipBehavior: Clip.none,
             children: [
             // Constrain bubble to max 75% of available width
@@ -1825,8 +2063,13 @@ class _ChatBubbleState extends ConsumerState<_ChatBubble> {
                                             fontSize: 14,
                                           ),
                                           linkStyle: TextStyle(
-                                            color: isMe ? Colors.white : Colors.blue,
+                                            color: context.isDarkMode
+                                                ? const Color(0xFF93C5FD)   // blue-300 readable on dark
+                                                : const Color(0xFF1D4ED8),  // blue-700 readable on light
                                             decoration: TextDecoration.underline,
+                                            decorationColor: context.isDarkMode
+                                                ? const Color(0xFF93C5FD)
+                                                : const Color(0xFF1D4ED8),
                                           ),
                                         ),
                                 ),

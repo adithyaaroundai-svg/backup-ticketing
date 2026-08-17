@@ -12,6 +12,7 @@ import '../../../auth/presentation/providers/auth_provider.dart';
 import '../../../tickets/presentation/providers/ticket_provider.dart';
 import '../../data/local/chat_cache_service.dart';
 import '../../data/local/chat_cache_constants.dart';
+import '../../../../core/services/chat_sound_service.dart';
 
 import 'dart:io';
 import 'package:http/http.dart' as http;
@@ -203,6 +204,19 @@ class ChatStream extends _$ChatStream {
       final currentList = state.value ?? [];
       if (!currentList.any((m) => m.id == newMsg.id)) {
         _updateState([...currentList, newMsg]);
+        
+        // Fire notification for custom channels (not support-chat or all-aroundtally)
+        final currentUserId = ref.read(authProvider)?.id;
+        final isFromCurrentUser = currentUserId != null && 
+            newMsg.senderId.trim().toLowerCase() == currentUserId.trim().toLowerCase();
+        
+        if (!isFromCurrentUser && 
+            channel != 'support-chat' && 
+            channel != 'all-aroundtally') {
+          // This is a custom channel message from someone else
+          ref.read(customChannelNewMessageEventProvider.notifier).notify(newMsg);
+          ChatSoundService.playPing();
+        }
       }
     } else if (payload.eventType == PostgresChangeEvent.update) {
       final updatedMsg = ChatMessage.fromJson(payload.newRecord);
@@ -684,8 +698,6 @@ class ChatNewMessageEvent extends _$ChatNewMessageEvent {
     final lastSeenAsync = ref.read(chatLastSeenProvider);
     final lastSeen = lastSeenAsync.value;
     if (lastSeen != null && !message.createdAt.toUtc().isAfter(lastSeen)) {
-      // Message is older than or equal to lastSeen — mark as notified so
-      // we never try again, but don't show a toast.
       _notifiedIds.add(message.id);
       return;
     }
@@ -697,6 +709,44 @@ class ChatNewMessageEvent extends _$ChatNewMessageEvent {
   void clear() => state = null;
 
   /// Call on logout to reset the notified-IDs set for the next user.
+  static void resetSession() => _notifiedIds.clear();
+}
+
+// ── DM new-message event — fires a toast for incoming direct messages ─────────
+@Riverpod(keepAlive: true)
+class DmNewMessageEvent extends _$DmNewMessageEvent {
+  static final Set<String> _notifiedIds = {};
+
+  @override
+  ChatMessage? build() => null;
+
+  void notify(ChatMessage message) {
+    if (_notifiedIds.contains(message.id)) return;
+    _notifiedIds.add(message.id);
+    state = message;
+  }
+
+  void clear() => state = null;
+
+  static void resetSession() => _notifiedIds.clear();
+}
+
+// ── Custom channel new-message event — fires a toast for custom channel messages
+@Riverpod(keepAlive: true)
+class CustomChannelNewMessageEvent extends _$CustomChannelNewMessageEvent {
+  static final Set<String> _notifiedIds = {};
+
+  @override
+  ChatMessage? build() => null;
+
+  void notify(ChatMessage message) {
+    if (_notifiedIds.contains(message.id)) return;
+    _notifiedIds.add(message.id);
+    state = message;
+  }
+
+  void clear() => state = null;
+
   static void resetSession() => _notifiedIds.clear();
 }
 
@@ -868,6 +918,136 @@ class AllAroundTallyNewMessageEvent extends _$AllAroundTallyNewMessageEvent {
 
   /// Call on logout to reset the notified-IDs set for the next user.
   static void resetSession() => _notifiedIds.clear();
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// Custom Channels — per-channel unread tracking (mirrors AllAroundTally pattern)
+// ════════════════════════════════════════════════════════════════════════════
+
+// ════════════════════════════════════════════════════════════════════════════
+// Custom Channels — per-channel unread tracking
+// Uses StateNotifier + Provider.family to avoid code-gen requirement
+// ════════════════════════════════════════════════════════════════════════════
+
+// ════════════════════════════════════════════════════════════════════════════
+// Custom Channels — per-channel unread tracking
+// ════════════════════════════════════════════════════════════════════════════
+
+/// Holds last-seen timestamps for all custom channels (keyed by channelId).
+class _CustomChannelLastSeenNotifier extends Notifier<Map<String, DateTime>> {
+  static const _keyPrefix = 'custom_channel_last_seen';
+
+  @override
+  Map<String, DateTime> build() => {};
+
+  /// Returns the last-seen time for [channelId], loading from prefs on first call.
+  Future<DateTime> getOrLoad(String channelId) async {
+    if (state.containsKey(channelId)) return state[channelId]!;
+
+    final myId = ref.read(authProvider)?.id;
+    if (myId == null) return DateTime.now().toUtc();
+
+    final prefs = await SharedPreferences.getInstance();
+    final key = '${_keyPrefix}_${channelId}_$myId';
+    final stored = prefs.getString(key);
+
+    if (stored != null) {
+      final dt = DateTime.parse(stored).toUtc();
+      state = {...state, channelId: dt};
+      return dt;
+    }
+
+    // First time — baseline to avoid false unread on first open
+    final messages = ref.read(chatStreamProvider(channelId)).asData?.value;
+    final DateTime baseline;
+    if (messages != null && messages.isNotEmpty) {
+      baseline = messages.last.createdAt.toUtc().add(const Duration(milliseconds: 500));
+    } else {
+      baseline = DateTime.now().toUtc();
+    }
+    await prefs.setString(key, baseline.toIso8601String());
+    state = {...state, channelId: baseline};
+    return baseline;
+  }
+
+  Future<void> markAsRead(String channelId) async {
+    final myId = ref.read(authProvider)?.id;
+    if (myId == null) return;
+
+    final messages = ref.read(chatStreamProvider(channelId)).asData?.value;
+    final DateTime ts;
+    if (messages != null && messages.isNotEmpty) {
+      ts = messages.last.createdAt.toUtc().add(const Duration(milliseconds: 500));
+    } else {
+      ts = DateTime.now().toUtc();
+    }
+
+    final current = state[channelId] ?? DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
+    if (ts.isAfter(current)) {
+      state = {...state, channelId: ts};
+    }
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final key = '${_keyPrefix}_${channelId}_$myId';
+      final existing = prefs.getString(key);
+      if (existing == null || ts.isAfter(DateTime.parse(existing).toUtc())) {
+        await prefs.setString(key, ts.toIso8601String());
+      }
+    } catch (_) {}
+  }
+}
+
+final customChannelLastSeenNotifierProvider =
+    NotifierProvider<_CustomChannelLastSeenNotifier, Map<String, DateTime>>(
+  _CustomChannelLastSeenNotifier.new,
+);
+
+/// Per-channel unread count. Watches the global last-seen map + messages.
+final customChannelUnreadCountProvider =
+    Provider.family<int, String>((ref, channelId) {
+  final myId = ref.watch(authProvider)?.id;
+  if (myId == null) return 0;
+
+  final messagesAsync = ref.watch(chatStreamProvider(channelId));
+  // Watch the whole map so we rebuild when any channel's lastSeen changes
+  final lastSeenMap = ref.watch(customChannelLastSeenNotifierProvider);
+
+  // If this channel's last-seen hasn't been loaded yet, trigger load and return 0
+  if (!lastSeenMap.containsKey(channelId)) {
+    // Fire-and-forget load — will update state and trigger a rebuild
+    Future.microtask(() =>
+        ref.read(customChannelLastSeenNotifierProvider.notifier).getOrLoad(channelId));
+    return 0;
+  }
+
+  final lastSeen = lastSeenMap[channelId];
+
+  return messagesAsync.maybeWhen(
+    data: (messages) {
+      if (messages.isEmpty) return 0;
+      final normalizedMyId = myId.trim().toLowerCase();
+      return messages.where((m) {
+        if (m.senderId.trim().toLowerCase() == normalizedMyId) return false;
+        if (m.isDeleted) return false;
+        if (lastSeen != null && !m.createdAt.toUtc().isAfter(lastSeen)) return false;
+        return true;
+      }).length;
+    },
+    orElse: () => 0,
+  );
+});
+
+/// Aggregates unread counts across a list of custom channel IDs.
+final totalCustomChannelUnreadProvider =
+    Provider.family<int, List<String>>((ref, channelIds) {
+  return channelIds.fold<int>(
+      0, (sum, id) => sum + ref.watch(customChannelUnreadCountProvider(id)));
+});
+
+/// Call this when the user opens a custom channel page to reset its badge.
+Future<void> markCustomChannelAsRead(WidgetRef ref, String channelId) async {
+  await ref.read(customChannelLastSeenNotifierProvider.notifier).markAsRead(channelId);
 }
 
 // ── Read receipts tracking (client-side) ─────────────────────────────────────
@@ -1724,6 +1904,22 @@ class DmConversationEngine extends Notifier<Map<String, DmConversationState>> {
       if (isInsert) {
         if (_seenMessageIds.contains(msg.id)) return;
         _seenMessageIds.add(msg.id);
+        
+        // Fire notification toast if this is an incoming message and conversation isn't open
+        if (msg.senderId == partnerId && !isOpen) {
+          _ref.read(dmNewMessageEventProvider.notifier).notify(msg);
+          
+          // Check for @mentions for special sound
+          final myFullName = _ref.read(authProvider)?.fullName ?? '';
+          final hasMention = myFullName.isNotEmpty && 
+              msg.content.contains('@$myFullName');
+          
+          if (hasMention) {
+            ChatSoundService.playMentionPing();
+          } else {
+            ChatSoundService.playPing();
+          }
+        }
       }
 
       final currentMap = state;

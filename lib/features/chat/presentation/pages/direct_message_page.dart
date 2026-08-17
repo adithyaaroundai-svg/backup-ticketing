@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'dart:ui';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import 'package:flutter/services.dart';
@@ -461,6 +462,8 @@ class _DirectMessagePageState extends ConsumerState<DirectMessagePage> {
     setState(() {
       _selectedFile = null;
     });
+
+    _messageFocusNode.requestFocus();
   }
 
   void _sendVoiceNote(String path, int duration) {
@@ -1784,6 +1787,7 @@ class _DirectMessagePageState extends ConsumerState<DirectMessagePage> {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.any,
         allowMultiple: false,
+        withData: kIsWeb,
       );
 
       if (result != null && result.files.isNotEmpty) {
@@ -1851,39 +1855,41 @@ class _DirectMessagePageState extends ConsumerState<DirectMessagePage> {
     if (extension == null) return 'application/octet-stream';
     final ext = extension.toLowerCase();
     switch (ext) {
-      case 'pdf':
-        return 'application/pdf';
+      case 'pdf': return 'application/pdf';
       case 'jpg':
-      case 'jpeg':
-        return 'image/jpeg';
-      case 'png':
-        return 'image/png';
-      case 'gif':
-        return 'image/gif';
-      case 'mp4':
-        return 'video/mp4';
-      case 'mov':
-        return 'video/quicktime';
-      case 'avi':
-        return 'video/x-msvideo';
-      case 'mp3':
-        return 'audio/mpeg';
-      case 'wav':
-        return 'audio/wav';
-      case 'doc':
-        return 'application/msword';
-      case 'docx':
-        return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-      case 'xls':
-        return 'application/vnd.ms-excel';
-      case 'xlsx':
-        return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-      case 'zip':
-        return 'application/zip';
-      case 'rar':
-        return 'application/vnd.rar';
-      default:
-        return 'application/octet-stream';
+      case 'jpeg': return 'image/jpeg';
+      case 'png': return 'image/png';
+      case 'gif': return 'image/gif';
+      case 'webp': return 'image/webp';
+      case 'mp4': return 'video/mp4';
+      case 'mov': return 'video/quicktime';
+      case 'avi': return 'video/x-msvideo';
+      case 'mkv': return 'video/x-matroska';
+      case 'webm': return 'video/webm';
+      case 'mp3': return 'audio/mpeg';
+      case 'wav': return 'audio/wav';
+      case 'm4a': return 'audio/mp4';
+      case 'ogg': return 'audio/ogg';
+      case 'doc': return 'application/msword';
+      case 'docx': return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+      case 'xls': return 'application/vnd.ms-excel';
+      case 'xlsx': return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+      case 'ppt': return 'application/vnd.ms-powerpoint';
+      case 'pptx': return 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
+      case 'txt': return 'text/plain';
+      case 'csv': return 'text/csv';
+      case 'zip': return 'application/zip';
+      case 'rar': return 'application/vnd.rar';
+      case '7z': return 'application/x-7z-compressed';
+      case 'tar': return 'application/x-tar';
+      case 'apk': return 'application/vnd.android.package-archive';
+      case 'exe': return 'application/x-msdownload';
+      case 'dmg': return 'application/x-apple-diskimage';
+      case 'json': return 'application/json';
+      case 'xml': return 'application/xml';
+      case 'html': return 'text/html';
+      case 'svg': return 'image/svg+xml';
+      default: return 'application/octet-stream';
     }
   }
 

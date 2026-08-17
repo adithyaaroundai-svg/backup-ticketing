@@ -64,6 +64,23 @@ class CustomChannelRepository {
       memberIds: memberIds,
     );
   }
+  /// Adds new members to an existing channel
+  Future<void> addMembersToChannel(String channelId, List<String> userIds) async {
+    if (userIds.isEmpty) return;
+    final payload = userIds
+        .map((uid) => {'channel_id': channelId, 'user_id': uid})
+        .toList();
+    await _client.from('channel_members').insert(payload);
+  }
+
+  /// Removes a member from a channel
+  Future<void> removeMemberFromChannel(String channelId, String userId) async {
+    await _client
+        .from('channel_members')
+        .delete()
+        .eq('channel_id', channelId)
+        .eq('user_id', userId);
+  }
 }
 
 final customChannelRepositoryProvider = Provider<CustomChannelRepository>((ref) {

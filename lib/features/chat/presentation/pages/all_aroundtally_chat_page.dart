@@ -1241,7 +1241,7 @@ class _ChatBubbleState extends ConsumerState<_ChatBubble> {
       child: MouseRegion(
         onEnter: (_) => setState(() => _hovered = true),
         onExit: (_) => setState(() => _hovered = false),
-      child: Container(
+        child: Container(
         margin: const EdgeInsets.only(bottom: 4),
         child: Align(
           alignment: Alignment.centerLeft,
@@ -1350,8 +1350,13 @@ class _ChatBubbleState extends ConsumerState<_ChatBubble> {
                                             fontSize: 14,
                                           ),
                                           linkStyle: TextStyle(
-                                            color: isMe ? Colors.white : Colors.blue,
+                                            color: context.isDarkMode
+                                                ? const Color(0xFF93C5FD)
+                                                : const Color(0xFF1D4ED8),
                                             decoration: TextDecoration.underline,
+                                            decorationColor: context.isDarkMode
+                                                ? const Color(0xFF93C5FD)
+                                                : const Color(0xFF1D4ED8),
                                           ),
                                         ),
                                 ),

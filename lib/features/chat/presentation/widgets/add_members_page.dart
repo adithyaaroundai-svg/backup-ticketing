@@ -40,11 +40,7 @@ class _AddMembersPageState extends ConsumerState<AddMembersPage> {
             onPressed: _selectedAgentIds.isEmpty
                 ? null
                 : () {
-                    // Logic to add members
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Members added (UI only)')),
-                    );
-                    Navigator.pop(context);
+                    Navigator.pop(context, Set<String>.from(_selectedAgentIds));
                   },
             child: Text(
               'Add',

@@ -16,6 +16,7 @@ import '../../../features/dashboard/presentation/providers/app_settings_provider
 import '../../network/connectivity_provider.dart';
 import '../../../features/chat/presentation/providers/chat_provider.dart';
 import '../../../features/chat/presentation/providers/custom_channel_provider.dart';
+import '../../../features/chat/domain/entities/chat_message.dart';
 import '../../../features/chat/presentation/widgets/create_channel_dialog.dart';
 import '../../../features/chat/presentation/widgets/new_dm_dialog.dart';
 import '../../../features/tickets/domain/entities/ticket.dart';
@@ -58,6 +59,7 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
   bool _hasInitialized = false;
   ProviderSubscription? _chatListenerSubscription;
   ProviderSubscription? _aroundTallyListenerSubscription;
+  RealtimeChannel? _customChannelRealtimeSub;
   ProviderContainer? _container;
 
   // Restricted agents check
@@ -99,6 +101,8 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
     _chatListenerSubscription = null;
     _aroundTallyListenerSubscription?.close();
     _aroundTallyListenerSubscription = null;
+    _customChannelRealtimeSub?.unsubscribe();
+    _customChannelRealtimeSub = null;
     _lastSeenUpdateTimer?.cancel();
     _lastSeenUpdateTimer = null;
     _container = null;
@@ -148,7 +152,8 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
   void _setupChatListener() {
     final c = _container;
     if (c == null) return;
-    // Use ProviderContainer.listen() directly — never touches the widget tree
+    
+    // Support-chat channel listener
     _chatListenerSubscription = c.listen(chatStreamProvider('support-chat'), (
       previous,
       next,
@@ -196,6 +201,13 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
           c.read(chatNewMessageEventProvider.notifier).notify(newMessages.last);
         }
       }
+    });
+
+    // DM conversations listener — keeps DmConversationEngine alive so it can fire notifications
+    // The engine itself handles the notification logic in _processMsgPayload
+    c.listen(dmConversationsProvider, (previous, next) {
+      // No action needed here — just keeping the provider alive
+      // The DmConversationEngine handles notifications internally
     });
 
     // All-AroundTally channel listener
@@ -250,6 +262,96 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
         }
       },
     );
+
+    // ── Custom channels: one global Supabase subscription ──────────────────
+    // We subscribe directly to the DB table (no chatStreamProvider needed),
+    // so notifications fire even when the channel page is not open.
+    _setupCustomChannelListener(c);
+  }
+
+  void _setupCustomChannelListener(ProviderContainer c) {
+    final client = Supabase.instance.client;
+    final myId = c.read(authProvider)?.id;
+    if (myId == null) return;
+
+    _customChannelRealtimeSub = client
+        .channel('custom-channel-global-notify')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'chat_messages',
+          callback: (payload) async {
+            if (_isDisposed || _container == null) return;
+
+            final record = payload.newRecord;
+            final senderId = record['sender_id']?.toString() ?? '';
+            final receiverId = record['receiver_id']?.toString();
+            final channelId = record['channel']?.toString() ?? '';
+
+            // Only handle public channel messages (no receiver = channel msg)
+            if (receiverId != null && receiverId.isNotEmpty) return;
+
+            // Skip support-chat and all-aroundtally (handled separately)
+            if (channelId == 'support-chat' || channelId == 'all-aroundtally') return;
+
+            // Skip messages sent by current user
+            if (senderId.trim().toLowerCase() == myId.trim().toLowerCase()) return;
+
+            // Skip if currently viewing this channel
+            if (widget.currentPath.startsWith('/channel/$channelId')) return;
+
+            // Check if user is a member of this channel (for private channels)
+            try {
+              // Fetch channel info to check membership
+              final channelResponse = await client
+                  .from('custom_channels')
+                  .select('*, channel_members(user_id)')
+                  .eq('id', channelId)
+                  .maybeSingle();
+              
+              if (channelResponse == null) return; // Channel not found
+              
+              final isPrivate = channelResponse['is_private'] as bool? ?? false;
+              
+              if (isPrivate) {
+                // Check if current user is a member
+                final members = channelResponse['channel_members'] as List<dynamic>? ?? [];
+                final isMember = members.any((m) => m['user_id'] == myId);
+                final isCreator = channelResponse['created_by'] == myId;
+                
+                if (!isMember && !isCreator) {
+                  return; // User is not a member, don't show notification
+                }
+              }
+
+              // Build ChatMessage and fire the notification
+              final msg = ChatMessage.fromJson(record);
+              c.read(customChannelNewMessageEventProvider.notifier).notify(msg);
+              
+              // Check for @mentions for special sound
+              final myFullName = c.read(authProvider)?.fullName ?? '';
+              final hasMention = myFullName.isNotEmpty && 
+                  msg.content.contains('@$myFullName');
+              
+              if (hasMention) {
+                ChatSoundService.playMentionPing();
+              } else {
+                ChatSoundService.playPing();
+              }
+            } catch (e) {
+              debugPrint('Error processing custom channel notification: $e');
+              // Still try to show notification even if membership check fails
+              try {
+                final msg = ChatMessage.fromJson(record);
+                c.read(customChannelNewMessageEventProvider.notifier).notify(msg);
+                ChatSoundService.playPing();
+              } catch (e2) {
+                debugPrint('Error parsing custom channel message: $e2');
+              }
+            }
+          },
+        )
+        .subscribe();
   }
 
   @override
@@ -444,7 +546,10 @@ class _TopNav extends ConsumerWidget {
             currentUser?.isAccountant == true ||
             currentUser?.isSupportHead == true);
 
-    final unreadCount = ref.watch(chatUnreadCountProvider);
+    final int _dmUnread = ref.watch(dmConversationsProvider.select<int>((map) => map.values.fold<int>(0, (sum, conv) => sum + conv.unreadCount)));
+    final List<String> _customChIds = ref.watch(customChannelsProvider).asData?.value.map((c) => c.id).toList() ?? [];
+    final int _customChUnread = ref.watch(totalCustomChannelUnreadProvider(_customChIds));
+    final int unreadCount = (ref.watch(chatUnreadCountProvider) + ref.watch(allAroundTallyUnreadCountProvider) + _dmUnread + _customChUnread).toInt();
     final overdueCount = ref.watch(overdueClaimedTicketsProvider).asData?.value.length ?? 0;
     final staleCount = ref.watch(staleUnclaimedTicketsProvider).asData?.value.length ?? 0;
     final alertCount = overdueCount + staleCount;
@@ -1918,7 +2023,9 @@ class _BottomNav extends ConsumerWidget {
     final isLight = isWhiteTheme;
 
     final int totalDmUnread = ref.watch(dmConversationsProvider.select<int>((map) => map.values.fold<int>(0, (sum, conv) => sum + conv.unreadCount)));
-    final int aggregateUnread = (ref.watch(chatUnreadCountProvider) + ref.watch(allAroundTallyUnreadCountProvider) + totalDmUnread).toInt();
+    final List<String> customChannelIds = ref.watch(customChannelsProvider).asData?.value.map((c) => c.id).toList() ?? [];
+    final int totalCustomChannelUnread = ref.watch(totalCustomChannelUnreadProvider(customChannelIds));
+    final int aggregateUnread = (ref.watch(chatUnreadCountProvider) + ref.watch(allAroundTallyUnreadCountProvider) + totalDmUnread + totalCustomChannelUnread).toInt();
 
     final bgColor = isLight 
         ? Colors.white 
@@ -2733,44 +2840,71 @@ class _ChannelsListState extends ConsumerState<_ChannelsList> {
           ),
         if (customChannelsAsync.hasValue) ...[
           for (final channel in customChannelsAsync.value!)
-            Material(
-              color: Colors.transparent,
-              child: InkWell(
-                onTap: () => context.go('/c/${channel.id}'),
-                child: Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: currentPath.startsWith('/c/${channel.id}')
-                        ? activeBgColor
-                        : Colors.transparent,
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        channel.isPrivate ? LucideIcons.lock : LucideIcons.hash,
-                        size: 16,
-                        color: currentPath.startsWith('/c/${channel.id}') ? textColorPrimary : textColor54,
+            Consumer(
+              key: ValueKey('ch_${channel.id}'),
+              builder: (context, ref, _) {
+                // Keep the stream alive so unread count updates even off-page
+                ref.watch(chatStreamProvider(channel.id));
+                final unread = ref.watch(customChannelUnreadCountProvider(channel.id));
+                final isActive = currentPath.startsWith('/c/${channel.id}');
+                final displayUnread = isActive ? 0 : unread;
+
+                return Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: () => context.go('/c/${channel.id}'),
+                    child: Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: isActive ? activeBgColor : Colors.transparent,
+                        borderRadius: BorderRadius.circular(6),
                       ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          channel.name,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: currentPath.startsWith('/c/${channel.id}') ? textColorPrimary : textColor70,
-                            fontSize: 13,
-                            fontWeight: currentPath.startsWith('/c/${channel.id}')
-                                ? FontWeight.w600
-                                : FontWeight.w500,
+                      child: Row(
+                        children: [
+                          Icon(
+                            channel.isPrivate ? LucideIcons.lock : LucideIcons.hash,
+                            size: 16,
+                            color: isActive ? textColorPrimary : textColor54,
                           ),
-                        ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              channel.name,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: (isActive || displayUnread > 0) ? textColorPrimary : textColor70,
+                                fontSize: 13,
+                                fontWeight: (isActive || displayUnread > 0)
+                                    ? FontWeight.w700
+                                    : FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                          if (displayUnread > 0) ...[
+                            const SizedBox(width: 4),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: AppColors.error,
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Text(
+                                displayUnread > 99 ? '99+' : displayUnread.toString(),
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
-                    ],
+                    ),
                   ),
-                ),
-              ),
+                );
+              },
             ),
         ],
 

@@ -8,7 +8,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../core/logging/app_logger.dart';
 import '../../../../core/services/global_chat_notification_service.dart';
 import '../../../chat/presentation/providers/chat_provider.dart'
-    show ChatNewMessageEvent;
+    show ChatNewMessageEvent, DmNewMessageEvent, CustomChannelNewMessageEvent;
 
 part 'auth_provider.g.dart';
 
@@ -200,6 +200,8 @@ class AuthNotifier extends _$AuthNotifier {
     // Clear the in-memory set of notified message IDs so the next user
     // doesn't inherit the previous user's notification history.
     ChatNewMessageEvent.resetSession();
+    DmNewMessageEvent.resetSession();
+    CustomChannelNewMessageEvent.resetSession();
     GlobalChatNotificationService.dispose();
     state = null;
     _clearPersistedAgent();

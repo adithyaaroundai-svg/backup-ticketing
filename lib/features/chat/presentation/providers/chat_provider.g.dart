@@ -67,7 +67,7 @@ final class GlobalMessageSearchProvider
 }
 
 String _$globalMessageSearchHash() =>
-    r'ecd39f789abcef059e658aeb6ced5dfdb6ad2335';
+    r'0c082f074036c21a8c7b30c00638e25e629b1d00';
 
 final class GlobalMessageSearchFamily extends $Family
     with $FunctionalFamilyOverride<FutureOr<List<ChatMessage>>, String> {
@@ -128,7 +128,7 @@ final class ChatStreamProvider
   }
 }
 
-String _$chatStreamHash() => r'f7f44294ecda9ca4eb9b44c800e7aaf0492d6c72';
+String _$chatStreamHash() => r'92ff6d5091e67439358a3d5d294f9a7d1c69d40c';
 
 final class ChatStreamFamily extends $Family
     with
@@ -403,6 +403,114 @@ String _$chatNewMessageEventHash() =>
     r'97f1a44b8e12a13737054d1a21ab1963e27a42ec';
 
 abstract class _$ChatNewMessageEvent extends $Notifier<ChatMessage?> {
+  ChatMessage? build();
+  @$mustCallSuper
+  @override
+  void runBuild() {
+    final created = build();
+    final ref = this.ref as $Ref<ChatMessage?, ChatMessage?>;
+    final element =
+        ref.element
+            as $ClassProviderElement<
+              AnyNotifier<ChatMessage?, ChatMessage?>,
+              ChatMessage?,
+              Object?,
+              Object?
+            >;
+    element.handleValue(ref, created);
+  }
+}
+
+@ProviderFor(DmNewMessageEvent)
+const dmNewMessageEventProvider = DmNewMessageEventProvider._();
+
+final class DmNewMessageEventProvider
+    extends $NotifierProvider<DmNewMessageEvent, ChatMessage?> {
+  const DmNewMessageEventProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'dmNewMessageEventProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$dmNewMessageEventHash();
+
+  @$internal
+  @override
+  DmNewMessageEvent create() => DmNewMessageEvent();
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(ChatMessage? value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<ChatMessage?>(value),
+    );
+  }
+}
+
+String _$dmNewMessageEventHash() => r'6256ed00c328dc3c4b624e4816f679a87682ab7c';
+
+abstract class _$DmNewMessageEvent extends $Notifier<ChatMessage?> {
+  ChatMessage? build();
+  @$mustCallSuper
+  @override
+  void runBuild() {
+    final created = build();
+    final ref = this.ref as $Ref<ChatMessage?, ChatMessage?>;
+    final element =
+        ref.element
+            as $ClassProviderElement<
+              AnyNotifier<ChatMessage?, ChatMessage?>,
+              ChatMessage?,
+              Object?,
+              Object?
+            >;
+    element.handleValue(ref, created);
+  }
+}
+
+@ProviderFor(CustomChannelNewMessageEvent)
+const customChannelNewMessageEventProvider =
+    CustomChannelNewMessageEventProvider._();
+
+final class CustomChannelNewMessageEventProvider
+    extends $NotifierProvider<CustomChannelNewMessageEvent, ChatMessage?> {
+  const CustomChannelNewMessageEventProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'customChannelNewMessageEventProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$customChannelNewMessageEventHash();
+
+  @$internal
+  @override
+  CustomChannelNewMessageEvent create() => CustomChannelNewMessageEvent();
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(ChatMessage? value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<ChatMessage?>(value),
+    );
+  }
+}
+
+String _$customChannelNewMessageEventHash() =>
+    r'327c2bacd7e56d0bf22797abe48a3c2f0f12a547';
+
+abstract class _$CustomChannelNewMessageEvent extends $Notifier<ChatMessage?> {
   ChatMessage? build();
   @$mustCallSuper
   @override
