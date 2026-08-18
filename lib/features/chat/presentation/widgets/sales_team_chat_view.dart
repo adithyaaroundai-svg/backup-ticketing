@@ -22,6 +22,7 @@ import 'markdown_text_editing_controller.dart';
 import 'chat_voice_recorder.dart';
 import 'video_message_widget.dart';
 import '../../../../core/utils/download_helper.dart';
+import '../../../../core/utils/storage_utils.dart';
 import '../../../sales/presentation/providers/lead_provider.dart';
 
 IconData _getFileIcon(String? fileType) {
@@ -290,7 +291,22 @@ class _SalesTeamChatViewState extends ConsumerState<SalesTeamChatView> {
 
     return agentsAsync.when(
       data: (agents) {
-        final filteredAgents = agents.where((a) {
+        const allowedSalesChannelIds = {
+          '14db36db-0cb9-44ef-8032-d9610b3bc797',
+          'b77b3738-4dfc-4515-a1fd-d6fb170423f4',
+          'd8aa6435-9e02-4bab-9acc-ae1f5f3d6a1c',
+          '5a06a8df-97f1-4dbf-bc13-9724a3c779c1',
+          'd9572a84-762b-4c8b-8ef5-7da0345e3ea8',
+          '0a5aeeb8-9544-4dc8-920f-e26c192b0dd3',
+          'f3b54de6-0372-4648-ad87-3e98089efc2d',
+        };
+
+        final channelAgents = agents.where((a) {
+          final id = a['id']?.toString();
+          return id != null && allowedSalesChannelIds.contains(id);
+        }).toList();
+
+        final filteredAgents = channelAgents.where((a) {
           final name = (a['full_name'] ?? a['username'] ?? '').toString().toLowerCase();
           final role = (a['role'] ?? '').toString().toLowerCase();
           return name.contains(_mentionQuery) || role.contains(_mentionQuery);
@@ -453,7 +469,7 @@ class _SalesTeamChatViewState extends ConsumerState<SalesTeamChatView> {
       setState(() => _isUploading = true);
       try {
         final supabase = Supabase.instance.client;
-        final filePath = '${DateTime.now().millisecondsSinceEpoch}_${_selectedFile!.name}';
+        final filePath = sanitizeStorageFileName(_selectedFile!.name);
         
         Uint8List fileBytes;
         if (_selectedFile!.bytes != null) {
@@ -464,13 +480,14 @@ class _SalesTeamChatViewState extends ConsumerState<SalesTeamChatView> {
           throw Exception('No file bytes or path available');
         }
         
+        final mimeType = getMimeType(_selectedFile!.extension, _selectedFile!.name);
         await supabase.storage
             .from('chat_attachments')
             .uploadBinary(
               filePath, 
               fileBytes,
               fileOptions: FileOptions(
-                contentType: _getMimeType(_selectedFile!.extension),
+                contentType: mimeType,
                 upsert: false,
               ),
             );
@@ -556,47 +573,7 @@ class _SalesTeamChatViewState extends ConsumerState<SalesTeamChatView> {
     );
   }
 
-  String _getMimeType(String? extension) {
-    if (extension == null) return 'application/octet-stream';
-    final ext = extension.toLowerCase();
-    switch (ext) {
-      case 'pdf': return 'application/pdf';
-      case 'jpg':
-      case 'jpeg': return 'image/jpeg';
-      case 'png': return 'image/png';
-      case 'gif': return 'image/gif';
-      case 'webp': return 'image/webp';
-      case 'mp4': return 'video/mp4';
-      case 'mov': return 'video/quicktime';
-      case 'avi': return 'video/x-msvideo';
-      case 'mkv': return 'video/x-matroska';
-      case 'webm': return 'video/webm';
-      case 'mp3': return 'audio/mpeg';
-      case 'wav': return 'audio/wav';
-      case 'm4a': return 'audio/mp4';
-      case 'ogg': return 'audio/ogg';
-      case 'doc': return 'application/msword';
-      case 'docx': return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-      case 'xls': return 'application/vnd.ms-excel';
-      case 'xlsx': return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-      case 'ppt': return 'application/vnd.ms-powerpoint';
-      case 'pptx': return 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
-      case 'txt': return 'text/plain';
-      case 'csv': return 'text/csv';
-      case 'zip': return 'application/zip';
-      case 'rar': return 'application/vnd.rar';
-      case '7z': return 'application/x-7z-compressed';
-      case 'tar': return 'application/x-tar';
-      case 'apk': return 'application/vnd.android.package-archive';
-      case 'exe': return 'application/x-msdownload';
-      case 'dmg': return 'application/x-apple-diskimage';
-      case 'json': return 'application/json';
-      case 'xml': return 'application/xml';
-      case 'html': return 'text/html';
-      case 'svg': return 'image/svg+xml';
-      default: return 'application/octet-stream';
-    }
-  }
+
 
   @override
   Widget build(BuildContext context) {

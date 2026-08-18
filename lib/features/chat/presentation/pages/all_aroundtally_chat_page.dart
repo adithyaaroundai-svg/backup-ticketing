@@ -21,6 +21,7 @@ import '../../../auth/presentation/providers/auth_provider.dart';
 import '../providers/chat_provider.dart';
 import '../../data/repositories/chat_repository.dart';
 import '../../../../core/utils/download_helper.dart';
+import '../../../../core/utils/storage_utils.dart';
 import '../../domain/entities/chat_message.dart';
 import '../../../tickets/presentation/providers/ticket_provider.dart';
 import '../widgets/chat_voice_recorder.dart';
@@ -260,17 +261,32 @@ class _AllAroundTallyChatPageState extends ConsumerState<AllAroundTallyChatPage>
       setState(() => _isUploading = true);
       try {
         final supabase = Supabase.instance.client;
-        final filePath = '${currentUser.id}/${DateTime.now().millisecondsSinceEpoch}_${_selectedFile!.name}';
+        final filePath = sanitizeStorageFileName(_selectedFile!.name, prefix: currentUser.id);
+        final mimeType = getMimeType(_selectedFile!.extension, _selectedFile!.name);
         
         if (kIsWeb && _selectedFile!.bytes != null) {
           await supabase.storage
               .from('chat_attachments')
-              .uploadBinary(filePath, _selectedFile!.bytes!);
+              .uploadBinary(
+                filePath,
+                _selectedFile!.bytes!,
+                fileOptions: FileOptions(
+                  contentType: mimeType,
+                  upsert: false,
+                ),
+              );
         } else if (_selectedFile!.path != null) {
           final file = File(_selectedFile!.path!);
           await supabase.storage
               .from('chat_attachments')
-              .upload(filePath, file);
+              .upload(
+                filePath,
+                file,
+                fileOptions: FileOptions(
+                  contentType: mimeType,
+                  upsert: false,
+                ),
+              );
         }
 
         fileUrl = supabase.storage.from('chat_attachments').getPublicUrl(filePath);

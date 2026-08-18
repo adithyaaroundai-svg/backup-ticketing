@@ -31,6 +31,7 @@ import '../widgets/chat_attachment_renderer.dart';
 import '../widgets/chat_drop_overlay.dart';
 import '../../../../core/services/chat_drag_drop_paste_helper.dart';
 import '../../../../core/utils/download_helper.dart';
+import '../../../../core/utils/storage_utils.dart';
 import '../../../../core/services/zoho_launcher.dart';
 import '../../../../core/services/zoho_api_service.dart';
 import '../../../../features/calls/domain/models/call_history_item.dart';
@@ -352,10 +353,30 @@ class _CustomChannelChatPageState extends ConsumerState<CustomChannelChatPage> {
 
   Widget _buildMentionsList() {
     final agentsAsync = ref.watch(agentsListProvider);
+    final channelsAsync = ref.watch(customChannelsProvider);
 
     return agentsAsync.when(
       data: (agents) {
-        final filteredAgents = agents.where((a) {
+        CustomChannel? channel;
+        if (channelsAsync.hasValue) {
+          try {
+            channel = channelsAsync.value!.firstWhere((c) => c.id == widget.channelId);
+          } catch (_) {}
+        }
+
+        if (channel == null) return const SizedBox.shrink();
+
+        final memberIds = {
+          ...channel.memberIds,
+          if (channel.createdBy.isNotEmpty) channel.createdBy,
+        };
+
+        final channelAgents = agents.where((a) {
+          final id = a['id']?.toString();
+          return id != null && memberIds.contains(id);
+        }).toList();
+
+        final filteredAgents = channelAgents.where((a) {
           final name = (a['full_name'] ?? a['username'] ?? '').toString().toLowerCase();
           final role = (a['role'] ?? '').toString().toLowerCase();
           return name.contains(_mentionQuery) || role.contains(_mentionQuery);
@@ -518,7 +539,7 @@ class _CustomChannelChatPageState extends ConsumerState<CustomChannelChatPage> {
       setState(() => _isUploading = true);
       try {
         final supabase = Supabase.instance.client;
-        final filePath = '${DateTime.now().millisecondsSinceEpoch}_${_selectedFile!.name}';
+        final filePath = sanitizeStorageFileName(_selectedFile!.name);
         
         Uint8List fileBytes;
         if (_selectedFile!.bytes != null) {
@@ -529,13 +550,14 @@ class _CustomChannelChatPageState extends ConsumerState<CustomChannelChatPage> {
           throw Exception('No file bytes or path available');
         }
         
+        final mimeType = getMimeType(_selectedFile!.extension, _selectedFile!.name);
         await supabase.storage
             .from('chat_attachments')
             .uploadBinary(
               filePath, 
               fileBytes,
               fileOptions: FileOptions(
-                contentType: _getMimeType(_selectedFile!.extension),
+                contentType: mimeType,
                 upsert: false,
               ),
             );
@@ -582,47 +604,7 @@ class _CustomChannelChatPageState extends ConsumerState<CustomChannelChatPage> {
     _scrollToBottom();
   }
 
-  String _getMimeType(String? extension) {
-    if (extension == null) return 'application/octet-stream';
-    final ext = extension.toLowerCase();
-    switch (ext) {
-      case 'pdf': return 'application/pdf';
-      case 'jpg':
-      case 'jpeg': return 'image/jpeg';
-      case 'png': return 'image/png';
-      case 'gif': return 'image/gif';
-      case 'webp': return 'image/webp';
-      case 'mp4': return 'video/mp4';
-      case 'mov': return 'video/quicktime';
-      case 'avi': return 'video/x-msvideo';
-      case 'mkv': return 'video/x-matroska';
-      case 'webm': return 'video/webm';
-      case 'mp3': return 'audio/mpeg';
-      case 'wav': return 'audio/wav';
-      case 'm4a': return 'audio/mp4';
-      case 'ogg': return 'audio/ogg';
-      case 'doc': return 'application/msword';
-      case 'docx': return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-      case 'xls': return 'application/vnd.ms-excel';
-      case 'xlsx': return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-      case 'ppt': return 'application/vnd.ms-powerpoint';
-      case 'pptx': return 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
-      case 'txt': return 'text/plain';
-      case 'csv': return 'text/csv';
-      case 'zip': return 'application/zip';
-      case 'rar': return 'application/vnd.rar';
-      case '7z': return 'application/x-7z-compressed';
-      case 'tar': return 'application/x-tar';
-      case 'apk': return 'application/vnd.android.package-archive';
-      case 'exe': return 'application/x-msdownload';
-      case 'dmg': return 'application/x-apple-diskimage';
-      case 'json': return 'application/json';
-      case 'xml': return 'application/xml';
-      case 'html': return 'text/html';
-      case 'svg': return 'image/svg+xml';
-      default: return 'application/octet-stream';
-    }
-  }
+
   Future<void> _launchGroupCall(CustomChannel channel, {required bool video}) async {
     final agentsAsync = ref.read(agentsListProvider);
     final agents = agentsAsync.maybeWhen(

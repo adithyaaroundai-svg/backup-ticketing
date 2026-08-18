@@ -30,6 +30,7 @@ class _CustomersPageState extends ConsumerState<CustomersPage> {
 
   @override
   Widget build(BuildContext context) {
+    final isMobile = MediaQuery.sizeOf(context).width < 600;
     final customersAsync = ref.watch(customersListProvider);
     final ticketsAsync = ref.watch(ticketsStreamProvider);
 
@@ -38,15 +39,17 @@ class _CustomersPageState extends ConsumerState<CustomersPage> {
       child: Scaffold(
         backgroundColor: context.adaptiveSlate50,
         body: Padding(
-          padding: const EdgeInsets.all(24),
+          padding: EdgeInsets.all(isMobile ? 16 : 24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               SectionHeader(
                 title: 'Customers',
                 subtitle: 'Company directory',
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
+                trailing: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
                     OutlinedButton.icon(
                       onPressed: () => setState(
@@ -56,36 +59,37 @@ class _CustomersPageState extends ConsumerState<CustomersPage> {
                         _expandedListView
                             ? LucideIcons.minimize2
                             : LucideIcons.maximize2,
-                        size: 16,
+                        size: 15,
                       ),
                       label: Text(
-                        _expandedListView ? 'Compact Cards' : 'Expand Cards',
+                        _expandedListView
+                            ? (isMobile ? 'Compact' : 'Compact Cards')
+                            : (isMobile ? 'Expand' : 'Expand Cards'),
                       ),
                       style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 10,
+                        ),
+                      ),
+                    ),
+                    ElevatedButton.icon(
+                      onPressed: () => context.push('/customers/add'),
+                      icon: const Icon(LucideIcons.plus, size: 16),
+                      label: const Text('Add Customer'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(
                           horizontal: 14,
                           vertical: 10,
                         ),
                       ),
                     ),
-                    const SizedBox(width: 12),
-                    ElevatedButton.icon(
-                      onPressed: () => context.push('/customers/add'),
-                      icon: const Icon(LucideIcons.plus),
-                      label: const Text('Add Customer'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.primary,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 12,
-                        ),
-                      ),
-                    ),
                   ],
                 ),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 20),
               _buildSearchAndFilters(),
               const SizedBox(height: 16),
               Expanded(

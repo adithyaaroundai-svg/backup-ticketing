@@ -202,74 +202,139 @@ class _Header extends StatelessWidget {
   });
 
   @override
+  @override
   Widget build(BuildContext context) {
+    final isMobile = MediaQuery.sizeOf(context).width < 600;
+
     return Container(
       color: context.adaptiveCard,
-      padding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
+      padding: EdgeInsets.fromLTRB(
+        isMobile ? 16 : 24,
+        isMobile ? 16 : 24,
+        isMobile ? 16 : 24,
+        16,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: accentColor.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(12),
+          if (isMobile) ...[
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: accentColor.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(icon, color: accentColor, size: 20),
                 ),
-                child: Icon(icon, color: accentColor, size: 22),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w600,
-                        color: context.adaptiveSlate900,
-                      ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                      color: context.adaptiveSlate900,
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      subtitle,
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: context.adaptiveSlate600,
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              subtitle,
+              style: TextStyle(
+                fontSize: 13,
+                color: context.adaptiveSlate600,
               ),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(999),
-                  color: accentColor.withValues(alpha: 0.1),
-                ),
-                child: Row(
-                  children: [
-                    Icon(LucideIcons.target, size: 16, color: accentColor),
-                    const SizedBox(width: 6),
-                    Text(
-                      thresholdLabel,
-                      style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        color: accentColor,
-                      ),
-                    ),
-                  ],
-                ),
+            ),
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(999),
+                color: accentColor.withValues(alpha: 0.1),
               ),
-            ],
-          ),
-          const SizedBox(height: 20),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(LucideIcons.target, size: 14, color: accentColor),
+                  const SizedBox(width: 6),
+                  Text(
+                    thresholdLabel,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: accentColor,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ] else ...[
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: accentColor.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(icon, color: accentColor, size: 22),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w600,
+                          color: context.adaptiveSlate900,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        subtitle,
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: context.adaptiveSlate600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(999),
+                    color: accentColor.withValues(alpha: 0.1),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(LucideIcons.target, size: 16, color: accentColor),
+                      const SizedBox(width: 6),
+                      Text(
+                        thresholdLabel,
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          color: accentColor,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ],
+          const SizedBox(height: 16),
           Wrap(
             spacing: 12,
-            runSpacing: 12,
+            runSpacing: 10,
             children: highlights
                 .map(
                   (point) => _HighlightPill(
@@ -294,7 +359,7 @@ class _HighlightPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: accentColor.withValues(alpha: 0.3)),
@@ -309,14 +374,21 @@ class _HighlightPill extends StatelessWidget {
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(LucideIcons.activity, size: 16, color: accentColor),
+          Padding(
+            padding: const EdgeInsets.only(top: 2),
+            child: Icon(LucideIcons.activity, size: 15, color: accentColor),
+          ),
           const SizedBox(width: 8),
-          Text(
-            text,
-            style: TextStyle(
-              fontSize: 12,
-              color: context.adaptiveSlate700,
+          Flexible(
+            child: Text(
+              text,
+              style: TextStyle(
+                fontSize: 12,
+                color: context.adaptiveSlate700,
+                height: 1.3,
+              ),
             ),
           ),
         ],
@@ -471,46 +543,51 @@ class _TicketAlertCard extends StatelessWidget {
                   ),
                 ],
                 const SizedBox(height: 16),
-                Row(
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  alignment: WrapAlignment.spaceBetween,
                   children: [
-                    TextButton.icon(
-                      onPressed: () => context.push('/ticket/${ticket.ticketId}'),
-                      icon: const Icon(LucideIcons.externalLink, size: 16),
-                      label: Text('Open ticket'),
-                    ),
-                    if (ticket.assignedTo != null && ticket.assignedTo!.isNotEmpty) ...[
-                      const SizedBox(width: 8),
-                      TextButton.icon(
-                        style: TextButton.styleFrom(foregroundColor: AppColors.primary),
-                        onPressed: () => context.push('/chat/dm/${ticket.assignedTo!}'),
-                        icon: const Icon(LucideIcons.messageSquare, size: 16),
-                        label: const Text('Nudge Agent'),
-                      ),
-                    ],
-                    if (ticket.priority != 'Urgent') ...[
-                      const SizedBox(width: 8),
-                      Consumer(
-                        builder: (context, ref, child) {
-                          return TextButton.icon(
-                            style: TextButton.styleFrom(foregroundColor: AppColors.error),
-                            onPressed: () async {
-                              final updated = ticket.copyWith(priority: 'Urgent');
-                              final error = await ref.read(ticketUpdaterProvider.notifier).updateTicket(updated);
-                              if (context.mounted) {
-                                if (error != null) {
-                                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error)));
-                                } else {
-                                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Ticket escalated to Urgent')));
-                                }
-                              }
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        TextButton.icon(
+                          onPressed: () => context.push('/ticket/${ticket.ticketId}'),
+                          icon: const Icon(LucideIcons.externalLink, size: 16),
+                          label: const Text('Open ticket'),
+                        ),
+                        if (ticket.assignedTo != null && ticket.assignedTo!.isNotEmpty)
+                          TextButton.icon(
+                            style: TextButton.styleFrom(foregroundColor: AppColors.primary),
+                            onPressed: () => context.push('/chat/dm/${ticket.assignedTo!}'),
+                            icon: const Icon(LucideIcons.messageSquare, size: 16),
+                            label: const Text('Nudge Agent'),
+                          ),
+                        if (ticket.priority != 'Urgent')
+                          Consumer(
+                            builder: (context, ref, child) {
+                              return TextButton.icon(
+                                style: TextButton.styleFrom(foregroundColor: AppColors.error),
+                                onPressed: () async {
+                                  final updated = ticket.copyWith(priority: 'Urgent');
+                                  final error = await ref.read(ticketUpdaterProvider.notifier).updateTicket(updated);
+                                  if (context.mounted) {
+                                    if (error != null) {
+                                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error)));
+                                    } else {
+                                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Ticket escalated to Urgent')));
+                                    }
+                                  }
+                                },
+                                icon: const Icon(LucideIcons.flame, size: 16),
+                                label: const Text('Escalate'),
+                              );
                             },
-                            icon: const Icon(LucideIcons.flame, size: 16),
-                            label: const Text('Escalate'),
-                          );
-                        }
-                      ),
-                    ],
-                    const Spacer(),
+                          ),
+                      ],
+                    ),
                     Text(
                       'Updated ${timeago.format((ticket.updatedAt ?? ticket.createdAt ?? entry.referenceTime).toLocal())}',
                       style: TextStyle(
@@ -519,7 +596,7 @@ class _TicketAlertCard extends StatelessWidget {
                       ),
                     ),
                   ],
-                )
+                ),
               ],
             ),
           ),

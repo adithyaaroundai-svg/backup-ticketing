@@ -36,6 +36,7 @@ import '../widgets/chat_attachment_renderer.dart';
 import '../widgets/chat_voice_recorder.dart';
 import '../widgets/chat_drop_overlay.dart';
 import '../../../../core/services/chat_drag_drop_paste_helper.dart';
+import '../../../../core/utils/storage_utils.dart';
 
 import '../../../dashboard/presentation/widgets/create_ticket_dialog.dart';
 
@@ -1745,8 +1746,7 @@ class _GlobalChatPageState extends ConsumerState<GlobalChatPage>
       }
 
       final storage = Supabase.instance.client.storage;
-      final fileName = '${DateTime.now().millisecondsSinceEpoch}_${file.name}';
-      final filePath = fileName;
+      final filePath = sanitizeStorageFileName(file.name);
 
       print('Reading file bytes...');
       Uint8List fileBytes;
@@ -1764,9 +1764,10 @@ class _GlobalChatPageState extends ConsumerState<GlobalChatPage>
         return null;
       }
 
+      final mimeType = getMimeType(file.extension, file.name);
       print('Uploading to storage: $filePath');
       print('Bucket: chat_attachments');
-      print('Content type: ${_getMimeType(file.extension)}');
+      print('Content type: $mimeType');
 
       await storage
           .from('chat_attachments')
@@ -1774,7 +1775,7 @@ class _GlobalChatPageState extends ConsumerState<GlobalChatPage>
             filePath,
             fileBytes,
             fileOptions: FileOptions(
-              contentType: _getMimeType(file.extension),
+              contentType: mimeType,
               upsert: false,
             ),
           );
@@ -1787,48 +1788,6 @@ class _GlobalChatPageState extends ConsumerState<GlobalChatPage>
       print('File upload error: $e');
       print('Error type: ${e.runtimeType}');
       return null;
-    }
-  }
-
-  String _getMimeType(String? extension) {
-    if (extension == null) return 'application/octet-stream';
-    final ext = extension.toLowerCase();
-    switch (ext) {
-      case 'pdf': return 'application/pdf';
-      case 'jpg':
-      case 'jpeg': return 'image/jpeg';
-      case 'png': return 'image/png';
-      case 'gif': return 'image/gif';
-      case 'webp': return 'image/webp';
-      case 'mp4': return 'video/mp4';
-      case 'mov': return 'video/quicktime';
-      case 'avi': return 'video/x-msvideo';
-      case 'mkv': return 'video/x-matroska';
-      case 'webm': return 'video/webm';
-      case 'mp3': return 'audio/mpeg';
-      case 'wav': return 'audio/wav';
-      case 'm4a': return 'audio/mp4';
-      case 'ogg': return 'audio/ogg';
-      case 'doc': return 'application/msword';
-      case 'docx': return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-      case 'xls': return 'application/vnd.ms-excel';
-      case 'xlsx': return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-      case 'ppt': return 'application/vnd.ms-powerpoint';
-      case 'pptx': return 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
-      case 'txt': return 'text/plain';
-      case 'csv': return 'text/csv';
-      case 'zip': return 'application/zip';
-      case 'rar': return 'application/vnd.rar';
-      case '7z': return 'application/x-7z-compressed';
-      case 'tar': return 'application/x-tar';
-      case 'apk': return 'application/vnd.android.package-archive';
-      case 'exe': return 'application/x-msdownload';
-      case 'dmg': return 'application/x-apple-diskimage';
-      case 'json': return 'application/json';
-      case 'xml': return 'application/xml';
-      case 'html': return 'text/html';
-      case 'svg': return 'image/svg+xml';
-      default: return 'application/octet-stream';
     }
   }
 
