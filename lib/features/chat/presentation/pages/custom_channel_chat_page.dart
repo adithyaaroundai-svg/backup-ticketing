@@ -27,6 +27,7 @@ import '../widgets/markdown_text_editing_controller.dart';
 import '../widgets/add_members_page.dart';
 import '../widgets/chat_voice_recorder.dart';
 import '../widgets/video_message_widget.dart';
+import '../widgets/forward_message_dialog.dart';
 import '../widgets/chat_attachment_renderer.dart';
 import '../widgets/chat_drop_overlay.dart';
 import '../../../../core/services/chat_drag_drop_paste_helper.dart';
@@ -317,7 +318,7 @@ class _CustomChannelChatPageState extends ConsumerState<CustomChannelChatPage> {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.any,
         allowMultiple: false,
-        withData: kIsWeb,
+        withData: true, // always load bytes — required for binary files like zip on all platforms
       );
       
       if (result != null && result.files.isNotEmpty) {
@@ -543,11 +544,15 @@ class _CustomChannelChatPageState extends ConsumerState<CustomChannelChatPage> {
         
         Uint8List fileBytes;
         if (_selectedFile!.bytes != null) {
-          fileBytes = Uint8List.fromList(_selectedFile!.bytes!);
+          fileBytes = _selectedFile!.bytes!;
         } else if (_selectedFile!.path != null) {
           fileBytes = await File(_selectedFile!.path!).readAsBytes();
         } else {
           throw Exception('No file bytes or path available');
+        }
+        
+        if (fileBytes.isEmpty) {
+          throw Exception('File is empty (0 bytes). Please re-select the file.');
         }
         
         final mimeType = getMimeType(_selectedFile!.extension, _selectedFile!.name);
@@ -2014,6 +2019,25 @@ class _ChatBubbleState extends ConsumerState<_ChatBubble> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    if (message.isForwarded)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 2, left: 4),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.forward, size: 12, color: Theme.of(context).brightness == Brightness.dark ? Colors.white54 : Colors.black54),
+                            const SizedBox(width: 4),
+                            Text(
+                              'Forwarded',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontStyle: FontStyle.italic,
+                                color: Theme.of(context).brightness == Brightness.dark ? Colors.white54 : Colors.black54,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     // Always show sender name
                     if (showSender && message.senderName != null)
                       Padding(
@@ -2282,6 +2306,26 @@ class _ChatBubbleState extends ConsumerState<_ChatBubble> {
                               Icon(Icons.reply, size: 20, color: context.isDarkMode ? Colors.white70 : Colors.black87),
                               const SizedBox(width: 12),
                               Text('Reply', style: TextStyle(color: context.isDarkMode ? Colors.white70 : Colors.black87)),
+                            ],
+                          ),
+                        ),
+                        PopupMenuItem<String>(
+                          value: 'forward',
+                          onTap: () {
+                             Future.microtask(() {
+                               if (context.mounted) {
+                                 showDialog(
+                                   context: context,
+                                   builder: (_) => ForwardMessageDialog(message: message),
+                                 );
+                               }
+                             });
+                          },
+                          child: Row(
+                            children: [
+                              Icon(Icons.forward, size: 20, color: context.isDarkMode ? Colors.white70 : Colors.black87),
+                              const SizedBox(width: 12),
+                              Text('Forward', style: TextStyle(color: context.isDarkMode ? Colors.white70 : Colors.black87)),
                             ],
                           ),
                         ),

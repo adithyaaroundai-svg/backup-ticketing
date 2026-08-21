@@ -369,6 +369,7 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
     });
 
     final isDesktop = MediaQuery.of(context).size.width > 900;
+    final currentUser = ref.watch(authProvider);
 
     if (isDesktop) {
       return ChatToastOverlay(
@@ -391,7 +392,7 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
                     });
                   },
                 ),
-                if (!_isRestrictedAgent && !widget.currentPath.startsWith('/sales-channel'))
+                if (!_isRestrictedAgent && !widget.currentPath.startsWith('/sales-channel') && currentUser?.isSoftwareDeveloper != true)
                   _CollapsibleTicketPane(
                     currentPath: widget.currentPath,
                     isOpen: ref.watch(ticketPaneOpenProvider),
@@ -556,7 +557,7 @@ class _TopNav extends ConsumerWidget {
     final mainNavItems = <Widget>[
       if (isSalesChannel) ...[
         _TopNavItem(
-          label: 'Chat',
+          label: 'Sales Chat',
           icon: LucideIcons.messageCircle,
           path: '/sales-channel?tab=0',
           isActive:
@@ -979,10 +980,11 @@ class _TopNav extends ConsumerWidget {
               child: Row(children: mainNavItems),
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-            child: Row(mainAxisSize: MainAxisSize.min, children: rightNavItems),
-          ),
+          if (!isSalesChannel)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Row(mainAxisSize: MainAxisSize.min, children: rightNavItems),
+            ),
           Consumer(
             builder: (context, ref, child) {
               return IconButton(
@@ -3017,7 +3019,7 @@ class _ChannelsListState extends ConsumerState<_ChannelsList> {
                     ),
                     const SizedBox(width: 8),
                     Text(
-                      'sales',
+                      'Product-sales',
                       style: TextStyle(
                         color: currentPath.startsWith('/sales-channel')
                             ? textColorPrimary
@@ -3775,7 +3777,7 @@ class _TicketTile extends ConsumerWidget {
 
   String _getTicketDescription(Ticket ticket) {
     // Use title as primary issue description
-    String description = ticket.title;
+    String description = ticket.ticketNumber != null ? '#${ticket.ticketNumber} · ${ticket.title}' : ticket.title;
 
     // Add description if available and different from title
     if (ticket.description != null &&

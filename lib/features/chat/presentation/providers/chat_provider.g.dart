@@ -128,7 +128,7 @@ final class ChatStreamProvider
   }
 }
 
-String _$chatStreamHash() => r'92ff6d5091e67439358a3d5d294f9a7d1c69d40c';
+String _$chatStreamHash() => r'9a7d91ed9f2ce58de14b58623c1670c6d08263c8';
 
 final class ChatStreamFamily extends $Family
     with
@@ -219,7 +219,7 @@ final class DmStreamProvider
   }
 }
 
-String _$dmStreamHash() => r'49cddd1f1b32fd3ff549b444d5948a2d05377dc9';
+String _$dmStreamHash() => r'80771dc2ac27f5df2ee6c391085667bd8850d2fb';
 
 final class DmStreamFamily extends $Family
     with
@@ -293,7 +293,7 @@ final class ChatLastSeenProvider
   ChatLastSeen create() => ChatLastSeen();
 }
 
-String _$chatLastSeenHash() => r'7dbe54d62256d72c9672650a5a0df0de3e74989a';
+String _$chatLastSeenHash() => r'1c63767017ff7c355ae15cb32bc788468851fd41';
 
 abstract class _$ChatLastSeen extends $AsyncNotifier<DateTime> {
   FutureOr<DateTime> build();
@@ -346,7 +346,7 @@ final class ChatUnreadCountProvider
   }
 }
 
-String _$chatUnreadCountHash() => r'e2885b069602872c0f3b07eef64e6f7a99ec6a1b';
+String _$chatUnreadCountHash() => r'1eb3cdfd176de3f53a361d5828d9157bd4f9d629';
 
 abstract class _$ChatUnreadCount extends $Notifier<int> {
   int build();
@@ -554,7 +554,7 @@ final class AllAroundTallyLastSeenProvider
 }
 
 String _$allAroundTallyLastSeenHash() =>
-    r'1d5ff50bad853fabe07953138702e6c77ebdd95b';
+    r'3486a00ab600ced619f223a4cd06289054d71608';
 
 abstract class _$AllAroundTallyLastSeen extends $AsyncNotifier<DateTime> {
   FutureOr<DateTime> build();
@@ -708,7 +708,7 @@ final class ChatControllerProvider
   ChatController create() => ChatController();
 }
 
-String _$chatControllerHash() => r'c18d7c03fef9dc4740695ceddde85c263032d37a';
+String _$chatControllerHash() => r'9c002aa20b28e20705ec3f4b00922fbbca130295';
 
 abstract class _$ChatController extends $AsyncNotifier<void> {
   FutureOr<void> build();

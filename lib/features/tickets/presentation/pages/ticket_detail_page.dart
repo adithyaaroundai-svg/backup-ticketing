@@ -402,7 +402,7 @@ class _TicketDetailPageState extends ConsumerState<TicketDetailPage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Ticket Details',
+                ticketsAsync.value?.ticketNumber != null ? 'Ticket #${ticketsAsync.value!.ticketNumber}' : 'Ticket Details',
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
@@ -514,7 +514,7 @@ class _TicketDetailPageState extends ConsumerState<TicketDetailPage> {
                                 children: [
                                   Expanded(
                                     child: Text(
-                                      ticket.title,
+                                      ticket.ticketNumber != null ? '#${ticket.ticketNumber} · ${ticket.title}' : ticket.title,
                                       style: TextStyle(
                                         fontSize: 18,
                                         fontWeight: FontWeight.w600,

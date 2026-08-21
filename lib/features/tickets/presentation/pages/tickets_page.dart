@@ -1898,7 +1898,7 @@ class _AgentAssignmentSidebarState
 
                         children: [
                           Text(
-                            ticket.title,
+                            ticket.ticketNumber != null ? '#${ticket.ticketNumber} · ${ticket.title}' : ticket.title,
 
                             maxLines: 2,
 
@@ -2217,7 +2217,7 @@ class _AgentAssignmentSidebarState
 
               children: [
                 Text(
-                  'Reassign "${ticket.title}"',
+                  ticket.ticketNumber != null ? 'Reassign "#${ticket.ticketNumber} · ${ticket.title}"' : 'Reassign "${ticket.title}"',
 
                   style: TextStyle(
                     fontSize: 16,

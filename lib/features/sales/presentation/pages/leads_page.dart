@@ -153,7 +153,7 @@ class _LeadsPageState extends ConsumerState<LeadsPage> {
             Expanded(
               child: leadsAsync.when(
                 data: (leads) {
-                  var columns = ['New Lead', 'Contacted', 'Qualified', 'Proposal', 'Negotiation'];
+                  var columns = ['New Lead', 'Contacted', 'Qualified', 'Negotiation'];
                   
                   final wonLeads = leads.where((d) => d.status == 'Won' || d.status == 'win').toList();
                   final lostLeads = leads.where((d) => d.status == 'Lost' || d.status == 'loss').toList();
@@ -681,7 +681,7 @@ class _CustomerCard extends StatelessWidget {
                     onStageChange(nextStage);
                   },
                   itemBuilder: (BuildContext context) {
-                    return ['New Lead', 'Contacted', 'Qualified', 'Proposal', 'Negotiation', 'Won', 'Lost'].map((String choice) {
+                    return ['New Lead', 'Contacted', 'Qualified', 'Negotiation', 'Won', 'Lost'].map((String choice) {
                       return PopupMenuItem<String>(
                         value: choice,
                         child: Text(choice, style: TextStyle(fontSize: 13, color: context.adaptiveSlate700)),
@@ -972,7 +972,7 @@ class _LeadCard extends StatelessWidget {
                         Navigator.pop(context);
                       },
                       itemBuilder: (BuildContext context) {
-                        return ['New Lead', 'Contacted', 'Qualified', 'Proposal', 'Negotiation', 'Won', 'Lost'].map((String choice) {
+                        return ['New Lead', 'Contacted', 'Qualified', 'Negotiation', 'Won', 'Lost'].map((String choice) {
                           return PopupMenuItem<String>(
                             value: choice,
                             child: Text(choice, style: TextStyle(fontSize: 14, color: context.adaptiveSlate700)),

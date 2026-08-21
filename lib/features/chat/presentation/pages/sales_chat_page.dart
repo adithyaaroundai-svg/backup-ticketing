@@ -242,7 +242,7 @@ class _SalesChatPageState extends ConsumerState<SalesChatPage> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           const Text(
-                            '#sales-channel',
+                            '#Product-sales',
                             style: TextStyle(
                               color: Colors.white,
                               fontSize: 18,
@@ -426,7 +426,7 @@ class _SalesChatPageState extends ConsumerState<SalesChatPage> {
                               ),
                             ),
                             Text(
-                              'sales-channel',
+                              'Product-sales',
                               style: TextStyle(
                                 color: Colors.white,
                                 fontSize: 16,

@@ -94,6 +94,7 @@ class ChatStream extends _$ChatStream {
   RealtimeChannel? _receiptsSub;
   bool _hasMore = true;
   bool _isLoadingMore = false;
+  
   bool get isLoadingMore => _isLoadingMore;
   bool get hasMore => _hasMore;
   
@@ -118,7 +119,7 @@ class ChatStream extends _$ChatStream {
       ReadReceiptsTracker.injectReceipts(receipts);
     }
     
-    _chatCache[channel] = finalMessages;
+    _updateState(finalMessages);
     _chatHasMoreCache[channel] = _hasMore;
     
     _channelSub = repository.subscribeToMessages(
@@ -201,6 +202,7 @@ class ChatStream extends _$ChatStream {
     if (payload.eventType == PostgresChangeEvent.insert) {
       final newMsg = ChatMessage.fromJson(payload.newRecord);
       if (newMsg.channel != channel || newMsg.receiverId != null) return;
+
       final currentList = state.value ?? [];
       if (!currentList.any((m) => m.id == newMsg.id)) {
         _updateState([...currentList, newMsg]);
@@ -219,8 +221,10 @@ class ChatStream extends _$ChatStream {
         }
       }
     } else if (payload.eventType == PostgresChangeEvent.update) {
+      print('Postgres UPDATE received for channel! Record ID: ${payload.newRecord['id']}');
       final updatedMsg = ChatMessage.fromJson(payload.newRecord);
       if (updatedMsg.channel != channel || updatedMsg.receiverId != null) return;
+
       final currentList = state.value ?? [];
       final index = currentList.indexWhere((m) => m.id == updatedMsg.id);
       if (index != -1) {
@@ -340,6 +344,7 @@ class DmStream extends _$DmStream {
   RealtimeChannel? _receiptsSub;
   bool _hasMore = true;
   bool _isLoadingMore = false;
+  
   bool get isLoadingMore => _isLoadingMore;
   bool get hasMore => _hasMore;
   
@@ -347,15 +352,19 @@ class DmStream extends _$DmStream {
   FutureOr<List<ChatMessage>> build(String chatPartnerId) async {
     final repository = ref.watch(chatRepositoryProvider);
     final myId = ref.watch(authProvider)?.id;
+    if (myId == null) return [];
+
+    final cacheKey = '${myId}_$chatPartnerId';
+    final currentCache = _dmCache[cacheKey] ?? [];
+    
     final messages = await repository.getPaginatedMessages(
       currentUserId: myId,
       chatPartnerId: chatPartnerId,
       limit: 30,
     );
+
     _hasMore = messages.length == 30;
-    
-    final cacheKey = '${myId}_$chatPartnerId';
-    final currentCache = _dmCache[cacheKey] ?? [];
+
     final optimisticMessages = currentCache.where((c) => !messages.any((m) => m.id == c.id)).toList();
     final finalMessages = [...messages, ...optimisticMessages];
     finalMessages.sort((a, b) {
@@ -369,10 +378,8 @@ class DmStream extends _$DmStream {
       ReadReceiptsTracker.injectReceipts(receipts);
     }
     
-    if (myId != null) {
-      _dmCache[cacheKey] = finalMessages;
-      _dmHasMoreCache[cacheKey] = _hasMore;
-    }
+    _updateState(finalMessages);
+    _dmHasMoreCache[cacheKey] = _hasMore;
     
     _channelSub = repository.subscribeToMessages(
       channelName: 'dm',
@@ -423,9 +430,15 @@ class DmStream extends _$DmStream {
     if (payload.eventType == PostgresChangeEvent.insert) {
       print('Postgres INSERT received for DM!');
       final newMsg = ChatMessage.fromJson(payload.newRecord);
-      final isRelevant = (newMsg.senderId == myId && newMsg.receiverId == chatPartnerId) ||
-                         (newMsg.senderId == chatPartnerId && newMsg.receiverId == myId);
+      final normalizedMyId = myId.trim().toLowerCase();
+      final normalizedPartnerId = chatPartnerId.trim().toLowerCase();
+      final normalizedSenderId = newMsg.senderId.trim().toLowerCase();
+      final normalizedReceiverId = newMsg.receiverId?.trim().toLowerCase();
+
+      final isRelevant = (normalizedSenderId == normalizedMyId && normalizedReceiverId == normalizedPartnerId) ||
+                         (normalizedSenderId == normalizedPartnerId && normalizedReceiverId == normalizedMyId);
       if (!isRelevant) return;
+      
       final currentList = state.value ?? [];
       if (!currentList.any((m) => m.id == newMsg.id)) {
         _updateState([...currentList, newMsg]);
@@ -433,9 +446,15 @@ class DmStream extends _$DmStream {
     } else if (payload.eventType == PostgresChangeEvent.update) {
       print('Postgres UPDATE received for DM! Record ID: ${payload.newRecord['id']}');
       final updatedMsg = ChatMessage.fromJson(payload.newRecord);
-      final isRelevant = (updatedMsg.senderId == myId && updatedMsg.receiverId == chatPartnerId) ||
-                         (updatedMsg.senderId == chatPartnerId && updatedMsg.receiverId == myId);
+      final normalizedMyId = myId.trim().toLowerCase();
+      final normalizedPartnerId = chatPartnerId.trim().toLowerCase();
+      final normalizedSenderId = updatedMsg.senderId.trim().toLowerCase();
+      final normalizedReceiverId = updatedMsg.receiverId?.trim().toLowerCase();
+
+      final isRelevant = (normalizedSenderId == normalizedMyId && normalizedReceiverId == normalizedPartnerId) ||
+                         (normalizedSenderId == normalizedPartnerId && normalizedReceiverId == normalizedMyId);
       if (!isRelevant) return;
+      
       final currentList = state.value ?? [];
       final index = currentList.indexWhere((m) => m.id == updatedMsg.id);
       if (index != -1) {
@@ -610,8 +629,12 @@ class ChatUnreadCount extends _$ChatUnreadCount {
     final lastSeenAsync = ref.watch(chatLastSeenProvider);
 
     // Set up callback to invalidate when tracker changes
-    ReadReceiptsTracker.setOnChangeCallback(() {
+    void listener() {
       ref.invalidateSelf();
+    }
+    ReadReceiptsTracker.addListener(listener);
+    ref.onDispose(() {
+      ReadReceiptsTracker.removeListener(listener);
     });
 
     // Don't calculate unread count until lastSeen has loaded.
@@ -1057,8 +1080,12 @@ final customChannelUnreadCountProvider =
   final lastSeenMap = ref.watch(customChannelLastSeenNotifierProvider);
 
   // Re-run whenever ReadReceiptsTracker changes
-  ReadReceiptsTracker.setOnChangeCallback(() {
+  void listener() {
     ref.invalidateSelf();
+  }
+  ReadReceiptsTracker.addListener(listener);
+  ref.onDispose(() {
+    ReadReceiptsTracker.removeListener(listener);
   });
 
   // If this channel's last-seen hasn't been loaded yet, trigger load and return 0
@@ -1102,7 +1129,23 @@ Future<void> markCustomChannelAsRead(WidgetRef ref, String channelId, {DateTime?
   await ref.read(customChannelLastSeenNotifierProvider.notifier).markAsRead(channelId, timestamp: timestamp);
 }
 
-// ── Read receipts tracking (client-side) ─────────────────────────────────────
+/// A provider that notifies listeners whenever ReadReceiptsTracker updates.
+/// UI widgets should watch this to rebuild when read receipts change.
+class ReadReceiptsUpdateNotifier extends Notifier<int> {
+  @override
+  int build() {
+    void listener() {
+      state++;
+    }
+    ReadReceiptsTracker.addListener(listener);
+    ref.onDispose(() {
+      ReadReceiptsTracker.removeListener(listener);
+    });
+    return 0;
+  }
+}
+final readReceiptsUpdateProvider = NotifierProvider<ReadReceiptsUpdateNotifier, int>(ReadReceiptsUpdateNotifier.new);
+
 class ReadReceiptsTracker {
   static const _readReceiptsKey = 'chat_read_receipts';
   static const _userLastSeenKey = 'chat_user_last_seen_';
@@ -1114,10 +1157,20 @@ class ReadReceiptsTracker {
   static bool _isInitializing = false; // Prevent concurrent initialization
 
   // Callback to notify when tracker changes
-  static VoidCallback? _onChange;
+  static final Set<VoidCallback> _listeners = {};
 
-  static void setOnChangeCallback(VoidCallback callback) {
-    _onChange = callback;
+  static void addListener(VoidCallback callback) {
+    _listeners.add(callback);
+  }
+
+  static void removeListener(VoidCallback callback) {
+    _listeners.remove(callback);
+  }
+
+  static void _notifyListeners() {
+    for (final listener in _listeners.toList()) {
+      listener();
+    }
   }
 
   static Future<void> _initialize() async {
@@ -1156,7 +1209,7 @@ class ReadReceiptsTracker {
 
       _initialized = true;
       // Notify listeners that tracker is now initialized
-      _onChange?.call();
+      _notifyListeners();
     } catch (e) {
       // If loading fails, continue with empty cache
       debugPrint('Error loading ReadReceiptsTracker: $e');
@@ -1194,7 +1247,7 @@ class ReadReceiptsTracker {
     await _saveReadReceipts();
     await _saveRemoteReadReceipt(messageId, userId);
     // Notify listeners that tracker changed
-    _onChange?.call();
+    _notifyListeners();
   }
 
   static Future<void> markMultipleAsRead(List<String> messageIds, String userId) async {
@@ -1221,7 +1274,7 @@ class ReadReceiptsTracker {
       debugPrint('Unable to save multiple remote chat read receipts: $e');
     }
     
-    _onChange?.call();
+    _notifyListeners();
   }
 
   static Future<void> updateUserLastSeen(
@@ -1275,7 +1328,7 @@ class ReadReceiptsTracker {
     }
     if (changed) {
       _saveReadReceipts();
-      _onChange?.call();
+      _notifyListeners();
     }
   }
 
@@ -1287,7 +1340,7 @@ class ReadReceiptsTracker {
     if (!_cache[messageId]!.contains(normalizedUser)) {
       _cache[messageId]!.add(normalizedUser);
       _saveReadReceipts();
-      _onChange?.call();
+      _notifyListeners();
     }
   }
 
@@ -1327,6 +1380,7 @@ class ChatController extends _$ChatController {
     String? fileName,
     String? fileType,
     String channel = 'support-chat',
+    bool isForwarded = false,
     List<dynamic>? richTextDelta,
   }) async {
     state = const AsyncLoading();
@@ -1349,6 +1403,7 @@ class ChatController extends _$ChatController {
       fileName: fileName,
       fileType: fileType,
       channel: channel,
+      isForwarded: isForwarded,
       richTextDelta: richTextDelta,
     );
 
@@ -1380,6 +1435,7 @@ class ChatController extends _$ChatController {
                 fileName: fileName,
                 fileType: fileType,
                 channel: channel,
+                isForwarded: isForwarded,
               );
         } catch (e, st) {
           print('SEND MESSAGE ERROR: $e');
@@ -1769,6 +1825,7 @@ class DmConversationEngine extends Notifier<Map<String, DmConversationState>> {
   RealtimeChannel? _rcptSub;
   bool _isBootstrapping = true;
   final List<PostgresChangePayload> _realtimeBuffer = [];
+  final Set<String> _pendingConversationReads = {};
   final Set<String> _seenMessageIds = {};
 
   int _stateVersion = 0;
@@ -1824,8 +1881,9 @@ class DmConversationEngine extends Notifier<Map<String, DmConversationState>> {
       final cachedMessages = await cacheService.readAllDmMessages(currentUserId);
       final cacheMap = <String, DmConversationState>{};
       for (final msg in cachedMessages) {
-        final partnerId = msg.senderId == currentUserId ? msg.receiverId! : msg.senderId;
-        if (partnerId == currentUserId) continue;
+        final rawPartnerId = msg.senderId == currentUserId ? msg.receiverId! : msg.senderId;
+        final partnerId = rawPartnerId.trim().toLowerCase();
+        if (partnerId == currentUserId.trim().toLowerCase()) continue;
         _seenMessageIds.add(msg.id);
 
         final existing = cacheMap[partnerId];
@@ -1868,7 +1926,7 @@ class DmConversationEngine extends Notifier<Map<String, DmConversationState>> {
       final nextState = Map<String, DmConversationState>.from(state);
 
       for (final entry in bootstrapData.entries) {
-        final partnerId = entry.key;
+        final partnerId = entry.key.trim().toLowerCase();
         final data = entry.value;
         final lastMsg = data['last_message'] as ChatMessage?;
         final unreadIds = data['unread_message_ids'] as Set<String>? ?? {};
@@ -1881,6 +1939,10 @@ class DmConversationEngine extends Notifier<Map<String, DmConversationState>> {
 
         final isOpen = _ref.read(currentOpenConversationProvider) == partnerId;
         final finalUnreadIds = isOpen ? <String>{} : unreadIds;
+        
+        if (isOpen && unreadIds.isNotEmpty) {
+          ReadReceiptsTracker.markMultipleAsRead(unreadIds.toList(), currentUserId);
+        }
         
         final existing = nextState[partnerId];
         if (existing == null) {
@@ -1910,6 +1972,7 @@ class DmConversationEngine extends Notifier<Map<String, DmConversationState>> {
 
     // 4. Replay buffered events in order and continue normal realtime operation
     _isBootstrapping = false;
+    print('DmConversationEngine: _init finished. Replaying ${_realtimeBuffer.length} buffered events.');
     if (_realtimeBuffer.isNotEmpty) {
       final toReplay = List<PostgresChangePayload>.from(_realtimeBuffer);
       _realtimeBuffer.clear();
@@ -1921,10 +1984,20 @@ class DmConversationEngine extends Notifier<Map<String, DmConversationState>> {
         }
       }
     }
+
+    // 5. Process pending reads that arrived during bootstrap
+    if (_pendingConversationReads.isNotEmpty) {
+      for (final partnerId in _pendingConversationReads) {
+        markConversationAsRead(partnerId);
+      }
+      _pendingConversationReads.clear();
+    }
   }
 
   void _handleMsgEvent(PostgresChangePayload payload, String currentUserId) {
+    print('DmConversationEngine: Received Msg Event! Type: ${payload.eventType}');
     if (_isBootstrapping) {
+      print('DmConversationEngine: Bootstrapping is true, buffering event.');
       _realtimeBuffer.add(payload);
       return;
     }
@@ -1944,11 +2017,18 @@ class DmConversationEngine extends Notifier<Map<String, DmConversationState>> {
       final msg = ChatMessage.fromJson(payload.newRecord);
       
       if (msg.receiverId == null) return;
-      final isRelevant = (msg.senderId == currentUserId || msg.receiverId == currentUserId);
+      
+      final normalizedMyId = currentUserId.trim().toLowerCase();
+      final normalizedSenderId = msg.senderId.trim().toLowerCase();
+      final normalizedReceiverId = msg.receiverId!.trim().toLowerCase();
+
+      final isRelevant = (normalizedSenderId == normalizedMyId || normalizedReceiverId == normalizedMyId);
       if (!isRelevant) return;
 
-      final partnerId = msg.senderId == currentUserId ? msg.receiverId! : msg.senderId;
-      if (partnerId == currentUserId) return;
+      final partnerId = normalizedSenderId == normalizedMyId ? normalizedReceiverId : normalizedSenderId;
+      if (partnerId == normalizedMyId) return;
+
+      print('DmConversationEngine: Processing Msg Payload for partner $partnerId');
 
       final isOpen = _ref.read(currentOpenConversationProvider) == partnerId;
       final isInsert = payload.eventType == PostgresChangeEvent.insert;
@@ -2082,15 +2162,19 @@ class DmConversationEngine extends Notifier<Map<String, DmConversationState>> {
     final nextMap = Map<String, DmConversationState>.from(currentMap);
     bool changed = false;
 
-    if (previous != null && nextMap.containsKey(previous)) {
-      nextMap[previous] = nextMap[previous]!.copyWith(isOpen: false);
-      changed = true;
+    if (previous != null) {
+      final p = previous.trim().toLowerCase();
+      if (nextMap.containsKey(p)) {
+        nextMap[p] = nextMap[p]!.copyWith(isOpen: false);
+        changed = true;
+      }
     }
 
     if (current != null) {
-      if (!nextMap.containsKey(current)) {
-        nextMap[current] = DmConversationState(
-          partnerId: current,
+      final c = current.trim().toLowerCase();
+      if (!nextMap.containsKey(c)) {
+        nextMap[c] = DmConversationState(
+          partnerId: c,
           unreadCount: 0,
           isOpen: true,
           unreadMessageIds: const {},
@@ -2098,10 +2182,10 @@ class DmConversationEngine extends Notifier<Map<String, DmConversationState>> {
         );
         changed = true;
       } else {
-        final conv = nextMap[current]!;
+        final conv = nextMap[c]!;
         if (!conv.isOpen || conv.unreadCount > 0) {
           final idsToMarkRead = Set<String>.from(conv.unreadMessageIds);
-          nextMap[current] = conv.copyWith(
+          nextMap[c] = conv.copyWith(
             isOpen: true,
             unreadCount: 0,
             unreadMessageIds: const {},
@@ -2122,6 +2206,11 @@ class DmConversationEngine extends Notifier<Map<String, DmConversationState>> {
   }
 
   void markConversationAsRead(String partnerId) {
+    if (_isBootstrapping) {
+      _pendingConversationReads.add(partnerId);
+      return;
+    }
+    
     final authUser = _ref.read(authProvider);
     if (authUser == null) return;
     final myId = authUser.id;
@@ -2187,5 +2276,8 @@ final dmConversationsProvider = NotifierProvider<DmConversationEngine, Map<Strin
 });
 
 final dmUnreadCountProvider = Provider.family<int, String>((ref, partnerId) {
-  return ref.watch(dmConversationsProvider.select((map) => map[partnerId]?.unreadCount ?? 0));
+  final normalizedId = partnerId.trim().toLowerCase();
+  final count = ref.watch(dmConversationsProvider.select((map) => map[normalizedId]?.unreadCount ?? 0));
+  print('dmUnreadCountProvider UI for $normalizedId = $count');
+  return count;
 });

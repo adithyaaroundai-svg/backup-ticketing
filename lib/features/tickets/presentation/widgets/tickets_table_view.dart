@@ -110,6 +110,8 @@ class _TicketsTableViewState extends ConsumerState<TicketsTableView> {
       ),
       child: Row(
         children: [
+          Expanded(flex: 1, child: Text('Ticket #', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: context.adaptiveSlate600))),
+          const SizedBox(width: 32),
           Expanded(flex: 2, child: Text('Status', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: context.adaptiveSlate600))),
           const SizedBox(width: 32),
           Expanded(flex: 2, child: Text('Name of Customer', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: context.adaptiveSlate600))),
@@ -597,6 +599,12 @@ class _TicketsTableViewState extends ConsumerState<TicketsTableView> {
                                               // Fields row - exact same flex ratios and gaps as table header
                                               Row(
                                                 children: [
+                                                  // Ticket Number placeholder (flex: 1)
+                                                  Expanded(
+                                                    flex: 1,
+                                                    child: Text('Auto', style: TextStyle(fontSize: 11, color: context.adaptiveSlate500, fontStyle: FontStyle.italic)),
+                                                  ),
+                                                  SizedBox(width: 32),
                                                   // Status dropdown (flex: 2)
                                                   Expanded(
                                                     flex: 2,
@@ -1083,7 +1091,7 @@ class _TicketsTableViewState extends ConsumerState<TicketsTableView> {
                 const Spacer(),
                 Expanded(
                   child: Text(
-                    '#${ticket.ticketId.length > 8 ? ticket.ticketId.substring(0, 8) : ticket.ticketId}',
+                    ticket.ticketNumber != null ? '#${ticket.ticketNumber}' : '#${ticket.ticketId.length > 8 ? ticket.ticketId.substring(0, 8) : ticket.ticketId}',
                     style: TextStyle(fontSize: 11, color: context.adaptiveSlate400),
                     textAlign: TextAlign.right,
                     overflow: TextOverflow.ellipsis,
@@ -1759,6 +1767,19 @@ class _TicketTableRowState extends ConsumerState<TicketTableRow> {
         ),
         child: Row(
           children: [
+            // Ticket Number
+            Expanded(
+              flex: 1,
+              child: Text(
+                ticket.ticketNumber != null ? '#${ticket.ticketNumber}' : '-',
+                style: TextStyle(
+                  color: context.adaptiveSlate900,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+            const SizedBox(width: 32),
             // Status
             Expanded(
               flex: 2,
@@ -2024,9 +2045,9 @@ class _TicketTableRowState extends ConsumerState<TicketTableRow> {
                             children: [
                               Flexible(
                                 child: Tooltip(
-                                  message: ticket.title,
+                                  message: ticket.ticketNumber != null ? '#${ticket.ticketNumber} · ${ticket.title}' : ticket.title,
                                   child: Text(
-                                    ticket.title,
+                                    ticket.ticketNumber != null ? '#${ticket.ticketNumber} · ${ticket.title}' : ticket.title,
                                     style: TextStyle(
                                       fontSize: 13,
                                       color: context.isDarkMode ? Colors.white : context.adaptiveSlate700,
@@ -2051,9 +2072,9 @@ class _TicketTableRowState extends ConsumerState<TicketTableRow> {
                             ],
                           )
                     : Tooltip(
-                        message: ticket.title,
+                        message: ticket.ticketNumber != null ? '#${ticket.ticketNumber} · ${ticket.title}' : ticket.title,
                         child: Text(
-                          ticket.title,
+                          ticket.ticketNumber != null ? '#${ticket.ticketNumber} · ${ticket.title}' : ticket.title,
                           style: TextStyle(
                             fontSize: 13,
                             color: context.isDarkMode ? Colors.white : context.adaptiveSlate700,
@@ -2277,6 +2298,7 @@ class _TicketTableRowState extends ConsumerState<TicketTableRow> {
                     ? Transform.translate(
                         offset: const Offset(-12, 0),
                         child: DropdownButton<bool>(
+                          isExpanded: true,
                           value: ticket.paymentCollected ?? false,
                           items: const [
                             DropdownMenuItem(value: false, child: Text('No')),
@@ -2339,6 +2361,7 @@ class _TicketTableRowState extends ConsumerState<TicketTableRow> {
                     ? Transform.translate(
                         offset: const Offset(-12, 0),
                         child: DropdownButton<bool?>(
+                          isExpanded: true,
                           value: ticket.hasAmc,
                           items: const [
                             DropdownMenuItem(value: null, child: SizedBox.shrink()),

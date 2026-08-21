@@ -35,6 +35,7 @@ import '../../../tickets/domain/entities/ticket.dart';
 
 import '../../../tickets/presentation/providers/ticket_provider.dart';
 import '../widgets/chat_attachment_renderer.dart';
+import '../widgets/forward_message_dialog.dart';
 import '../widgets/chat_voice_recorder.dart';
 import '../widgets/chat_drop_overlay.dart';
 import '../../../../core/services/chat_drag_drop_paste_helper.dart';
@@ -454,6 +455,7 @@ class _DirectMessagePageState extends ConsumerState<DirectMessagePage> {
           fileUrl: fileUrl,
           fileName: fileName,
           fileType: fileType,
+          channel: 'dm',
         );
 
     final agentsAsync = ref.read(agentsListProvider);
@@ -504,6 +506,7 @@ class _DirectMessagePageState extends ConsumerState<DirectMessagePage> {
           replyToMessageId: _replyingToMessage?.id,
           replyToSenderName: _replyingToMessage?.senderName,
           replyToContent: _replyingToMessage?.content,
+          channel: 'dm',
         );
 
     if (_replyingToMessage != null) {
@@ -568,6 +571,7 @@ class _DirectMessagePageState extends ConsumerState<DirectMessagePage> {
           senderRole: agent.role,
 
           content: content,
+          channel: 'dm',
         );
   }
 
@@ -1819,7 +1823,7 @@ class _DirectMessagePageState extends ConsumerState<DirectMessagePage> {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.any,
         allowMultiple: false,
-        withData: kIsWeb,
+        withData: true, // always load bytes — required for binary files like zip on all platforms
       );
 
       if (result != null && result.files.isNotEmpty) {
@@ -1844,19 +1848,28 @@ class _DirectMessagePageState extends ConsumerState<DirectMessagePage> {
       final storage = Supabase.instance.client.storage;
       final filePath = sanitizeStorageFileName(file.name);
 
-      print('Reading file bytes...');
       Uint8List fileBytes;
 
       if (file.bytes != null) {
-        // Web platform - bytes are already available
-        fileBytes = Uint8List.fromList(file.bytes!);
+        // Bytes already loaded by FilePicker (withData: true)
+        fileBytes = file.bytes!;
         print('Using file bytes from picker: ${fileBytes.length}');
       } else if (file.path != null) {
-        // Mobile/desktop platform - read from file path
+        // Native platform fallback — read from disk
         fileBytes = await File(file.path!).readAsBytes();
         print('File bytes read from path: ${fileBytes.length}');
       } else {
         print('Error: No file bytes or path available');
+        return null;
+      }
+
+      if (fileBytes.isEmpty) {
+        print('Error: File is empty (0 bytes)');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Cannot upload: file appears to be empty. Please try again.')),
+          );
+        }
         return null;
       }
 
@@ -3210,6 +3223,7 @@ class _ChatBubble extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    ref.watch(readReceiptsUpdateProvider);
     final agentsAsync = ref.watch(agentsListProvider);
     final agents = agentsAsync.asData?.value ?? [];
     final agentData = agents.where((a) => a['id'] == message.senderId).firstOrNull;
@@ -3311,6 +3325,25 @@ class _ChatBubble extends ConsumerWidget {
                           : CrossAxisAlignment.start,
 
                       children: [
+                        if (message.isForwarded)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 4, left: 4),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.forward, size: 12, color: Theme.of(context).brightness == Brightness.dark ? Colors.white54 : Colors.black54),
+                                const SizedBox(width: 4),
+                                Text(
+                                  'Forwarded',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontStyle: FontStyle.italic,
+                                    color: Theme.of(context).brightness == Brightness.dark ? Colors.white54 : Colors.black54,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
                         // Header with name and timestamp
                         if (showSender)
                           Wrap(
@@ -4132,6 +4165,22 @@ class _ChatBubble extends ConsumerWidget {
                                         : AppColors.slate400),
                             ),
                           ),
+                          if (isMe) ...[
+                            const SizedBox(width: 4),
+                            Builder(
+                              builder: (context) {
+                                final readBy = ReadReceiptsTracker.getReadBy(message.id);
+                                final isRead = readBy.isNotEmpty; // Since it's a DM, any read means partner read it
+                                return Icon(
+                                  isRead ? Icons.done_all : Icons.check,
+                                  size: 14,
+                                  color: isRead 
+                                      ? Colors.blue 
+                                      : (context.isDarkMode ? Colors.white54 : Colors.black38),
+                                );
+                              }
+                            ),
+                          ],
                         ],
                       ),
                       if (mentionId != null)
@@ -4301,6 +4350,7 @@ class _HoverableMessageRowState extends State<_HoverableMessageRow> {
           isHovering: _isHovering,
           messageId: widget.message.id,
           messageContent: widget.message.content,
+          message: widget.message,
           child: widget.child,
         ),
       ),
@@ -4319,6 +4369,7 @@ class _HoverableActionMenuContext extends InheritedWidget {
   final Function(BuildContext, String) onHandleStarMessage;
   final String messageId;
   final String messageContent;
+  final ChatMessage message;
 
   const _HoverableActionMenuContext({
     required this.isHovering,
@@ -4330,6 +4381,7 @@ class _HoverableActionMenuContext extends InheritedWidget {
     required this.onHandleStarMessage,
     required this.messageId,
     required this.messageContent,
+    required this.message,
     required Widget child,
   }) : super(child: child);
 
@@ -4458,6 +4510,27 @@ class _HoverableActionMenu extends StatelessWidget {
                 Icon(Icons.reply, size: 20, color: isDark ? Colors.white70 : Colors.black87),
                 const SizedBox(width: 12),
                 Text('Reply', style: TextStyle(color: isDark ? Colors.white70 : Colors.black87)),
+              ],
+            ),
+          ),
+          PopupMenuItem<String>(
+            value: 'forward',
+            onTap: () {
+               // Use Future.microtask to show the dialog after the popup menu closes
+               Future.microtask(() {
+                 if (context.mounted) {
+                   showDialog(
+                     context: context,
+                     builder: (_) => ForwardMessageDialog(message: hoverContext.message),
+                   );
+                 }
+               });
+            },
+            child: Row(
+              children: [
+                Icon(Icons.forward, size: 20, color: isDark ? Colors.white70 : Colors.black87),
+                const SizedBox(width: 12),
+                Text('Forward', style: TextStyle(color: isDark ? Colors.white70 : Colors.black87)),
               ],
             ),
           ),

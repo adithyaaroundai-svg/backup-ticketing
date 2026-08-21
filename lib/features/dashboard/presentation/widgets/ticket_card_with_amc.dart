@@ -556,7 +556,7 @@ class _TicketCardWithAmcBody extends ConsumerWidget {
             const SizedBox(width: 8),
             Expanded(
               child: Text(
-                ticket.title,
+                ticket.ticketNumber != null ? '#${ticket.ticketNumber} · ${ticket.title}' : ticket.title,
                 style: TextStyle(
                   fontSize: 11.25,
                   fontWeight: FontWeight.w600,
@@ -718,7 +718,7 @@ class _TicketCardWithAmcBody extends ConsumerWidget {
             const SizedBox(width: 6),
             Expanded(
               child: Text(
-                ticket.title,
+                ticket.ticketNumber != null ? '#${ticket.ticketNumber} · ${ticket.title}' : ticket.title,
                 style: TextStyle(
                   fontSize: 10.5,
                   fontWeight: FontWeight.w600,

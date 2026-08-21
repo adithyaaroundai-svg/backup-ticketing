@@ -263,31 +263,30 @@ class _AllAroundTallyChatPageState extends ConsumerState<AllAroundTallyChatPage>
         final supabase = Supabase.instance.client;
         final filePath = sanitizeStorageFileName(_selectedFile!.name, prefix: currentUser.id);
         final mimeType = getMimeType(_selectedFile!.extension, _selectedFile!.name);
-        
-        if (kIsWeb && _selectedFile!.bytes != null) {
-          await supabase.storage
-              .from('chat_attachments')
-              .uploadBinary(
-                filePath,
-                _selectedFile!.bytes!,
-                fileOptions: FileOptions(
-                  contentType: mimeType,
-                  upsert: false,
-                ),
-              );
+
+        Uint8List fileBytes;
+        if (_selectedFile!.bytes != null) {
+          fileBytes = _selectedFile!.bytes!;
         } else if (_selectedFile!.path != null) {
-          final file = File(_selectedFile!.path!);
-          await supabase.storage
-              .from('chat_attachments')
-              .upload(
-                filePath,
-                file,
-                fileOptions: FileOptions(
-                  contentType: mimeType,
-                  upsert: false,
-                ),
-              );
+          fileBytes = await File(_selectedFile!.path!).readAsBytes();
+        } else {
+          throw Exception('No file bytes or path available');
         }
+
+        if (fileBytes.isEmpty) {
+          throw Exception('File is empty (0 bytes). Please re-select the file.');
+        }
+
+        await supabase.storage
+            .from('chat_attachments')
+            .uploadBinary(
+              filePath,
+              fileBytes,
+              fileOptions: FileOptions(
+                contentType: mimeType,
+                upsert: false,
+              ),
+            );
 
         fileUrl = supabase.storage.from('chat_attachments').getPublicUrl(filePath);
         fileName = _selectedFile!.name;
@@ -430,7 +429,7 @@ class _AllAroundTallyChatPageState extends ConsumerState<AllAroundTallyChatPage>
       final result = await FilePicker.platform.pickFiles(
         type: FileType.any,
         allowMultiple: false,
-        withData: kIsWeb,
+        withData: true, // always load bytes — required for binary files like zip on all platforms
       );
       
       if (result != null && result.files.isNotEmpty) {

@@ -6,8 +6,10 @@ list(APPEND FLUTTER_PLUGIN_LIST
   audioplayers_linux
   file_selector_linux
   gtk
+  irondash_engine_context
   printing
   record_linux
+  super_native_extensions
   url_launcher_linux
 )
 

@@ -1,0 +1,5 @@
+import 'package:super_clipboard/super_clipboard.dart';
+
+void main() {
+  ClipboardEvents.instance?.registerPasteEventListener((event) async {});
+}

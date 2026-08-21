@@ -57,13 +57,32 @@ void _processBlobFile(html.File file, String? typeHint, void Function(PlatformFi
               : Uint8List.fromList(result as List<int>);
 
           final rawType = typeHint ?? file.type;
-          final ext = rawType.contains('/')
-              ? rawType.split('/').last.split('+').first
-              : 'png';
-          final safeExt = (ext == 'jpeg' || ext.isEmpty) ? 'jpg' : ext;
-          final name = file.name.isNotEmpty && file.name != 'image.png'
+
+          // Derive extension from MIME type or existing filename
+          String ext;
+          if (file.name.isNotEmpty && file.name.contains('.')) {
+            ext = file.name.split('.').last.toLowerCase();
+          } else if (rawType.contains('/')) {
+            final mimeExt = rawType.split('/').last.split('+').first.toLowerCase();
+            // Normalise common MIME sub-types
+            ext = mimeExt == 'jpeg' ? 'jpg'
+                : mimeExt == 'vnd.rar' ? 'rar'
+                : mimeExt == 'x-7z-compressed' ? '7z'
+                : mimeExt == 'vnd.android.package-archive' ? 'apk'
+                : mimeExt == 'x-msdownload' ? 'exe'
+                : mimeExt == 'octet-stream' ? 'bin'
+                : mimeExt.isEmpty ? 'bin'
+                : mimeExt;
+          } else {
+            ext = 'bin';
+          }
+
+          // Use the original filename if meaningful, otherwise generate one
+          final name = (file.name.isNotEmpty &&
+                  file.name != 'image.png' &&
+                  file.name != 'blob')
               ? file.name
-              : 'screenshot_${DateTime.now().millisecondsSinceEpoch}.$safeExt';
+              : 'pasted_${DateTime.now().millisecondsSinceEpoch}.$ext';
 
           final platformFile = PlatformFile(
             name: name,
@@ -97,14 +116,14 @@ ChatDragDropPasteSubscription registerChatDragDropAndPaste({
       final clipboardData = event.clipboardData;
       if (clipboardData == null) return;
 
-      // Check 1: clipboardData.items (standard screenshot copy in Chrome/Edge/Firefox)
+      // Check 1: clipboardData.items — handles screenshots AND copied files
       final items = clipboardData.items;
       if (items != null && (items.length ?? 0) > 0) {
         for (int i = 0; i < (items.length ?? 0); i++) {
           final item = items[i];
-          final type = item.type;
+          final type = item.type ?? '';
 
-          if (type != null && type.startsWith('image/')) {
+          if (item.kind == 'file') {
             final file = item.getAsFile();
             if (file != null) {
               event.preventDefault();
@@ -116,16 +135,14 @@ ChatDragDropPasteSubscription registerChatDragDropAndPaste({
         }
       }
 
-      // Check 2: clipboardData.files
+      // Check 2: clipboardData.files — fallback for some browsers
       final files = clipboardData.files;
       if (files != null && files.isNotEmpty) {
         for (final file in files) {
-          if (file.type.startsWith('image/') || file.name.toLowerCase().endsWith('.png') || file.name.toLowerCase().endsWith('.jpg')) {
-            event.preventDefault();
-            event.stopPropagation();
-            _processBlobFile(file, file.type, onFileReceived);
-            return;
-          }
+          event.preventDefault();
+          event.stopPropagation();
+          _processBlobFile(file, file.type, onFileReceived);
+          return;
         }
       }
     }

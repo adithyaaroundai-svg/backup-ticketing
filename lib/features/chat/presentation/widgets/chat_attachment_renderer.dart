@@ -47,6 +47,40 @@ class ChatAttachmentRenderer extends ConsumerWidget {
     await downloadFileDirectly(url, fileName);
   }
 
+  /// Returns the best display/download filename.
+  /// Prefers message.fileName, then falls back to extracting from the URL path,
+  /// then appends the extension from fileType if still missing.
+  String _resolveFileName(String? fileName, String? fileType, String? url) {
+    // 1. Use provided filename if it looks valid (has extension)
+    if (fileName != null && fileName.trim().isNotEmpty && fileName.contains('.')) {
+      return fileName.trim();
+    }
+
+    // 2. Extract from URL
+    if (url != null && url.isNotEmpty) {
+      try {
+        final uri = Uri.parse(url);
+        final segments = uri.pathSegments;
+        if (segments.isNotEmpty) {
+          // URL path often has timestamp_originalname.ext — decode %20 etc.
+          final rawName = Uri.decodeComponent(segments.last);
+          if (rawName.isNotEmpty && rawName.contains('.')) {
+            return rawName;
+          }
+        }
+      } catch (_) {}
+    }
+
+    // 3. Use provided filename + append fileType extension
+    if (fileName != null && fileName.trim().isNotEmpty && fileType != null) {
+      return '${fileName.trim()}.${fileType.toLowerCase()}';
+    }
+
+    // 4. Generic fallback with extension
+    final ext = fileType != null && fileType.isNotEmpty ? '.${fileType.toLowerCase()}' : '';
+    return 'file$ext';
+  }
+
   ChatAttachmentType _getType(String? fileType, String? fileName) {
     if (fileType == null && fileName == null) return ChatAttachmentType.none;
     final type = (fileType ?? '').toLowerCase();
@@ -163,7 +197,7 @@ class ChatAttachmentRenderer extends ConsumerWidget {
                               tooltip: 'Download',
                               constraints: const BoxConstraints(),
                               padding: const EdgeInsets.all(6),
-                              onPressed: () => _downloadFile(url, fileName),
+                              onPressed: () => _downloadFile(url, _resolveFileName(fileName, null, url)),
                             ),
                             const SizedBox(width: 8),
                             IconButton(
@@ -311,8 +345,8 @@ class ChatAttachmentRenderer extends ConsumerWidget {
           padding: const EdgeInsets.only(top: 4, bottom: 4),
           child: VideoMessageWidget(
             videoUrl: message.fileUrl!,
-            fileName: message.fileName ?? 'video',
-            onDownload: () => _downloadFile(message.fileUrl!, message.fileName ?? 'video'),
+            fileName: _resolveFileName(message.fileName, message.fileType, message.fileUrl),
+            onDownload: () => _downloadFile(message.fileUrl!, _resolveFileName(message.fileName, message.fileType, message.fileUrl)),
           ),
         );
         break;
@@ -320,8 +354,10 @@ class ChatAttachmentRenderer extends ConsumerWidget {
       case ChatAttachmentType.file:
       case ChatAttachmentType.none:
       default:
+        // Derive best available filename — prefer message.fileName, fallback to extracting from URL
+        final displayName = _resolveFileName(message.fileName, message.fileType, message.fileUrl);
         contentWidget = GestureDetector(
-          onTap: () => _downloadFile(message.fileUrl!, message.fileName ?? 'file'),
+          onTap: () => _downloadFile(message.fileUrl!, displayName),
           child: Container(
             margin: const EdgeInsets.only(top: 4, bottom: 8),
             padding: const EdgeInsets.all(8),
@@ -339,7 +375,7 @@ class ChatAttachmentRenderer extends ConsumerWidget {
                 const SizedBox(width: 6),
                 Flexible(
                   child: Text(
-                    message.fileName ?? 'File',
+                    displayName,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(

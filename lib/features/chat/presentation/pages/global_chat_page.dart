@@ -33,6 +33,7 @@ import '../../../tickets/domain/entities/ticket.dart';
 
 import '../../../tickets/presentation/providers/ticket_provider.dart';
 import '../widgets/chat_attachment_renderer.dart';
+import '../widgets/forward_message_dialog.dart';
 import '../widgets/chat_voice_recorder.dart';
 import '../widgets/chat_drop_overlay.dart';
 import '../../../../core/services/chat_drag_drop_paste_helper.dart';
@@ -1709,6 +1710,7 @@ class _GlobalChatPageState extends ConsumerState<GlobalChatPage>
       final result = await FilePicker.platform.pickFiles(
         type: FileType.any,
         allowMultiple: false,
+        withData: true, // always load bytes — required for binary files like zip on all platforms
       );
 
       if (result != null && result.files.isNotEmpty) {
@@ -1748,19 +1750,23 @@ class _GlobalChatPageState extends ConsumerState<GlobalChatPage>
       final storage = Supabase.instance.client.storage;
       final filePath = sanitizeStorageFileName(file.name);
 
-      print('Reading file bytes...');
       Uint8List fileBytes;
 
       if (file.bytes != null) {
-        // Web platform - bytes are already available
-        fileBytes = Uint8List.fromList(file.bytes!);
+        // Bytes already loaded by FilePicker (withData: true)
+        fileBytes = file.bytes!;
         print('Using file bytes from picker: ${fileBytes.length}');
       } else if (file.path != null) {
-        // Mobile/desktop platform - read from file path
+        // Native platform fallback — read from disk
         fileBytes = await File(file.path!).readAsBytes();
         print('File bytes read from path: ${fileBytes.length}');
       } else {
         print('Error: No file bytes or path available');
+        return null;
+      }
+
+      if (fileBytes.isEmpty) {
+        print('Error: File is empty (0 bytes) — aborting upload');
         return null;
       }
 
@@ -2679,6 +2685,25 @@ class _ChatBubble extends ConsumerWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
 
                     children: [
+                      if (message.isForwarded)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 4, left: 4),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.forward, size: 12, color: Theme.of(context).brightness == Brightness.dark ? Colors.white54 : Colors.black54),
+                              const SizedBox(width: 4),
+                              Text(
+                                'Forwarded',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontStyle: FontStyle.italic,
+                                  color: Theme.of(context).brightness == Brightness.dark ? Colors.white54 : Colors.black54,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       // Header with name and timestamp
                       if (showSender || isTicketMessage)
                         Row(
@@ -3691,6 +3716,7 @@ class _HoverableMessageRowState extends State<_HoverableMessageRow> {
             isHovering: _isHovering,
             messageId: widget.message.id,
             messageContent: widget.message.content,
+            message: widget.message,
             child: widget.child,
           ),
         ),
@@ -3710,6 +3736,7 @@ class _HoverableActionMenuContext extends InheritedWidget {
   final Function(BuildContext, String) onHandleStarMessage;
   final String messageId;
   final String messageContent;
+  final ChatMessage message;
 
   const _HoverableActionMenuContext({
     required this.isHovering,
@@ -3721,6 +3748,7 @@ class _HoverableActionMenuContext extends InheritedWidget {
     required this.onHandleStarMessage,
     required this.messageId,
     required this.messageContent,
+    required this.message,
     required super.child,
   });
 
@@ -3849,6 +3877,26 @@ class _HoverableActionMenu extends StatelessWidget {
                 Icon(Icons.reply, size: 20, color: isDark ? Colors.white70 : Colors.black87),
                 const SizedBox(width: 12),
                 Text('Reply', style: TextStyle(color: isDark ? Colors.white70 : Colors.black87)),
+              ],
+            ),
+          ),
+          PopupMenuItem<String>(
+            value: 'forward',
+            onTap: () {
+               Future.microtask(() {
+                 if (context.mounted) {
+                   showDialog(
+                     context: context,
+                     builder: (_) => ForwardMessageDialog(message: hoverContext.message),
+                   );
+                 }
+               });
+            },
+            child: Row(
+              children: [
+                Icon(Icons.forward, size: 20, color: isDark ? Colors.white70 : Colors.black87),
+                const SizedBox(width: 12),
+                Text('Forward', style: TextStyle(color: isDark ? Colors.white70 : Colors.black87)),
               ],
             ),
           ),

@@ -38,6 +38,7 @@ abstract class Ticket with _$Ticket {
     @JsonKey(name: 'category') String? category,
     @JsonKey(name: 'status') @Default('New') String status,
     @JsonKey(name: 'priority') String? priority,
+    @JsonKey(name: 'ticket_number') int? ticketNumber,
     @JsonKey(name: 'created_by') @Default('Unknown') String createdBy,
     @JsonKey(name: 'assigned_to') String? assignedTo,
     @JsonKey(name: 'created_at') @UtcDateTimeConverter() DateTime? createdAt,

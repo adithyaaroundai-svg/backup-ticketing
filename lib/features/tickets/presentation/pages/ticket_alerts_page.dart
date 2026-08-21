@@ -456,7 +456,7 @@ class _TicketAlertCard extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            ticket.title.isEmpty ? 'Untitled Ticket' : ticket.title,
+                            ticket.ticketNumber != null ? '#${ticket.ticketNumber} · ${ticket.title.isEmpty ? 'Untitled Ticket' : ticket.title}' : (ticket.title.isEmpty ? 'Untitled Ticket' : ticket.title),
                             style: TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.w600,

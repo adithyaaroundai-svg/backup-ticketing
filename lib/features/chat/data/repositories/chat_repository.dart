@@ -17,7 +17,7 @@ class ChatRepository {
     DateTime? before,
     int limit = 50,
   }) async {
-    var query = _client.from('chat_messages').select('id, sender_id, receiver_id, sender_name, sender_role, sender_avatar_url, content, created_at, is_deleted, reactions, reply_to_message_id, reply_to_sender_name, reply_to_content, file_url, file_name, file_type, channel');
+    var query = _client.from('chat_messages').select('id, sender_id, receiver_id, sender_name, sender_role, sender_avatar_url, content, created_at, is_deleted, reactions, reply_to_message_id, reply_to_sender_name, reply_to_content, file_url, file_name, file_type, channel, is_forwarded');
     
     if (chatPartnerId == null) {
       // Global/Custom channel
@@ -57,7 +57,7 @@ class ChatRepository {
     String channelName = 'support-chat',
     int batchSize = kDeltaSyncBatchSize,
   }) async {
-    var query = _client.from('chat_messages').select('id, sender_id, receiver_id, sender_name, sender_role, sender_avatar_url, content, created_at, is_deleted, reactions, reply_to_message_id, reply_to_sender_name, reply_to_content, file_url, file_name, file_type, channel');
+    var query = _client.from('chat_messages').select('id, sender_id, receiver_id, sender_name, sender_role, sender_avatar_url, content, created_at, is_deleted, reactions, reply_to_message_id, reply_to_sender_name, reply_to_content, file_url, file_name, file_type, channel, is_forwarded');
 
     if (chatPartnerId == null) {
       query = query.eq('channel', channelName).isFilter('receiver_id', null);
@@ -110,12 +110,15 @@ class ChatRepository {
     return _client
         .channel(realtimeChannelName)
         .onPostgresChanges(
-          event: PostgresChangeEvent.all,
+          event: PostgresChangeEvent.insert,
           schema: 'public',
           table: 'chat_messages',
           callback: onEvent,
         )
-        .subscribe();
+        .subscribe((status, [error]) {
+          print('Realtime subscribeToMessages ($realtimeChannelName) status: $status');
+          if (error != null) print('Realtime error: $error');
+        });
   }
 
   RealtimeChannel subscribeToReadReceipts({
@@ -137,7 +140,10 @@ class ChatRepository {
           table: 'chat_read_receipts',
           callback: onEvent,
         )
-        .subscribe();
+        .subscribe((status, [error]) {
+          print('Realtime subscribeToReadReceipts ($realtimeChannelName) status: $status');
+          if (error != null) print('Realtime error: $error');
+        });
   }
 
   // Send a message
@@ -156,6 +162,7 @@ class ChatRepository {
     String? fileName,
     String? fileType,
     String channel = 'support-chat',
+    bool isForwarded = false,
     List<dynamic>? richTextDelta,
   }) async {
     final payload = <String, dynamic>{
@@ -164,6 +171,7 @@ class ChatRepository {
       'sender_role': senderRole,
       'content': content,
       'channel': channel,
+      'is_forwarded': isForwarded,
     };
     if (id != null) {
       payload['id'] = id;
@@ -353,7 +361,7 @@ class ChatRepository {
 
       final messagesData = await _client
           .from('chat_messages')
-          .select('id, sender_id, receiver_id, sender_name, sender_role, sender_avatar_url, content, created_at, is_deleted, reactions, reply_to_message_id, reply_to_sender_name, reply_to_content, file_url, file_name, file_type, channel')
+          .select('id, sender_id, receiver_id, sender_name, sender_role, sender_avatar_url, content, created_at, is_deleted, reactions, reply_to_message_id, reply_to_sender_name, reply_to_content, file_url, file_name, file_type, channel, is_forwarded')
           .inFilter('id', messageIds)
           .order('created_at', ascending: false);
 
@@ -366,7 +374,7 @@ class ChatRepository {
   Future<Map<String, Map<String, dynamic>>> fetchDmConversationsBootstrap(String currentUserId) async {
     final response = await _client
         .from('chat_messages')
-        .select('id, sender_id, receiver_id, sender_name, sender_role, sender_avatar_url, content, created_at, is_deleted, reactions, reply_to_message_id, reply_to_sender_name, reply_to_content, file_url, file_name, file_type, channel')
+        .select('id, sender_id, receiver_id, sender_name, sender_role, sender_avatar_url, content, created_at, is_deleted, reactions, reply_to_message_id, reply_to_sender_name, reply_to_content, file_url, file_name, file_type, channel, is_forwarded')
         .not('receiver_id', 'is', null)
         .or('sender_id.eq.$currentUserId,receiver_id.eq.$currentUserId')
         .order('created_at', ascending: false)
@@ -436,15 +444,19 @@ class ChatRepository {
     required void Function(PostgresChangePayload payload) onEvent,
   }) {
     final uniqueId = DateTime.now().millisecondsSinceEpoch;
+    final channelName = 'dm_engine_msg_${currentUserId}_$uniqueId';
     return _client
-        .channel('dm_engine_msg_${currentUserId}_$uniqueId')
+        .channel(channelName)
         .onPostgresChanges(
-          event: PostgresChangeEvent.all,
+          event: PostgresChangeEvent.insert,
           schema: 'public',
           table: 'chat_messages',
           callback: onEvent,
         )
-        .subscribe();
+        .subscribe((status, [error]) {
+          print('Realtime subscribeToDmEngineMessages ($channelName) status: $status');
+          if (error != null) print('Realtime error: $error');
+        });
   }
 
   RealtimeChannel subscribeToDmEngineReadReceipts({
@@ -452,8 +464,9 @@ class ChatRepository {
     required void Function(PostgresChangePayload payload) onEvent,
   }) {
     final uniqueId = DateTime.now().millisecondsSinceEpoch;
+    final channelName = 'dm_engine_rcpt_${currentUserId}_$uniqueId';
     return _client
-        .channel('dm_engine_rcpt_${currentUserId}_$uniqueId')
+        .channel(channelName)
         .onPostgresChanges(
           event: PostgresChangeEvent.all,
           schema: 'public',
@@ -465,7 +478,10 @@ class ChatRepository {
           ),
           callback: onEvent,
         )
-        .subscribe();
+        .subscribe((status, [error]) {
+          print('Realtime subscribeToDmEngineReadReceipts ($channelName) status: $status');
+          if (error != null) print('Realtime error: $error');
+        });
   }
 }
 

@@ -17,6 +17,7 @@ _Ticket _$TicketFromJson(Map<String, dynamic> json) => _Ticket(
   category: json['category'] as String?,
   status: json['status'] as String? ?? 'New',
   priority: json['priority'] as String?,
+  ticketNumber: (json['ticket_number'] as num?)?.toInt(),
   createdBy: json['created_by'] as String? ?? 'Unknown',
   assignedTo: json['assigned_to'] as String?,
   createdAt: const UtcDateTimeConverter().fromJson(
@@ -48,6 +49,7 @@ Map<String, dynamic> _$TicketToJson(_Ticket instance) => <String, dynamic>{
   'category': instance.category,
   'status': instance.status,
   'priority': instance.priority,
+  'ticket_number': instance.ticketNumber,
   'created_by': instance.createdBy,
   'assigned_to': instance.assignedTo,
   'created_at': const UtcDateTimeConverter().toJson(instance.createdAt),
