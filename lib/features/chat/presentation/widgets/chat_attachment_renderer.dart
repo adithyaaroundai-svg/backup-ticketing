@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:url_launcher/url_launcher.dart' as url_launcher;
+import 'package:intl/intl.dart';
 import '../../../../core/design_system/theme/app_colors.dart';
 import '../../domain/entities/chat_message.dart';
 import '../providers/chat_provider.dart';
@@ -295,6 +296,7 @@ class ChatAttachmentRenderer extends ConsumerWidget {
             voiceUrl: message.fileUrl!,
             duration: duration,
             isMe: isMe,
+            timestamp: DateFormat('h:mm a').format(message.createdAt.toLocal()),
           ),
         );
         break;
@@ -356,39 +358,11 @@ class ChatAttachmentRenderer extends ConsumerWidget {
       default:
         // Derive best available filename — prefer message.fileName, fallback to extracting from URL
         final displayName = _resolveFileName(message.fileName, message.fileType, message.fileUrl);
-        contentWidget = GestureDetector(
-          onTap: () => _downloadFile(message.fileUrl!, displayName),
-          child: Container(
-            margin: const EdgeInsets.only(top: 4, bottom: 8),
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: context.isDarkMode ? context.adaptiveSlate800 : Colors.white,
-              borderRadius: BorderRadius.circular(6),
-              border: Border.all(
-                color: context.isDarkMode ? context.adaptiveSlate700 : Colors.grey.shade300,
-              ),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(_getFileIcon(message.fileType), size: 16, color: context.adaptiveSlate400),
-                const SizedBox(width: 6),
-                Flexible(
-                  child: Text(
-                    displayName,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: context.isDarkMode ? Colors.white : Colors.black87,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 6),
-                Icon(LucideIcons.download, size: 14, color: context.adaptiveSlate400),
-              ],
-            ),
-          ),
+        contentWidget = _FileAttachmentCard(
+          displayName: displayName,
+          fileType: message.fileType,
+          fileUrl: message.fileUrl!,
+          onDownload: () => _downloadFile(message.fileUrl!, displayName),
         );
         break;
     }
@@ -470,5 +444,201 @@ class ChatAttachmentRenderer extends ConsumerWidget {
     }
 
     return contentWidget;
+  }
+}
+
+class _FileAttachmentCard extends StatefulWidget {
+  final String displayName;
+  final String? fileType;
+  final String fileUrl;
+  final Future<void> Function() onDownload;
+
+  const _FileAttachmentCard({
+    required this.displayName,
+    required this.fileType,
+    required this.fileUrl,
+    required this.onDownload,
+  });
+
+  @override
+  State<_FileAttachmentCard> createState() => _FileAttachmentCardState();
+}
+
+class _FileAttachmentCardState extends State<_FileAttachmentCard> with SingleTickerProviderStateMixin {
+  bool _isDownloading = false;
+  bool _isHovering = false;
+  late AnimationController _controller;
+  late Animation<double> _scaleAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 150));
+    _scaleAnimation = Tween<double>(begin: 1.0, end: 0.98).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _handleDownload() async {
+    if (_isDownloading) return;
+    setState(() => _isDownloading = true);
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Download started...'),
+        duration: Duration(seconds: 2),
+      ),
+    );
+
+    try {
+      await widget.onDownload();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Download completed'),
+            backgroundColor: AppColors.success,
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Download failed: $e'),
+            backgroundColor: AppColors.error,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isDownloading = false);
+    }
+  }
+
+  IconData _getFileIcon(String? fileType) {
+    if (fileType == null) return Icons.insert_drive_file;
+    final type = fileType.toLowerCase();
+    if (type == 'pdf') return Icons.picture_as_pdf;
+    if (['jpg', 'jpeg', 'png', 'gif', 'webp'].contains(type)) return Icons.image;
+    if (['mp4', 'mov', 'avi'].contains(type)) return Icons.videocam;
+    if (['mp3', 'wav', 'webm', 'm4a', 'opus', 'voice'].contains(type)) return Icons.audio_file;
+    if (['doc', 'docx'].contains(type)) return Icons.description;
+    if (['xls', 'xlsx'].contains(type)) return Icons.table_chart;
+    if (['zip', 'rar'].contains(type)) return Icons.folder_zip;
+    return Icons.insert_drive_file;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(top: 4, bottom: 8),
+      padding: const EdgeInsets.all(12),
+      constraints: const BoxConstraints(minWidth: 220, maxWidth: 300),
+      decoration: BoxDecoration(
+        color: context.isDarkMode ? context.adaptiveSlate800.withOpacity(0.6) : Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: context.isDarkMode ? context.adaptiveSlate700 : Colors.grey.shade200,
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: context.isDarkMode ? context.adaptiveSlate700 : AppColors.primary.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(
+                    _getFileIcon(widget.fileType),
+                    size: 24,
+                    color: context.isDarkMode ? Colors.white70 : AppColors.primary,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        widget.displayName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: context.isDarkMode ? Colors.white : Colors.black87,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        _isDownloading ? 'Downloading...' : 'Click to download',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: _isDownloading ? AppColors.primary : context.adaptiveSlate400,
+                          fontWeight: _isDownloading ? FontWeight.w500 : FontWeight.normal,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 16),
+                MouseRegion(
+                  onEnter: (_) => setState(() => _isHovering = true),
+                  onExit: (_) => setState(() => _isHovering = false),
+                  cursor: SystemMouseCursors.click,
+                  child: GestureDetector(
+                    onTapDown: (_) => _controller.forward(),
+                    onTapUp: (_) => _controller.reverse(),
+                    onTapCancel: () => _controller.reverse(),
+                    onTap: _handleDownload,
+                    child: ScaleTransition(
+                      scale: _scaleAnimation,
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: context.isDarkMode
+                              ? (_isHovering ? context.adaptiveSlate600 : context.adaptiveSlate700)
+                              : (_isHovering ? AppColors.primary.withOpacity(0.1) : Colors.white),
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            if (!context.isDarkMode && !_isHovering)
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.05),
+                                blurRadius: 4,
+                                offset: const Offset(0, 2),
+                              ),
+                          ],
+                        ),
+                        child: _isDownloading
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : Icon(
+                                LucideIcons.download,
+                                size: 16,
+                                color: _isHovering
+                                    ? AppColors.primary
+                                    : (context.isDarkMode ? Colors.white70 : AppColors.slate600),
+                              ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 36), // Buffer for the drop-down arrow
+              ],
+            ),
+        );
   }
 }

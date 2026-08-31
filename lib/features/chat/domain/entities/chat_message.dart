@@ -25,6 +25,8 @@ abstract class ChatMessage with _$ChatMessage {
     @JsonKey(name: 'file_type') String? fileType,
     @Default('support-chat') @JsonKey(name: 'channel') String channel,
     @Default(false) @JsonKey(name: 'is_forwarded') bool isForwarded,
+    @Default(false) @JsonKey(name: 'is_edited') bool isEdited,
+    @JsonKey(name: 'edited_at') @UtcDateTimeConverter() DateTime? editedAt,
     @JsonKey(name: 'rich_text_delta') List<dynamic>? richTextDelta,
   }) = _ChatMessage;
 

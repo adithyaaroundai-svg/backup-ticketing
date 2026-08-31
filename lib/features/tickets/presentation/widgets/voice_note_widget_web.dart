@@ -5,12 +5,14 @@ class VoiceNoteWidget extends StatefulWidget {
   final String voiceUrl;
   final int duration;
   final bool isMe;
+  final String? timestamp;
 
   const VoiceNoteWidget({
     super.key,
     required this.voiceUrl,
     required this.duration,
     this.isMe = false,
+    this.timestamp,
   });
 
   @override
@@ -187,13 +189,30 @@ class _VoiceNoteWidgetState extends State<VoiceNoteWidget> {
                 ),
               ),
               const SizedBox(width: 8),
-              Text(
-                displayLabel,
-                style: TextStyle(
-                  color: primaryTextColor.withValues(alpha: 0.9),
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    displayLabel,
+                    style: TextStyle(
+                      color: primaryTextColor.withValues(alpha: 0.9),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  if (widget.timestamp != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Text(
+                        widget.timestamp!,
+                        style: TextStyle(
+                          color: primaryTextColor.withValues(alpha: 0.7),
+                          fontSize: 9,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                ],
               ),
             ],
           ),

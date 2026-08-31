@@ -35,8 +35,10 @@ Future<void> downloadFileDirectly(String url, String fileName) async {
       anchor.click();
       anchor.remove();
 
-      // Give browser a moment before revoking the blob URL
-      Future.delayed(const Duration(milliseconds: 500), () {
+      // Give browser plenty of time to save the file before revoking the blob URL.
+      // If we revoke too quickly (e.g. 500ms), large files like ZIPs get truncated to 8KB
+      // because the browser's asynchronous save-to-disk gets interrupted.
+      Future.delayed(const Duration(seconds: 60), () {
         web.URL.revokeObjectURL(blobUrl);
       });
       debugPrint('[Download] Success via blob strategy');

@@ -106,7 +106,7 @@ class _DirectMessagePageState extends ConsumerState<DirectMessagePage> {
 
   bool _hasInitialScrolled = false;
   ChatMessage? _replyingToMessage;
-  PlatformFile? _selectedFile;
+  List<PlatformFile> _selectedFiles = [];
   bool _isUploadingFile = false;
   bool _isRecordingVoice = false;
   bool _isTextEmpty = true;
@@ -292,9 +292,11 @@ class _DirectMessagePageState extends ConsumerState<DirectMessagePage> {
     _dragDropPasteSub = registerChatDragDropAndPaste(
       onFileReceived: (file) {
         if (!mounted) return;
-        setState(() {
-          _selectedFile = file;
-        });
+        if (file != null) {
+          setState(() {
+            _selectedFiles.add(file);
+          });
+        }
         _messageFocusNode.requestFocus();
       },
       onDragStateChanged: (isDragging) {
@@ -399,15 +401,11 @@ class _DirectMessagePageState extends ConsumerState<DirectMessagePage> {
   void _sendMessage() async {
     final plainText = _textCtrl.text.trim();
 
-    if (plainText.isEmpty && _selectedFile == null) return;
+    if (plainText.isEmpty && _selectedFiles.isEmpty) return;
 
     final agent = ref.read(authProvider);
 
     if (agent == null) return;
-
-    String? fileUrl;
-    String? fileName;
-    String? fileType;
 
     final replyToMessageId = _replyingToMessage?.id;
     final replyToSenderName = _replyingToMessage?.senderName;
@@ -419,44 +417,62 @@ class _DirectMessagePageState extends ConsumerState<DirectMessagePage> {
       _replyingToMessage = null;
     });
 
-    if (_selectedFile != null) {
+    final filesToSend = List<PlatformFile>.from(_selectedFiles);
+    setState(() {
+      _selectedFiles.clear();
+    });
+
+    if (filesToSend.isEmpty) {
+      ref
+          .read(chatControllerProvider.notifier)
+          .sendMessage(
+            senderId: agent.id,
+            senderName: agent.fullName,
+            senderRole: agent.role,
+            content: plainText,
+            receiverId: widget.partnerId,
+            senderAvatarUrl: agent.avatarUrl,
+            replyToMessageId: replyToMessageId,
+            replyToSenderName: replyToSenderName,
+            replyToContent: replyToContent,
+            channel: 'dm',
+          );
+    } else {
       setState(() {
         _isUploadingFile = true;
       });
 
-      fileUrl = await _uploadFile(_selectedFile!);
+      for (int i = 0; i < filesToSend.length; i++) {
+        final fileUrl = await _uploadFile(filesToSend[i]);
+        if (fileUrl == null) continue;
+
+        final fileName = filesToSend[i].name;
+        final fileType = filesToSend[i].extension ??
+            (fileName.contains('.') ? fileName.split('.').last : 'png');
+
+        ref
+            .read(chatControllerProvider.notifier)
+            .sendMessage(
+              senderId: agent.id,
+              senderName: agent.fullName,
+              senderRole: agent.role,
+              content: i == 0 ? plainText : '',
+              receiverId: widget.partnerId,
+              senderAvatarUrl: agent.avatarUrl,
+              replyToMessageId: i == 0 ? replyToMessageId : null,
+              replyToSenderName: i == 0 ? replyToSenderName : null,
+              replyToContent: i == 0 ? replyToContent : null,
+              fileUrl: fileUrl,
+              fileName: fileName,
+              fileType: fileType,
+              channel: 'dm',
+            );
+      }
 
       setState(() {
         _isUploadingFile = false;
       });
-
-      if (fileUrl == null) {
-        // Upload failed
-        return;
-      }
-      fileName = _selectedFile!.name;
-      fileType = _selectedFile!.extension ??
-          (fileName.contains('.') ? fileName.split('.').last : 'png');
     }
-
-    ref
-        .read(chatControllerProvider.notifier)
-        .sendMessage(
-          senderId: agent.id,
-
-          senderName: agent.fullName,
-          senderRole: agent.role,
-          content: plainText,
-          receiverId: widget.partnerId,
-          senderAvatarUrl: agent.avatarUrl,
-          replyToMessageId: replyToMessageId,
-          replyToSenderName: replyToSenderName,
-          replyToContent: replyToContent,
-          fileUrl: fileUrl,
-          fileName: fileName,
-          fileType: fileType,
-          channel: 'dm',
-        );
 
     final agentsAsync = ref.read(agentsListProvider);
 
@@ -469,24 +485,15 @@ class _DirectMessagePageState extends ConsumerState<DirectMessagePage> {
         try {
           await Supabase.instance.client.from('notifications').insert({
             'user_id': a['id'],
-
             'type': 'mention',
-
             'title': 'Mentioned in Support',
-
             'message': '${agent.fullName} mentioned you: "$plainText"',
-
             'link': '/chat',
-
             'is_read': false,
           });
         } catch (_) {}
       }
     }
-
-    setState(() {
-      _selectedFile = null;
-    });
 
     _messageFocusNode.requestFocus();
   }
@@ -1467,84 +1474,75 @@ class _DirectMessagePageState extends ConsumerState<DirectMessagePage> {
                 ),
               ),
             // File preview
-            if (_selectedFile != null)
+            if (_selectedFiles.isNotEmpty)
               Container(
                 margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: context.adaptiveCard,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: context.adaptiveBorder),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.05),
-                      blurRadius: 4,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: Row(
-                  children: [
-                    if (_selectedFile!.bytes != null &&
-                        ['png', 'jpg', 'jpeg', 'webp', 'gif'].contains((_selectedFile!.extension ?? (_selectedFile!.name.contains('.') ? _selectedFile!.name.split('.').last : '')).toLowerCase()))
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: Image.memory(
-                          _selectedFile!.bytes!,
-                          width: 44,
-                          height: 44,
-                          fit: BoxFit.cover,
-                        ),
-                      )
-                    else
-                      Icon(
-                        _getFileIcon(_selectedFile!.extension ?? (_selectedFile!.name.contains('.') ? _selectedFile!.name.split('.').last : null)),
-                        size: 32,
-                        color: AppColors.primary,
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: _selectedFiles.map((file) {
+                    return Container(
+                      width: 200,
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: context.isDarkMode ? context.adaptiveCard : Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                            color: context.isDarkMode
+                                ? context.adaptiveSlate800
+                                : Colors.grey.shade300),
                       ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                      child: Row(
                         children: [
-                          Text(
-                            _selectedFile!.name,
-                            style: TextStyle(
-                              fontWeight: FontWeight.w600,
-                              fontSize: 14,
-                              color: context.adaptiveSlate900,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          if (_selectedFile!.size > 0)
-                            Text(
-                              '${(_selectedFile!.size / 1024).toStringAsFixed(1)} KB',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: context.adaptiveSlate500,
+                          if (file.bytes != null &&
+                              ['png', 'jpg', 'jpeg', 'webp', 'gif']
+                                  .contains((file.extension ?? (file.name.contains('.') ? file.name.split('.').last : '')).toLowerCase()))
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: Image.memory(
+                                file.bytes!,
+                                width: 32,
+                                height: 32,
+                                fit: BoxFit.cover,
                               ),
+                            )
+                          else
+                            Icon(_getFileIcon(file.extension ?? (file.name.contains('.') ? file.name.split('.').last : null)),
+                                size: 24, color: AppColors.primary),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  file.name,
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.w600, fontSize: 12),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                if (file.size > 0)
+                                  Text(
+                                    '${(file.size / 1024).toStringAsFixed(1)} KB',
+                                    style: TextStyle(
+                                        fontSize: 10,
+                                        color: context.adaptiveSlate500),
+                                  ),
+                              ],
                             ),
+                          ),
+                          IconButton(
+                            icon: Icon(Icons.close,
+                                color: context.adaptiveSlate500, size: 20),
+                            onPressed: () =>
+                                setState(() => _selectedFiles.remove(file)),
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
+                          ),
                         ],
                       ),
-                    ),
-                    if (_isUploadingFile)
-                      const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    else
-                      IconButton(
-                        icon: Icon(
-                          Icons.close,
-                          color: context.adaptiveSlate500,
-                        ),
-                        onPressed: _clearFile,
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(),
-                      ),
-                  ],
+                    );
+                  }).toList(),
                 ),
               ),
             Row(
@@ -1714,10 +1712,10 @@ class _DirectMessagePageState extends ConsumerState<DirectMessagePage> {
                 ),
                 const SizedBox(width: 4),
                 ],
-                if (_isRecordingVoice || (_isTextEmpty && _selectedFile == null && !_isUploadingFile))
+                if (_isRecordingVoice || (_isTextEmpty && _selectedFiles.isEmpty && !_isUploadingFile))
                   ChatVoiceRecorder(
-                    key: const ValueKey('chat_voice_recorder'),
-                    disabled: _selectedFile != null || _isUploadingFile,
+                    key: const ValueKey('dm_chat_voice_recorder'),
+                    disabled: _selectedFiles.isNotEmpty || _isUploadingFile,
                     onRecordComplete: (path, duration) => _sendVoiceNote(path, duration),
                     onRecordingStateChanged: (isRecording) {
                       setState(() => _isRecordingVoice = isRecording);
@@ -1822,13 +1820,13 @@ class _DirectMessagePageState extends ConsumerState<DirectMessagePage> {
     try {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.any,
-        allowMultiple: false,
-        withData: true, // always load bytes — required for binary files like zip on all platforms
+        allowMultiple: true,
+        withData: true,
       );
 
       if (result != null && result.files.isNotEmpty) {
         setState(() {
-          _selectedFile = result.files.single;
+          _selectedFiles.addAll(result.files);
         });
       }
     } catch (e) {
@@ -1836,9 +1834,9 @@ class _DirectMessagePageState extends ConsumerState<DirectMessagePage> {
     }
   }
 
-  void _clearFile() {
+  void _cancelFileSelection() {
     setState(() {
-      _selectedFile = null;
+      _selectedFiles.clear();
     });
   }
 

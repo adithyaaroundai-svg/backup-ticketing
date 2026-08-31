@@ -66,7 +66,7 @@ class _AllAroundTallyChatPageState extends ConsumerState<AllAroundTallyChatPage>
   String? _replyToContent;
 
   // File attachment state
-  PlatformFile? _selectedFile;
+  List<PlatformFile> _selectedFiles = [];
   bool _isUploading = false;
   bool _isDragging = false;
   ChatDragDropPasteSubscription? _dragDropPasteSub;
@@ -131,11 +131,11 @@ class _AllAroundTallyChatPageState extends ConsumerState<AllAroundTallyChatPage>
 
     _dragDropPasteSub = registerChatDragDropAndPaste(
       onFileReceived: (file) {
-        if (!mounted) return;
+        if (file != null) {
         setState(() {
-          _selectedFile = file;
+          _selectedFiles.add(file);
         });
-        _focusNode.requestFocus();
+      }  _focusNode.requestFocus();
       },
       onDragStateChanged: (isDragging) {
         if (!mounted) return;
@@ -244,7 +244,7 @@ class _AllAroundTallyChatPageState extends ConsumerState<AllAroundTallyChatPage>
 
   Future<void> _sendMessage() async {
     final text = _ctrl.text.trim();
-    if (text.isEmpty && _selectedFile == null) return;
+    if (text.isEmpty && _selectedFiles.isEmpty) return;
 
     final currentUser = ref.read(authProvider);
     if (currentUser == null) return;
@@ -252,74 +252,87 @@ class _AllAroundTallyChatPageState extends ConsumerState<AllAroundTallyChatPage>
     _ctrl.clear();
     _focusNode.unfocus();
 
-    String? fileUrl;
-    String? fileName;
-    String? fileType;
+    // Store files to upload locally and clear selection
+    final filesToSend = List<PlatformFile>.from(_selectedFiles);
+    setState(() {
+      _selectedFiles.clear();
+    });
 
-    // Upload file if selected
-    if (_selectedFile != null) {
+    final controller = ref.read(chatControllerProvider.notifier);
+    
+    if (filesToSend.isEmpty) {
+      await controller.sendMessage(
+        senderId: currentUser.id,
+        senderName: currentUser.fullName.isNotEmpty ? currentUser.fullName : currentUser.username,
+        senderRole: currentUser.role,
+        content: text,
+        replyToMessageId: _replyingTo,
+        replyToSenderName: _replyToName,
+        replyToContent: _replyToContent,
+        channel: 'all-aroundtally',
+      );
+    } else {
       setState(() => _isUploading = true);
       try {
         final supabase = Supabase.instance.client;
-        final filePath = sanitizeStorageFileName(_selectedFile!.name, prefix: currentUser.id);
-        final mimeType = getMimeType(_selectedFile!.extension, _selectedFile!.name);
+        
+        for (int i = 0; i < filesToSend.length; i++) {
+          final file = filesToSend[i];
+          final filePath = sanitizeStorageFileName(file.name, prefix: currentUser.id);
+          final mimeType = getMimeType(file.extension, file.name);
 
-        Uint8List fileBytes;
-        if (_selectedFile!.bytes != null) {
-          fileBytes = _selectedFile!.bytes!;
-        } else if (_selectedFile!.path != null) {
-          fileBytes = await File(_selectedFile!.path!).readAsBytes();
-        } else {
-          throw Exception('No file bytes or path available');
+          Uint8List fileBytes;
+          if (file.bytes != null) {
+            fileBytes = file.bytes!;
+          } else if (file.path != null) {
+            fileBytes = await File(file.path!).readAsBytes();
+          } else {
+            throw Exception('No file bytes or path available');
+          }
+
+          if (fileBytes.isEmpty) {
+            throw Exception('File is empty (0 bytes). Please re-select the file.');
+          }
+
+          await supabase.storage
+              .from('chat_attachments')
+              .uploadBinary(
+                filePath,
+                fileBytes,
+                fileOptions: FileOptions(
+                  contentType: mimeType,
+                  upsert: false,
+                ),
+              );
+
+          final fileUrl = supabase.storage.from('chat_attachments').getPublicUrl(filePath);
+          
+          await controller.sendMessage(
+            senderId: currentUser.id,
+            senderName: currentUser.fullName.isNotEmpty ? currentUser.fullName : currentUser.username,
+            senderRole: currentUser.role,
+            content: i == 0 ? text : '',
+            replyToMessageId: i == 0 ? _replyingTo : null,
+            replyToSenderName: i == 0 ? _replyToName : null,
+            replyToContent: i == 0 ? _replyToContent : null,
+            fileUrl: fileUrl,
+            fileName: file.name,
+            fileType: file.extension,
+            channel: 'all-aroundtally',
+          );
         }
-
-        if (fileBytes.isEmpty) {
-          throw Exception('File is empty (0 bytes). Please re-select the file.');
-        }
-
-        await supabase.storage
-            .from('chat_attachments')
-            .uploadBinary(
-              filePath,
-              fileBytes,
-              fileOptions: FileOptions(
-                contentType: mimeType,
-                upsert: false,
-              ),
-            );
-
-        fileUrl = supabase.storage.from('chat_attachments').getPublicUrl(filePath);
-        fileName = _selectedFile!.name;
-        fileType = _selectedFile!.extension;
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('Failed to upload file: $e')),
           );
         }
-        setState(() => _isUploading = false);
-        return;
+      } finally {
+        if (mounted) {
+          setState(() => _isUploading = false);
+        }
       }
-      setState(() {
-        _selectedFile = null;
-        _isUploading = false;
-      });
     }
-
-    final controller = ref.read(chatControllerProvider.notifier);
-    await controller.sendMessage(
-      senderId: currentUser.id,
-      senderName: currentUser.fullName.isNotEmpty ? currentUser.fullName : currentUser.username,
-      senderRole: currentUser.role,
-      content: text,
-      replyToMessageId: _replyingTo,
-      replyToSenderName: _replyToName,
-      replyToContent: _replyToContent,
-      fileUrl: fileUrl,
-      fileName: fileName,
-      fileType: fileType,
-      channel: 'all-aroundtally',
-    );
 
     setState(() {
       _replyingTo = null;
@@ -428,13 +441,13 @@ class _AllAroundTallyChatPageState extends ConsumerState<AllAroundTallyChatPage>
     try {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.any,
-        allowMultiple: false,
+        allowMultiple: true,
         withData: true, // always load bytes — required for binary files like zip on all platforms
       );
       
       if (result != null && result.files.isNotEmpty) {
         setState(() {
-          _selectedFile = result.files.first;
+          _selectedFiles.addAll(result.files);
         });
       }
     } catch (e) {
@@ -448,7 +461,7 @@ class _AllAroundTallyChatPageState extends ConsumerState<AllAroundTallyChatPage>
 
   void _cancelFileSelection() {
     setState(() {
-      _selectedFile = null;
+      _selectedFiles.clear();
     });
   }
 
@@ -818,37 +831,47 @@ class _AllAroundTallyChatPageState extends ConsumerState<AllAroundTallyChatPage>
                 ),
               ),
             // File preview
-            if (_selectedFile != null)
+            if (_selectedFiles.isNotEmpty)
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 decoration: BoxDecoration(
                   color: Colors.grey.shade100,
                   border: Border(top: BorderSide(color: Colors.grey.shade300)),
                 ),
-                child: Row(
-                  children: [
-                    Icon(_getFileIcon(_selectedFile!.extension), size: 20, color: AppColors.slate500),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        _selectedFile!.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontSize: 12),
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: _selectedFiles.map((file) {
+                    return Container(
+                      width: 200,
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.grey.shade300),
                       ),
-                    ),
-                    if (_isUploading)
-                      const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    else
-                      IconButton(
-                        icon: const Icon(Icons.close, size: 18),
-                        onPressed: _cancelFileSelection,
+                      child: Row(
+                        children: [
+                          Icon(_getFileIcon(file.extension), size: 20, color: AppColors.slate500),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              file.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontSize: 12),
+                            ),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.close, size: 18),
+                            onPressed: () => setState(() => _selectedFiles.remove(file)),
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
+                          ),
+                        ],
                       ),
-                  ],
+                    );
+                  }).toList(),
                 ),
               ),
             // Emoji picker panel
@@ -937,64 +960,66 @@ class _AllAroundTallyChatPageState extends ConsumerState<AllAroundTallyChatPage>
             // Mentions List
             if (_showMentions) _buildMentionsList(),
             
-            // Selected File Preview
-            if (_selectedFile != null)
+            // Selected Files Preview
+            if (_selectedFiles.isNotEmpty)
               Container(
                 margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: context.isDarkMode ? context.adaptiveCard : Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: context.isDarkMode ? context.adaptiveSlate800 : Colors.grey.shade300),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.05),
-                      blurRadius: 4,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: Row(
-                  children: [
-                    if (_selectedFile!.bytes != null &&
-                        ['png', 'jpg', 'jpeg', 'webp', 'gif'].contains((_selectedFile!.extension ?? '').toLowerCase()))
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: Image.memory(
-                          _selectedFile!.bytes!,
-                          width: 44,
-                          height: 44,
-                          fit: BoxFit.cover,
-                        ),
-                      )
-                    else
-                      Icon(_getFileIcon(_selectedFile!.extension), size: 32, color: AppColors.primary),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: _selectedFiles.map((file) {
+                    return Container(
+                      width: 200,
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: context.isDarkMode ? context.adaptiveCard : Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: context.isDarkMode ? context.adaptiveSlate800 : Colors.grey.shade300),
+                      ),
+                      child: Row(
                         children: [
-                          Text(
-                            _selectedFile!.name,
-                            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          if (_selectedFile!.size > 0)
-                            Text(
-                              '${(_selectedFile!.size / 1024).toStringAsFixed(1)} KB',
-                              style: TextStyle(fontSize: 12, color: context.adaptiveSlate500),
+                          if (file.bytes != null &&
+                              ['png', 'jpg', 'jpeg', 'webp', 'gif'].contains((file.extension ?? '').toLowerCase()))
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: Image.memory(
+                                file.bytes!,
+                                width: 32,
+                                height: 32,
+                                fit: BoxFit.cover,
+                              ),
+                            )
+                          else
+                            Icon(_getFileIcon(file.extension), size: 24, color: AppColors.primary),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  file.name,
+                                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                if (file.size > 0)
+                                  Text(
+                                    '${(file.size / 1024).toStringAsFixed(1)} KB',
+                                    style: TextStyle(fontSize: 10, color: context.adaptiveSlate500),
+                                  ),
+                              ],
                             ),
+                          ),
+                          IconButton(
+                            icon: Icon(Icons.close, color: context.adaptiveSlate500, size: 20),
+                            onPressed: () => setState(() => _selectedFiles.remove(file)),
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
+                          ),
                         ],
                       ),
-                    ),
-                    IconButton(
-                      icon: Icon(Icons.close, color: context.adaptiveSlate500),
-                      onPressed: () => setState(() => _selectedFile = null),
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(),
-                    ),
-                  ],
+                    );
+                  }).toList(),
                 ),
               ),
 
@@ -1128,10 +1153,10 @@ class _AllAroundTallyChatPageState extends ConsumerState<AllAroundTallyChatPage>
                     ),
                     const SizedBox(width: 8),
                     // Send button
-                    if (_isRecordingVoice || (_isTextEmpty && _selectedFile == null && !_isUploading))
+                    if (_isRecordingVoice || (_isTextEmpty && _selectedFiles.isEmpty && !_isUploading))
                       ChatVoiceRecorder(
                         key: const ValueKey('all_aroundtally_chat_voice_recorder'),
-                        disabled: _selectedFile != null || _isUploading,
+                        disabled: _selectedFiles.isNotEmpty || _isUploading,
                         onRecordComplete: (path, duration) => _sendVoiceNote(path, duration),
                         onRecordingStateChanged: (isRecording) {
                           setState(() => _isRecordingVoice = isRecording);
@@ -1244,7 +1269,7 @@ class _ChatBubbleState extends ConsumerState<_ChatBubble> {
   void _showAllReactions(BuildContext context) {
     setState(() => _hovered = false);
     const all = [
-      '👍','👎','❤️','😂','😮','😢','�','�',
+      '👍','👎','❤️','😂','😮','😢','','',
       '👏','🎉','🙏','💯','✅','🤔','😊','🥰',
       '😎','🤩','😭','🤣','😅','🫡','💪','🚀',
       '⭐','🌟','💡','🎯','🏆','💎','🌈','🍕',

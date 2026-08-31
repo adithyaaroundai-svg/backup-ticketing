@@ -29,6 +29,8 @@ _ChatMessage _$ChatMessageFromJson(Map<String, dynamic> json) => _ChatMessage(
   fileType: json['file_type'] as String?,
   channel: json['channel'] as String? ?? 'support-chat',
   isForwarded: json['is_forwarded'] as bool? ?? false,
+  isEdited: json['is_edited'] as bool? ?? false,
+  editedAt: const UtcDateTimeConverter().fromJson(json['edited_at'] as String?),
   richTextDelta: json['rich_text_delta'] as List<dynamic>?,
 );
 
@@ -52,5 +54,7 @@ Map<String, dynamic> _$ChatMessageToJson(_ChatMessage instance) =>
       'file_type': instance.fileType,
       'channel': instance.channel,
       'is_forwarded': instance.isForwarded,
+      'is_edited': instance.isEdited,
+      'edited_at': const UtcDateTimeConverter().toJson(instance.editedAt),
       'rich_text_delta': instance.richTextDelta,
     };

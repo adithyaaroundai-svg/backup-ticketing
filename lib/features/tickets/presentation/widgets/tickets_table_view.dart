@@ -126,9 +126,9 @@ class _TicketsTableViewState extends ConsumerState<TicketsTableView> {
           const SizedBox(width: 32),
           Expanded(flex: 2, child: Text('Bill Description', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: context.adaptiveSlate600))),
           const SizedBox(width: 32),
-          Expanded(flex: 1, child: Text('Payment\nCollected', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: context.adaptiveSlate600))),
+          Expanded(flex: 2, child: Text('Payment\nCollected', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: context.adaptiveSlate600))),
           const SizedBox(width: 32),
-          Expanded(flex: 1, child: Text('AMC', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: context.adaptiveSlate600))),
+          Expanded(flex: 2, child: Text('AMC', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: context.adaptiveSlate600))),
           const SizedBox(width: 32),
           Expanded(flex: 2, child: Text('Completed Date', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: context.adaptiveSlate600))),
           const SizedBox(width: 32),
@@ -2291,7 +2291,7 @@ class _TicketTableRowState extends ConsumerState<TicketTableRow> {
             SizedBox(width: 32),
             // Payment collected
             Expanded(
-              flex: 1,
+              flex: 2,
               child: Align(
                 alignment: Alignment.centerLeft,
                 child: currentUser?.isAccountant == true
@@ -2354,7 +2354,7 @@ class _TicketTableRowState extends ConsumerState<TicketTableRow> {
             SizedBox(width: 32),
             // AMC
             Expanded(
-              flex: 1,
+              flex: 2,
               child: Align(
                 alignment: Alignment.centerLeft,
                 child: isClaimedByMe

@@ -17,7 +17,7 @@ class ChatRepository {
     DateTime? before,
     int limit = 50,
   }) async {
-    var query = _client.from('chat_messages').select('id, sender_id, receiver_id, sender_name, sender_role, sender_avatar_url, content, created_at, is_deleted, reactions, reply_to_message_id, reply_to_sender_name, reply_to_content, file_url, file_name, file_type, channel, is_forwarded');
+    var query = _client.from('chat_messages').select('id, sender_id, receiver_id, sender_name, sender_role, sender_avatar_url, content, created_at, is_deleted, reactions, reply_to_message_id, reply_to_sender_name, reply_to_content, file_url, file_name, file_type, channel, is_forwarded, is_edited, edited_at');
     
     if (chatPartnerId == null) {
       // Global/Custom channel
@@ -57,7 +57,7 @@ class ChatRepository {
     String channelName = 'support-chat',
     int batchSize = kDeltaSyncBatchSize,
   }) async {
-    var query = _client.from('chat_messages').select('id, sender_id, receiver_id, sender_name, sender_role, sender_avatar_url, content, created_at, is_deleted, reactions, reply_to_message_id, reply_to_sender_name, reply_to_content, file_url, file_name, file_type, channel, is_forwarded');
+    var query = _client.from('chat_messages').select('id, sender_id, receiver_id, sender_name, sender_role, sender_avatar_url, content, created_at, is_deleted, reactions, reply_to_message_id, reply_to_sender_name, reply_to_content, file_url, file_name, file_type, channel, is_forwarded, is_edited, edited_at');
 
     if (chatPartnerId == null) {
       query = query.eq('channel', channelName).isFilter('receiver_id', null);
@@ -110,9 +110,14 @@ class ChatRepository {
     return _client
         .channel(realtimeChannelName)
         .onPostgresChanges(
-          event: PostgresChangeEvent.insert,
+          event: PostgresChangeEvent.all,
           schema: 'public',
           table: 'chat_messages',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'channel',
+            value: chatPartnerId != null ? 'dm' : channelName,
+          ),
           callback: onEvent,
         )
         .subscribe((status, [error]) {
@@ -236,6 +241,14 @@ class ChatRepository {
     await _client.from('chat_messages').insert(payload);
   }
 
+
+  Future<void> editMessage(String messageId, String newContent, {List<dynamic>? newRichTextDelta}) async {
+    await _client.from('chat_messages').update({
+      'content': newContent,
+      'is_edited': true,
+      'edited_at': DateTime.now().toUtc().toIso8601String(),
+    }).eq('id', messageId);
+  }
 
   Future<void> deleteMessage(String messageId) async {
     await _client
@@ -361,7 +374,7 @@ class ChatRepository {
 
       final messagesData = await _client
           .from('chat_messages')
-          .select('id, sender_id, receiver_id, sender_name, sender_role, sender_avatar_url, content, created_at, is_deleted, reactions, reply_to_message_id, reply_to_sender_name, reply_to_content, file_url, file_name, file_type, channel, is_forwarded')
+          .select('id, sender_id, receiver_id, sender_name, sender_role, sender_avatar_url, content, created_at, is_deleted, reactions, reply_to_message_id, reply_to_sender_name, reply_to_content, file_url, file_name, file_type, channel, is_forwarded, is_edited, edited_at')
           .inFilter('id', messageIds)
           .order('created_at', ascending: false);
 
@@ -374,7 +387,7 @@ class ChatRepository {
   Future<Map<String, Map<String, dynamic>>> fetchDmConversationsBootstrap(String currentUserId) async {
     final response = await _client
         .from('chat_messages')
-        .select('id, sender_id, receiver_id, sender_name, sender_role, sender_avatar_url, content, created_at, is_deleted, reactions, reply_to_message_id, reply_to_sender_name, reply_to_content, file_url, file_name, file_type, channel, is_forwarded')
+        .select('id, sender_id, receiver_id, sender_name, sender_role, sender_avatar_url, content, created_at, is_deleted, reactions, reply_to_message_id, reply_to_sender_name, reply_to_content, file_url, file_name, file_type, channel, is_forwarded, is_edited, edited_at')
         .not('receiver_id', 'is', null)
         .or('sender_id.eq.$currentUserId,receiver_id.eq.$currentUserId')
         .order('created_at', ascending: false)
@@ -448,9 +461,14 @@ class ChatRepository {
     return _client
         .channel(channelName)
         .onPostgresChanges(
-          event: PostgresChangeEvent.insert,
+          event: PostgresChangeEvent.all,
           schema: 'public',
           table: 'chat_messages',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'channel',
+            value: 'dm',
+          ),
           callback: onEvent,
         )
         .subscribe((status, [error]) {
