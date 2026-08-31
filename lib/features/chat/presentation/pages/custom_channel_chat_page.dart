@@ -23,6 +23,7 @@ import '../../domain/entities/chat_message.dart';
 import '../../domain/entities/custom_channel.dart';
 import '../../data/repositories/chat_repository.dart';
 import '../../data/repositories/custom_channel_repository.dart';
+import '../widgets/shared_media_view.dart';
 import '../widgets/markdown_text_editing_controller.dart';
 import '../widgets/add_members_page.dart';
 import '../widgets/chat_voice_recorder.dart';
@@ -854,93 +855,49 @@ class _CustomChannelChatPageState extends ConsumerState<CustomChannelChatPage> {
                   const SizedBox(height: 8),
 
                   // Media Section
-                  if (mediaMessages.isNotEmpty) ...[
-                    Container(
-                      color: Colors.white,
-                      padding: const EdgeInsets.all(24),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              const Text(
-                                'Media, links, and docs',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
-                                  color: AppColors.slate800,
+                  Container(
+                    color: Colors.white,
+                    child: ListTile(
+                      title: const Text(
+                        'Media, links, and docs',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.slate800,
+                        ),
+                      ),
+                      trailing: const Icon(Icons.chevron_right, color: AppColors.slate500),
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => Scaffold(
+                              appBar: AppBar(
+                                backgroundColor: Colors.white,
+                                elevation: 1,
+                                leading: IconButton(
+                                  icon: const Icon(Icons.arrow_back, color: AppColors.slate900),
+                                  onPressed: () => Navigator.pop(context),
+                                ),
+                                title: const Text(
+                                  'Shared Media',
+                                  style: TextStyle(
+                                    color: AppColors.slate900,
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                  ),
                                 ),
                               ),
-                              Text(
-                                '${mediaMessages.length}',
-                                style: const TextStyle(color: AppColors.slate500),
+                              body: SharedMediaView(
+                                channelName: channel.name,
                               ),
-                            ],
-                          ),
-                          const SizedBox(height: 16),
-                          SizedBox(
-                            height: 80,
-                            child: ListView.builder(
-                              scrollDirection: Axis.horizontal,
-                              itemCount: mediaMessages.length,
-                              itemBuilder: (context, index) {
-                                final msg = mediaMessages[index];
-                                final isImage = msg.fileType == 'jpg' || msg.fileType == 'jpeg' || msg.fileType == 'png' || msg.fileType == 'gif';
-                                
-                                return GestureDetector(
-                                  onTap: () async {
-                                    final uri = Uri.parse(msg.fileUrl!);
-                                    try {
-                                      await url_launcher.launchUrl(
-                                        uri,
-                                        mode: url_launcher.LaunchMode.externalApplication,
-                                      );
-                                    } catch (e) {
-                                      debugPrint('Could not launch ${msg.fileUrl}: $e');
-                                    }
-                                  },
-                                  child: Container(
-                                    width: 80,
-                                    margin: const EdgeInsets.only(right: 8),
-                                    decoration: BoxDecoration(
-                                      color: Colors.grey.shade100,
-                                      borderRadius: BorderRadius.circular(8),
-                                      border: Border.all(color: Colors.grey.shade300),
-                                    ),
-                                    clipBehavior: Clip.antiAlias,
-                                    child: isImage
-                                      ? Image.network(
-                                          msg.fileUrl!,
-                                          fit: BoxFit.cover,
-                                          errorBuilder: (_, __, ___) => const Icon(Icons.broken_image, color: Colors.grey),
-                                        )
-                                      : Column(
-                                          mainAxisAlignment: MainAxisAlignment.center,
-                                          children: [
-                                            Icon(_getFileIcon(msg.fileType), color: AppColors.slate500, size: 28),
-                                            const SizedBox(height: 4),
-                                            Padding(
-                                              padding: const EdgeInsets.symmetric(horizontal: 4),
-                                              child: Text(
-                                                msg.fileName ?? 'File',
-                                                maxLines: 1,
-                                                overflow: TextOverflow.ellipsis,
-                                                style: const TextStyle(fontSize: 10, color: AppColors.slate600),
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                  ),
-                                );
-                              },
                             ),
                           ),
-                        ],
-                      ),
+                        );
+                      },
                     ),
-                    const SizedBox(height: 8),
-                  ],
+                  ),
+                  const SizedBox(height: 8),
                   
                   // Members Section
                   Container(

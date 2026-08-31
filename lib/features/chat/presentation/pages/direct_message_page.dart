@@ -26,6 +26,7 @@ import '../../../../core/design_system/design_system.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
 
 import '../providers/chat_provider.dart';
+import '../widgets/shared_media_view.dart';
 
 import '../../domain/entities/chat_message.dart';
 
@@ -857,10 +858,46 @@ class _DirectMessagePageState extends ConsumerState<DirectMessagePage> {
               foregroundColor: context.adaptiveSlate900,
             ),
           ),
-          title: Row(
-            children: [
-              // Avatar
-              Container(
+          title: GestureDetector(
+            onTap: () {
+              showModalBottomSheet(
+                context: context,
+                isScrollControlled: true,
+                backgroundColor: context.adaptiveCard,
+                shape: const RoundedRectangleBorder(
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+                ),
+                builder: (context) {
+                  return Container(
+                    height: MediaQuery.of(context).size.height * 0.8,
+                    padding: const EdgeInsets.only(top: 16),
+                    child: Column(
+                      children: [
+                        Container(
+                          width: 40,
+                          height: 4,
+                          margin: const EdgeInsets.only(bottom: 16),
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade300,
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                        ),
+                        Expanded(
+                          child: SharedMediaView(
+                            channelName: 'dm',
+                            partnerId: widget.partnerId,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              );
+            },
+            child: Row(
+              children: [
+                // Avatar
+                Container(
                 width: 36,
                 height: 36,
                 margin: const EdgeInsets.only(right: 12),
@@ -938,8 +975,8 @@ class _DirectMessagePageState extends ConsumerState<DirectMessagePage> {
               ),
             ],
           ),
-
-          backgroundColor: context.adaptiveCard,
+        ),
+        backgroundColor: context.adaptiveCard,
 
           elevation: 0,
 

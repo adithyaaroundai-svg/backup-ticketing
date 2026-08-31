@@ -2275,6 +2275,26 @@ final dmConversationsProvider = NotifierProvider<DmConversationEngine, Map<Strin
   return DmConversationEngine();
 });
 
+final sharedMediaProvider = FutureProvider.family<List<ChatMessage>, ({String channelName, String? partnerId})>((ref, arg) async {
+  final repo = ref.read(chatRepositoryProvider);
+  final myId = ref.read(authProvider)?.id;
+  return repo.getSharedMedia(
+    channelName: arg.channelName,
+    currentUserId: myId,
+    chatPartnerId: arg.partnerId,
+  );
+});
+
+final sharedLinksProvider = FutureProvider.family<List<ChatMessage>, ({String channelName, String? partnerId})>((ref, arg) async {
+  final repo = ref.read(chatRepositoryProvider);
+  final myId = ref.read(authProvider)?.id;
+  return repo.getSharedLinks(
+    channelName: arg.channelName,
+    currentUserId: myId,
+    chatPartnerId: arg.partnerId,
+  );
+});
+
 final dmUnreadCountProvider = Provider.family<int, String>((ref, partnerId) {
   final normalizedId = partnerId.trim().toLowerCase();
   final count = ref.watch(dmConversationsProvider.select((map) => map[normalizedId]?.unreadCount ?? 0));

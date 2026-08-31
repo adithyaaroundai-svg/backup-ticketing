@@ -95,6 +95,40 @@ class ChatRepository {
     return receipts;
   }
 
+  Future<List<ChatMessage>> getSharedMedia({
+    required String channelName,
+    String? currentUserId,
+    String? chatPartnerId,
+  }) async {
+    var query = _client.from('chat_messages').select().not('file_url', 'is', null);
+    
+    if (chatPartnerId == null) {
+      query = query.eq('channel', channelName).isFilter('receiver_id', null);
+    } else {
+      query = query.or('and(sender_id.eq.$currentUserId,receiver_id.eq.$chatPartnerId),and(sender_id.eq.$chatPartnerId,receiver_id.eq.$currentUserId)');
+    }
+
+    final data = await query.order('created_at', ascending: false);
+    return data.map((json) => ChatMessage.fromJson(json)).toList();
+  }
+
+  Future<List<ChatMessage>> getSharedLinks({
+    required String channelName,
+    String? currentUserId,
+    String? chatPartnerId,
+  }) async {
+    var query = _client.from('chat_messages').select().or('content.ilike.%http://%,content.ilike.%https://%');
+    
+    if (chatPartnerId == null) {
+      query = query.eq('channel', channelName).isFilter('receiver_id', null);
+    } else {
+      query = query.or('and(sender_id.eq.$currentUserId,receiver_id.eq.$chatPartnerId),and(sender_id.eq.$chatPartnerId,receiver_id.eq.$currentUserId)');
+    }
+
+    final data = await query.order('created_at', ascending: false);
+    return data.map((json) => ChatMessage.fromJson(json)).toList();
+  }
+
   // ── Realtime subscription for chat messages ──────────────────────────────────
   RealtimeChannel subscribeToMessages({
     required String channelName,
