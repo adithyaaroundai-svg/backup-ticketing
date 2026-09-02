@@ -11,6 +11,7 @@ final leadsProvider = FutureProvider<List<Lead>>((ref) async {
   final data = await client
       .from('leads')
       .select()
+      .eq('pipeline_type', 'global')
       .order('created_at', ascending: false);
   final allLeads = (data as List).map((json) => Lead.fromJson(json)).toList();
 
@@ -25,6 +26,22 @@ final leadsProvider = FutureProvider<List<Lead>>((ref) async {
   }
 
   return allLeads;
+});
+
+final privateLeadsProvider = FutureProvider<List<Lead>>((ref) async {
+  final client = Supabase.instance.client;
+  final currentUser = ref.watch(authProvider);
+  
+  if (currentUser == null) return [];
+
+  final data = await client
+      .from('leads')
+      .select()
+      .eq('pipeline_type', 'private')
+      .eq('created_by', currentUser.id)
+      .order('created_at', ascending: false);
+      
+  return (data as List).map((json) => Lead.fromJson(json)).toList();
 });
 
 // Keep backward-compatible stream alias
@@ -42,6 +59,7 @@ class LeadController extends AsyncNotifier<void> {
     required String companyName,
     required double amount,
     String status = 'pending',
+    String pipelineType = 'global',
   }) async {
     state = const AsyncLoading();
     try {
@@ -49,11 +67,13 @@ class LeadController extends AsyncNotifier<void> {
         'company_name': companyName,
         'amount': amount,
         'status': status,
+        'pipeline_type': pipelineType,
         'created_by': Supabase.instance.client.auth.currentUser?.id,
       });
       state = const AsyncData(null);
-      // Refresh the leads list after successful insert
+      // Refresh both providers
       ref.invalidate(leadsProvider);
+      ref.invalidate(privateLeadsProvider);
     } catch (e, st) {
       state = AsyncError(e, st);
     }
@@ -70,6 +90,7 @@ class LeadController extends AsyncNotifier<void> {
           .eq('id', leadId);
       // Refresh the leads list after update
       ref.invalidate(leadsProvider);
+      ref.invalidate(privateLeadsProvider);
     } catch (e, st) {
       state = AsyncError(e, st);
     }
@@ -90,6 +111,7 @@ class LeadController extends AsyncNotifier<void> {
           .eq('id', leadId);
       // Refresh the leads list after update
       ref.invalidate(leadsProvider);
+      ref.invalidate(privateLeadsProvider);
     } catch (e, st) {
       state = AsyncError(e, st);
       rethrow;
@@ -103,9 +125,9 @@ class LeadController extends AsyncNotifier<void> {
       state = const AsyncData(null);
       // Refresh the leads list after delete
       ref.invalidate(leadsProvider);
+      ref.invalidate(privateLeadsProvider);
     } catch (e, st) {
       state = AsyncError(e, st);
     }
   }
 }
-

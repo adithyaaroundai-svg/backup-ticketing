@@ -15,7 +15,9 @@ import '../providers/lead_provider.dart';
 import 'lead_success_celebration.dart';
 
 class CreateLeadDialog extends ConsumerStatefulWidget {
-  const CreateLeadDialog({super.key});
+  final String pipelineType;
+
+  const CreateLeadDialog({super.key, this.pipelineType = 'global'});
 
   @override
   ConsumerState<CreateLeadDialog> createState() => _CreateLeadDialogState();
@@ -134,14 +136,16 @@ class _CreateLeadDialogState extends ConsumerState<CreateLeadDialog> {
         'source': sourceValue,
         'product': _selectedProduct,
         'demo_needed': 'Yes',
+        'pipeline_type': widget.pipelineType,
         'created_by': currentUser?.id,
         'created_at': DateTime.now().toUtc().toIso8601String(),
       };
 
       await Supabase.instance.client.from('leads').insert(leadData);
 
-      // Invalidate the leads provider so the pipeline updates
+      // Invalidate the leads providers so the pipeline updates
       container.invalidate(leadsProvider);
+      container.invalidate(privateLeadsProvider);
 
       // Prepare chat content — embed lead ID so the chat bubble can show live status
       // We fetch the ID by querying after insert (using company_name + created_by match)

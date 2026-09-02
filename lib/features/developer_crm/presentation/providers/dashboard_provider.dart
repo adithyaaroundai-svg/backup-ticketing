@@ -31,23 +31,8 @@ class DashboardProvider extends ChangeNotifier {
     notifyListeners();
     try {
       final supabase = Supabase.instance.client;
-      // Fetch open tasks count
-      final tasksResp = await supabase.schema('aroundtally').from('tasks').select('id, status').not('status', 'in', '("completed", "cancelled")');
-      final openTasksCount = (tasksResp as List).length;
-      
-      // Fetch pending tasks count
-      final pendingResp = await supabase.schema('aroundtally').from('tasks').select('id, pending').eq('pending', 1);
-      final pendingCount = (pendingResp as List).length;
-
-      // Fetch deliverables (projects in progress) count
-      final projResp = await supabase.schema('aroundtally').from('projects').select('id, status').eq('status', 'active');
-      final ongoingProjectsCount = (projResp as List).length;
-
-      data = DashboardData.fromJson({
-        'open_tasks_count': openTasksCount,
-        'pending_tasks_count': pendingCount,
-        'ongoing_projects_count': ongoingProjectsCount,
-      });
+      final response = await supabase.schema('aroundtally').rpc('get_dashboard_data');
+      data = DashboardData.fromJson(response as Map<String, dynamic>);
     } catch (e) {
       debugPrint('Error loading dashboard: $e');
       error = e.toString();

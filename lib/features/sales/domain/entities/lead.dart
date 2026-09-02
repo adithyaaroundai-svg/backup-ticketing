@@ -15,6 +15,7 @@ class Lead {
   final String? source;
   final String? demoNeeded;
   final String? product;
+  final String pipelineType;
 
   Lead({
     required this.id,
@@ -31,6 +32,7 @@ class Lead {
     this.source,
     this.demoNeeded,
     this.product,
+    this.pipelineType = 'global',
   });
 
   factory Lead.fromJson(Map<String, dynamic> json) {
@@ -51,6 +53,7 @@ class Lead {
       source: json['source']?.toString(),
       demoNeeded: json['demo_needed']?.toString(),
       product: json['product']?.toString(),
+      pipelineType: json['pipeline_type']?.toString() ?? 'global',
     );
   }
 }

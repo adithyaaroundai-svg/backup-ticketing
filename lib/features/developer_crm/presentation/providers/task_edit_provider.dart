@@ -219,7 +219,7 @@ class TaskEditProvider extends ChangeNotifier {
   }
 
   Future<void> carryForward() async {
-    await Supabase.instance.client.rpc('carry_forward_one', params: {'p_task_id': taskId});
+    await Supabase.instance.client.schema('aroundtally').rpc('carry_forward_one', params: {'p_task_id': taskId});
     await load();
   }
 }

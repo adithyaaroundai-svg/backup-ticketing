@@ -12,6 +12,7 @@ import 'features/chat/presentation/pages/sales_chat_page.dart';
 import 'features/chat/presentation/pages/all_aroundtally_chat_page.dart';
 import 'features/chat/presentation/pages/custom_channel_chat_page.dart';
 import 'features/sales/presentation/pages/leads_page.dart';
+import 'features/sales/presentation/pages/private_leads_page.dart';
 import 'features/chat/presentation/pages/direct_message_page.dart';
 import 'features/auth/presentation/pages/login_page.dart';
 import 'features/auth/presentation/pages/profile_page.dart';
@@ -252,6 +253,22 @@ final routerProvider = Provider<GoRouter>((ref) {
         }
       }
 
+      // Private pipeline access: only Sidharth is allowed
+      if (state.matchedLocation.startsWith('/private-pipeline')) {
+        const allowedPrivatePipelineIds = {
+          'd8aa6435-9e02-4bab-9acc-ae1f5f3d6a1c',
+        };
+        final userId = authState?.id ?? '';
+        if (!allowedPrivatePipelineIds.contains(userId)) {
+          if (!isLoggedIn) return '/login';
+          if (isAdmin) return '/admin';
+          if (isAccountant) return '/accountant';
+          if (isSupport) return '/chat';
+          if (isSales) return '/sales';
+          return '/';
+        }
+      }
+
       return null;
     },
     routes: [
@@ -420,6 +437,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/leads',
         builder: (context, state) => const LeadsPage(),
+      ),
+      GoRoute(
+        path: '/private-pipeline',
+        builder: (context, state) => const PrivateLeadsPage(),
       ),
       GoRoute(
         path: '/deals-tracker',

@@ -214,12 +214,12 @@ class TaskBoardProvider extends ChangeNotifier {
   }
 
   Future<void> carryForwardOne(int taskId) async {
-    await Supabase.instance.client.rpc('carry_forward_one', params: {'p_task_id': taskId});
+    await Supabase.instance.client.schema('aroundtally').rpc('carry_forward_one', params: {'p_task_id': taskId});
     await load();
   }
 
   Future<int> carryForwardAll() async {
-    final resp = await Supabase.instance.client.rpc('carry_forward_all');
+    final resp = await Supabase.instance.client.schema('aroundtally').rpc('carry_forward_all');
     await load();
     if (resp is num) return resp.toInt();
     return 0;
