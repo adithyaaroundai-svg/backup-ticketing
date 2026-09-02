@@ -45,6 +45,7 @@ import 'features/productivity/presentation/pages/deals_page.dart';
 import 'features/dashboard/presentation/providers/app_settings_provider.dart';
 import 'features/sales/presentation/pages/proposal_generator_page.dart';
 import 'features/tickets/presentation/pages/ticket_alerts_page.dart';
+import 'features/developer_crm/presentation/dev_crm_app.dart';
 
 import 'core/services/local_notification_service.dart';
 import 'package:hive_flutter/hive_flutter.dart';
@@ -254,6 +255,12 @@ final routerProvider = Provider<GoRouter>((ref) {
       return null;
     },
     routes: [
+      GoRoute(
+        path: '/developer-crm',
+        builder: (context, state) => DeveloperCrmEntryApp(
+          onExit: () => context.go('/dashboard'),
+        ),
+      ),
       GoRoute(
         path: '/',
         builder: (context, state) => const RootRedirectionWidget(),

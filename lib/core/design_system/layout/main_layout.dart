@@ -9,6 +9,7 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import '../../../features/auth/presentation/providers/auth_provider.dart';
 import '../theme/app_colors.dart';
 import '../theme/theme_provider.dart';
+import '../../../features/developer_crm/presentation/providers/auth_provider.dart' as dev_crm_auth;
 
 import '../../../features/tickets/presentation/providers/ticket_provider.dart';
 import '../../../features/customers/presentation/providers/customer_provider.dart';
@@ -634,6 +635,7 @@ class _TopNav extends ConsumerWidget {
                 currentPath.startsWith('/tickets') ||
                 currentPath.startsWith('/ticket'),
           ),
+        // Dev CRM button moved to Software Development channel
         // Support Dashboard for Accountants
         if (!isRestrictedAgent && currentUser?.isAccountant == true)
           _TopNavItem(

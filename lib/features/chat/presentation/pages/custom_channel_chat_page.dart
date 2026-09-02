@@ -38,6 +38,7 @@ import '../../../../core/services/zoho_launcher.dart';
 import '../../../../core/services/zoho_api_service.dart';
 import '../../../../features/calls/domain/models/call_history_item.dart';
 import '../../../../features/calls/presentation/providers/call_history_provider.dart';
+import '../../../../features/developer_crm/presentation/providers/auth_provider.dart' as dev_crm_auth;
 
 IconData _getFileIcon(String? fileType) {
   if (fileType == null) return Icons.insert_drive_file;
@@ -1254,6 +1255,33 @@ class _CustomChannelChatPageState extends ConsumerState<CustomChannelChatPage> {
           elevation: 0,
           actions: [
             if (channel != null) ...[
+              if (channel!.name.toLowerCase() == 'software development' && 
+                  dev_crm_auth.AuthProvider.agentToDevCrmIdMap.containsKey(ref.watch(authProvider)?.id ?? '')) ...[
+                Tooltip(
+                  message: 'Project Tracker',
+                  child: InkWell(
+                    onTap: () => context.go('/developer-crm'),
+                    borderRadius: BorderRadius.circular(8),
+                    child: Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withAlpha(25),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: AppColors.primary.withAlpha(75)),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(LucideIcons.kanbanSquare, size: 16, color: AppColors.primary),
+                          const SizedBox(width: 6),
+                          const Text('Project Tracker', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w600, fontSize: 13)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+              ],
               Tooltip(
                 message: 'Group Audio Call',
                 child: InkWell(
