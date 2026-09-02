@@ -1266,15 +1266,15 @@ class _CustomChannelChatPageState extends ConsumerState<CustomChannelChatPage> {
                       margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                       decoration: BoxDecoration(
-                        color: AppColors.primary.withAlpha(25),
+                        color: context.isDarkMode ? Colors.indigo.withAlpha(40) : AppColors.primary.withAlpha(25),
                         borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: AppColors.primary.withAlpha(75)),
+                        border: Border.all(color: context.isDarkMode ? Colors.indigo.withAlpha(80) : AppColors.primary.withAlpha(75)),
                       ),
                       child: Row(
                         children: [
-                          const Icon(LucideIcons.kanbanSquare, size: 16, color: AppColors.primary),
+                          Icon(LucideIcons.kanbanSquare, size: 16, color: context.isDarkMode ? Colors.indigo.shade200 : AppColors.primary),
                           const SizedBox(width: 6),
-                          const Text('Project Tracker', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w600, fontSize: 13)),
+                          Text('Project Tracker', style: TextStyle(color: context.isDarkMode ? Colors.indigo.shade200 : AppColors.primary, fontWeight: FontWeight.w600, fontSize: 13)),
                         ],
                       ),
                     ),
