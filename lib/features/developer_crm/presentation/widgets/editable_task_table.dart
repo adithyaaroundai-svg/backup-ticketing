@@ -11,7 +11,7 @@ import 'common.dart';
 /// [onQuickUpdate] (`POST /api/tasks/:id/update`), with a "Saved ✓" /
 /// "Save failed" snackbar, matching the original EJS board's inline-edit
 /// behavior.
-class EditableTaskTable extends StatelessWidget {
+class EditableTaskTable extends StatefulWidget {
   final List<Task> tasks;
   final bool showClient;
   final Future<void> Function(int taskId, {String? priority, String? status}) onQuickUpdate;
@@ -28,55 +28,74 @@ class EditableTaskTable extends StatelessWidget {
   });
 
   @override
+  State<EditableTaskTable> createState() => _EditableTaskTableState();
+}
+
+class _EditableTaskTableState extends State<EditableTaskTable> {
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    if (tasks.isEmpty) {
+    if (widget.tasks.isEmpty) {
       return Padding(
         padding: const EdgeInsets.all(24),
-        child: Text(emptyMessage, style: const TextStyle(color: Colors.grey)),
+        child: Text(widget.emptyMessage, style: const TextStyle(color: Colors.grey)),
       );
     }
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: DataTable(
-        columns: [
-          if (showClient) const DataColumn(label: Text('Client')),
-          const DataColumn(label: Text('Description')),
-          const DataColumn(label: Text('Priority')),
-          const DataColumn(label: Text('Status')),
-          const DataColumn(label: Text('Due')),
-          const DataColumn(label: Text('Assignees')),
-          const DataColumn(label: Text('Time')),
-          const DataColumn(label: Text('Actions')),
-        ],
-        rows: [
-          for (final t in tasks)
-            DataRow(cells: [
-              if (showClient)
+    return Scrollbar(
+      controller: _scrollController,
+      thumbVisibility: true,
+      trackVisibility: true,
+      child: SingleChildScrollView(
+        controller: _scrollController,
+        scrollDirection: Axis.horizontal,
+        child: DataTable(
+          columns: [
+            if (widget.showClient) const DataColumn(label: Text('Client')),
+            const DataColumn(label: Text('Description')),
+            const DataColumn(label: Text('Priority')),
+            const DataColumn(label: Text('Status')),
+            const DataColumn(label: Text('Due')),
+            const DataColumn(label: Text('Assignees')),
+            const DataColumn(label: Text('Time')),
+            const DataColumn(label: Text('Actions')),
+          ],
+          rows: [
+            for (final t in widget.tasks)
+              DataRow(cells: [
+                if (widget.showClient)
+                  DataCell(
+                    Text(t.client ?? '-'),
+                    onTap: () => context.push('/tasks/${t.id}'),
+                  ),
                 DataCell(
-                  Text(t.client ?? '-'),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 240),
+                    child: Text(t.description, overflow: TextOverflow.ellipsis, maxLines: 2),
+                  ),
                   onTap: () => context.push('/tasks/${t.id}'),
                 ),
-              DataCell(
-                ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 240),
-                  child: Text(t.description, overflow: TextOverflow.ellipsis, maxLines: 2),
-                ),
-                onTap: () => context.push('/tasks/${t.id}'),
-              ),
-              DataCell(_PriorityDropdown(
-                value: t.priority,
-                onChanged: (v) => onQuickUpdate(t.id, priority: v),
-              )),
-              DataCell(_StatusDropdown(
-                value: t.status,
-                onChanged: (v) => onQuickUpdate(t.id, status: v),
-              )),
-              DataCell(Text(t.expectedFinish == null ? '-' : fmtDate(t.expectedFinish))),
-              DataCell(Text(t.assignees.map((a) => a.name ?? '#${a.id}').join(', '))),
-              DataCell(Text(fmtDuration(t.liveSeconds()))),
-              DataCell(Row(mainAxisSize: MainAxisSize.min, children: rowActionsBuilder(t))),
-            ]),
-        ],
+                DataCell(_PriorityDropdown(
+                  value: t.priority,
+                  onChanged: (v) => widget.onQuickUpdate(t.id, priority: v),
+                )),
+                DataCell(_StatusDropdown(
+                  value: t.status,
+                  onChanged: (v) => widget.onQuickUpdate(t.id, status: v),
+                )),
+                DataCell(Text(t.expectedFinish == null ? '-' : fmtDate(t.expectedFinish))),
+                DataCell(Text(t.assignees.map((a) => a.name ?? '#${a.id}').join(', '))),
+                DataCell(Text(fmtDuration(t.liveSeconds()))),
+                DataCell(Row(mainAxisSize: MainAxisSize.min, children: widget.rowActionsBuilder(t))),
+              ]),
+          ],
+        ),
       ),
     );
   }

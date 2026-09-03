@@ -7,6 +7,7 @@ import '../../../../core/design_system/theme/app_colors.dart';
 import '../providers/lead_provider.dart';
 import '../../domain/entities/lead.dart';
 import '../widgets/edit_lead_dialog.dart';
+import '../widgets/create_lead_dialog.dart';
 
 class PrivateLeadsPage extends ConsumerStatefulWidget {
   final bool isEmbedded;
@@ -56,6 +57,7 @@ class _PrivateLeadsPageState extends ConsumerState<PrivateLeadsPage> {
                       ],
                     ),
                     child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
                           'My Private Pipeline',
@@ -65,6 +67,20 @@ class _PrivateLeadsPageState extends ConsumerState<PrivateLeadsPage> {
                             color: context.adaptiveSlate900,
                             letterSpacing: -0.5,
                           ),
+                        ),
+                        ElevatedButton.icon(
+                          onPressed: () {
+                            showDialog(
+                              context: context,
+                              builder: (_) => const CreateLeadDialog(isPrivatePipeline: true),
+                            );
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.primary,
+                            foregroundColor: Colors.white,
+                          ),
+                          icon: const Icon(LucideIcons.plus, size: 16),
+                          label: const Text('Add Lead'),
                         ),
                       ],
                     ),

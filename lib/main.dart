@@ -12,7 +12,6 @@ import 'features/chat/presentation/pages/sales_chat_page.dart';
 import 'features/chat/presentation/pages/all_aroundtally_chat_page.dart';
 import 'features/chat/presentation/pages/custom_channel_chat_page.dart';
 import 'features/sales/presentation/pages/leads_page.dart';
-import 'features/sales/presentation/pages/private_leads_page.dart';
 import 'features/chat/presentation/pages/direct_message_page.dart';
 import 'features/auth/presentation/pages/login_page.dart';
 import 'features/auth/presentation/pages/profile_page.dart';
@@ -36,6 +35,7 @@ import 'features/customers/presentation/widgets/customer_history_sheet.dart';
 import 'features/dashboard/presentation/pages/support_dashboard_page.dart';
 import 'features/tickets/presentation/pages/past_tickets_page.dart';
 import 'features/sales/presentation/pages/sales_opportunity_page.dart';
+import 'features/sales/presentation/pages/private_leads_page.dart';
 import 'features/sales/presentation/pages/sales_dashboard_page.dart';
 import 'features/dashboard/presentation/pages/reports_page.dart';
 import 'features/dashboard/presentation/pages/revenue_page.dart';
@@ -253,13 +253,13 @@ final routerProvider = Provider<GoRouter>((ref) {
         }
       }
 
-      // Private pipeline access: only Sidharth is allowed
-      if (state.matchedLocation.startsWith('/private-pipeline')) {
-        const allowedPrivatePipelineIds = {
-          'd8aa6435-9e02-4bab-9acc-ae1f5f3d6a1c',
+      // Private Leads access: only Sidharth is allowed
+      if (state.matchedLocation.startsWith('/private-leads')) {
+        const allowedPrivateLeadsIds = {
+          'd8aa6435-9e02-4bab-9acc-ae1f5f3d6a1c', // Sidharth
         };
         final userId = authState?.id ?? '';
-        if (!allowedPrivatePipelineIds.contains(userId)) {
+        if (!allowedPrivateLeadsIds.contains(userId)) {
           if (!isLoggedIn) return '/login';
           if (isAdmin) return '/admin';
           if (isAccountant) return '/accountant';
@@ -301,6 +301,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/sales',
         builder: (context, state) => const SalesDashboardPage(),
+      ),
+      GoRoute(
+        path: '/private-leads',
+        builder: (context, state) => const PrivateLeadsPage(),
       ),
       GoRoute(
         path: '/tickets',
@@ -437,10 +441,6 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/leads',
         builder: (context, state) => const LeadsPage(),
-      ),
-      GoRoute(
-        path: '/private-pipeline',
-        builder: (context, state) => const PrivateLeadsPage(),
       ),
       GoRoute(
         path: '/deals-tracker',

@@ -8,6 +8,7 @@ import '../../domain/entities/lead.dart';
 /// Use ref.invalidate(leadsProvider) to refresh after any change.
 final leadsProvider = FutureProvider<List<Lead>>((ref) async {
   final client = Supabase.instance.client;
+  // Main Sales Pipeline only shows 'global' leads
   final data = await client
       .from('leads')
       .select()
@@ -34,6 +35,7 @@ final privateLeadsProvider = FutureProvider<List<Lead>>((ref) async {
   
   if (currentUser == null) return [];
 
+  // Private Pipeline only shows 'private' leads created by this user
   final data = await client
       .from('leads')
       .select()
@@ -59,7 +61,6 @@ class LeadController extends AsyncNotifier<void> {
     required String companyName,
     required double amount,
     String status = 'pending',
-    String pipelineType = 'global',
   }) async {
     state = const AsyncLoading();
     try {
@@ -67,13 +68,11 @@ class LeadController extends AsyncNotifier<void> {
         'company_name': companyName,
         'amount': amount,
         'status': status,
-        'pipeline_type': pipelineType,
         'created_by': Supabase.instance.client.auth.currentUser?.id,
       });
       state = const AsyncData(null);
-      // Refresh both providers
+      // Refresh the leads list after successful insert
       ref.invalidate(leadsProvider);
-      ref.invalidate(privateLeadsProvider);
     } catch (e, st) {
       state = AsyncError(e, st);
     }
@@ -131,3 +130,4 @@ class LeadController extends AsyncNotifier<void> {
     }
   }
 }
+

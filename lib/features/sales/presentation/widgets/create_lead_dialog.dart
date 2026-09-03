@@ -15,9 +15,12 @@ import '../providers/lead_provider.dart';
 import 'lead_success_celebration.dart';
 
 class CreateLeadDialog extends ConsumerStatefulWidget {
-  final String pipelineType;
+  final bool isPrivatePipeline;
 
-  const CreateLeadDialog({super.key, this.pipelineType = 'global'});
+  const CreateLeadDialog({
+    super.key,
+    this.isPrivatePipeline = false,
+  });
 
   @override
   ConsumerState<CreateLeadDialog> createState() => _CreateLeadDialogState();
@@ -136,16 +139,19 @@ class _CreateLeadDialogState extends ConsumerState<CreateLeadDialog> {
         'source': sourceValue,
         'product': _selectedProduct,
         'demo_needed': 'Yes',
-        'pipeline_type': widget.pipelineType,
         'created_by': currentUser?.id,
+        'pipeline_type': widget.isPrivatePipeline ? 'private' : 'global',
         'created_at': DateTime.now().toUtc().toIso8601String(),
       };
 
       await Supabase.instance.client.from('leads').insert(leadData);
 
-      // Invalidate the leads providers so the pipeline updates
-      container.invalidate(leadsProvider);
-      container.invalidate(privateLeadsProvider);
+      // Invalidate the leads provider so the pipeline updates
+      if (widget.isPrivatePipeline) {
+        container.invalidate(privateLeadsProvider);
+      } else {
+        container.invalidate(leadsProvider);
+      }
 
       // Prepare chat content — embed lead ID so the chat bubble can show live status
       // We fetch the ID by querying after insert (using company_name + created_by match)
@@ -180,8 +186,9 @@ class _CreateLeadDialogState extends ConsumerState<CreateLeadDialog> {
         rootNavigator.pop(true);
       }
 
-      // Send to chat after closing
-      if (senderId != null &&
+      // Send to chat after closing (only if it's NOT a private pipeline lead)
+      if (!widget.isPrivatePipeline &&
+          senderId != null &&
           senderName != null &&
           senderRole != null) {
         try {
