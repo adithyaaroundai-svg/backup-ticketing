@@ -1,12 +1,10 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../../core/api_client.dart';
 import '../../domain/entities/user.dart';
 
 class SettingsProvider extends ChangeNotifier {
-  final ApiClient api;
-  SettingsProvider(this.api);
+  SettingsProvider();
 
   bool loading = false;
   String? error;

@@ -1,12 +1,14 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../core/api_client.dart';
 import '../../domain/entities/client.dart';
 import '../../domain/entities/task.dart';
 import '../../domain/entities/user.dart';
-import '../providers/clients_provider.dart';
 import '../providers/task_board_provider.dart';
+import '../providers/clients_provider.dart';
+import '../providers/auth_provider.dart';
 import '../widgets/common.dart';
 import '../widgets/editable_task_table.dart';
 import '../widgets/task_form_dialog.dart';
@@ -20,9 +22,9 @@ class PendingBoardScreen extends StatelessWidget {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(
-          create: (ctx) => TaskBoardProvider(ctx.read<ApiClient>(), pendingBoard: true)..load(),
+          create: (ctx) => TaskBoardProvider(pendingBoard: true)..load(),
         ),
-        ChangeNotifierProvider(create: (ctx) => ClientsProvider(ctx.read<ApiClient>())..load()),
+        ChangeNotifierProvider(create: (ctx) => ClientsProvider()..load()),
       ],
       child: const _PendingBoardBody(),
     );
@@ -37,8 +39,15 @@ class _PendingBoardBody extends StatefulWidget {
 }
 
 class _PendingBoardBodyState extends State<_PendingBoardBody> {
+  final ScrollController _horizontalScrollController = ScrollController();
   List<UserRef> _assigneeOptions = [];
   bool _capturedOptions = false;
+
+  @override
+  void dispose() {
+    _horizontalScrollController.dispose();
+    super.dispose();
+  }
 
   void _maybeCaptureAssigneeOptions(List<Task> tasks) {
     if (_capturedOptions) return;
@@ -54,9 +63,16 @@ class _PendingBoardBodyState extends State<_PendingBoardBody> {
     }
   }
 
-  Future<void> _quickUpdate(TaskBoardProvider prov, int taskId, {String? priority, String? status}) async {
+  Future<void> _quickUpdate(TaskBoardProvider prov, Task task, AuthProvider authProv, {String? priority, String? status}) async {
     try {
-      await prov.quickUpdate(taskId, priority: priority, status: status);
+      await prov.quickUpdate(
+        task.id,
+        priority: priority,
+        status: status,
+        taskDescription: task.description,
+        currentUserId: authProv.user?.id,
+        currentUserName: authProv.user?.name,
+      );
       if (mounted) showSavedSnack(context, ok: true);
     } catch (e) {
       if (mounted) showSavedSnack(context, ok: false, message: e.toString());
@@ -67,6 +83,7 @@ class _PendingBoardBodyState extends State<_PendingBoardBody> {
   Widget build(BuildContext context) {
     final prov = context.watch<TaskBoardProvider>();
     final clientsProv = context.watch<ClientsProvider>();
+    final authProv = context.watch<AuthProvider>();
     _maybeCaptureAssigneeOptions(prov.tasks);
 
     if (prov.loading && prov.tasks.isEmpty) return const CenterLoading();
@@ -74,12 +91,28 @@ class _PendingBoardBodyState extends State<_PendingBoardBody> {
       return ErrorBanner(message: prov.error!, onRetry: () => prov.load());
     }
 
-    return RefreshIndicator(
-      onRefresh: () => prov.load(),
-      child: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          Wrap(
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return Scrollbar(
+          controller: _horizontalScrollController,
+          thumbVisibility: true,
+          trackVisibility: true,
+          child: SingleChildScrollView(
+            controller: _horizontalScrollController,
+            scrollDirection: Axis.horizontal,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                minWidth: math.max(constraints.maxWidth, 1000), // Enforce minimum width
+              ),
+              child: RefreshIndicator(
+                onRefresh: () => prov.load(),
+                child: SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Wrap(
             crossAxisAlignment: WrapCrossAlignment.center,
             spacing: 12,
             runSpacing: 8,
@@ -115,15 +148,17 @@ class _PendingBoardBodyState extends State<_PendingBoardBody> {
             child: EditableTaskTable(
               tasks: prov.tasks,
               emptyMessage: 'No pending tasks.',
-              onQuickUpdate: (id, {priority, status}) =>
-                  _quickUpdate(prov, id, priority: priority, status: status),
+              onQuickUpdate: (id, {priority, status}) {
+                final task = prov.tasks.firstWhere((t) => t.id == id);
+                return _quickUpdate(prov, task, authProv, priority: priority, status: status);
+              },
               rowActionsBuilder: (task) => [
                 IconButton(
                   tooltip: 'Move to today',
                   icon: const Icon(Icons.arrow_forward, size: 18),
                   onPressed: () async {
                     try {
-                      await prov.activate(task.id);
+                      await prov.activate(task.id, taskDescription: task.description, currentUserId: authProv.user?.id, currentUserName: authProv.user?.name);
                       if (mounted) showSavedSnack(context, message: 'Moved to today \u2713');
                     } catch (e) {
                       if (mounted) showSavedSnack(context, ok: false, message: e.toString());
@@ -135,6 +170,12 @@ class _PendingBoardBodyState extends State<_PendingBoardBody> {
           ),
         ],
       ),
+    ),
+  ),
+),
+          ),
+        );
+      },
     );
   }
 
@@ -169,8 +210,15 @@ class _PendingBoardBodyState extends State<_PendingBoardBody> {
     final formResult = await showTaskFormDialog(context, users: _assigneeOptions, initialPending: true);
     if (formResult == null) return;
     try {
+      final authProv = context.read<AuthProvider>();
+      final clientName = clients.firstWhere(
+        (c) => c.id == clientId,
+        orElse: () => Client(id: clientId, name: ''),
+      ).name;
+
       await prov.createTask(
         clientId: clientId,
+        clientName: clientName,
         description: formResult.description,
         priority: formResult.priority,
         status: formResult.status,
@@ -180,6 +228,8 @@ class _PendingBoardBodyState extends State<_PendingBoardBody> {
         pending: true,
         assigneeIds: formResult.assigneeIds,
         files: formResult.files,
+        currentUserId: authProv.user?.id,
+        currentUserName: authProv.user?.name,
       );
       if (context.mounted) showSavedSnack(context, message: 'Pending task created \u2713');
     } catch (e) {

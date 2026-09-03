@@ -1,8 +1,9 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
-import '../../core/api_client.dart';
 import '../../core/time_utils.dart';
 import '../providers/auth_provider.dart';
 import '../providers/clients_provider.dart';
@@ -14,7 +15,7 @@ class ClientsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
-      create: (ctx) => ClientsProvider(ctx.read<ApiClient>())..load(),
+      create: (ctx) => ClientsProvider()..load(),
       child: const _ClientsBody(),
     );
   }
@@ -28,6 +29,7 @@ class _ClientsBody extends StatefulWidget {
 }
 
 class _ClientsBodyState extends State<_ClientsBody> {
+  final ScrollController _horizontalScrollController = ScrollController();
   bool _showForm = false;
   final _nameCtrl = TextEditingController();
   final _contactCtrl = TextEditingController();
@@ -36,6 +38,7 @@ class _ClientsBodyState extends State<_ClientsBody> {
 
   @override
   void dispose() {
+    _horizontalScrollController.dispose();
     _nameCtrl.dispose();
     _contactCtrl.dispose();
     super.dispose();
@@ -51,7 +54,13 @@ class _ClientsBodyState extends State<_ClientsBody> {
       _formError = null;
     });
     try {
-      await prov.createClient(_nameCtrl.text.trim(), _contactCtrl.text.trim());
+      final authProv = context.read<AuthProvider>();
+      await prov.createClient(
+        _nameCtrl.text.trim(), 
+        _contactCtrl.text.trim(),
+        currentUserId: authProv.user?.id,
+        currentUserName: authProv.user?.name,
+      );
       _nameCtrl.clear();
       _contactCtrl.clear();
       if (mounted) setState(() => _showForm = false);
@@ -72,15 +81,31 @@ class _ClientsBodyState extends State<_ClientsBody> {
       return ErrorBanner(message: prov.error!, onRetry: prov.load);
     }
 
-    return RefreshIndicator(
-      onRefresh: prov.load,
-      child: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text('Clients', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return Scrollbar(
+          controller: _horizontalScrollController,
+          thumbVisibility: true,
+          trackVisibility: true,
+          child: SingleChildScrollView(
+            controller: _horizontalScrollController,
+            scrollDirection: Axis.horizontal,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                minWidth: math.max(constraints.maxWidth, 1000), // Enforce minimum width
+              ),
+              child: RefreshIndicator(
+                onRefresh: prov.load,
+                child: SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text('Clients', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
               if (isManager)
                 FilledButton.icon(
                   onPressed: () => setState(() => _showForm = !_showForm),
@@ -124,10 +149,8 @@ class _ClientsBodyState extends State<_ClientsBody> {
             ),
           const SizedBox(height: 16),
           Card(
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: DataTable(
-                columns: const [
+            child: DataTable(
+              columns: const [
                   DataColumn(label: Text('Name')),
                   DataColumn(label: Text('Contact')),
                   DataColumn(label: Text('Open tasks')),
@@ -151,9 +174,14 @@ class _ClientsBodyState extends State<_ClientsBody> {
                 ],
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
+    ),
+  ),
+),
+        );
+      },
     );
   }
 }

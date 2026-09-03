@@ -47,6 +47,7 @@ import 'features/dashboard/presentation/providers/app_settings_provider.dart';
 import 'features/sales/presentation/pages/proposal_generator_page.dart';
 import 'features/tickets/presentation/pages/ticket_alerts_page.dart';
 import 'features/developer_crm/presentation/dev_crm_app.dart';
+import 'features/chat/presentation/pages/aroundai_project_status_screen.dart';
 
 import 'core/services/local_notification_service.dart';
 import 'package:hive_flutter/hive_flutter.dart';
@@ -428,6 +429,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/notifications',
         builder: (context, state) => const NotificationsPage(),
+      ),
+      GoRoute(
+        path: '/aroundai-project-status',
+        builder: (context, state) => const AroundaiProjectStatusScreen(),
       ),
       GoRoute(
         path: '/sales-opportunity',

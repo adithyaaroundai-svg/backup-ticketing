@@ -1,8 +1,9 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
-import '../../core/api_client.dart';
 import '../../core/money_utils.dart';
 import '../../core/time_utils.dart';
 import '../providers/billing_provider.dart';
@@ -15,14 +16,27 @@ class BillingScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
-      create: (ctx) => BillingProvider(ctx.read<ApiClient>(), ctx.read<AuthProvider>())..load(),
+      create: (ctx) => BillingProvider(ctx.read<AuthProvider>())..load(),
       child: const _BillingBody(),
     );
   }
 }
 
-class _BillingBody extends StatelessWidget {
+class _BillingBody extends StatefulWidget {
   const _BillingBody();
+
+  @override
+  State<_BillingBody> createState() => _BillingBodyState();
+}
+
+class _BillingBodyState extends State<_BillingBody> {
+  final ScrollController _horizontalScrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _horizontalScrollController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -32,12 +46,28 @@ class _BillingBody extends StatelessWidget {
       return ErrorBanner(message: prov.error!, onRetry: prov.load);
     }
     final data = prov.data!;
-    return RefreshIndicator(
-      onRefresh: prov.load,
-      child: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          const Text('Billing', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return Scrollbar(
+          controller: _horizontalScrollController,
+          thumbVisibility: true,
+          trackVisibility: true,
+          child: SingleChildScrollView(
+            controller: _horizontalScrollController,
+            scrollDirection: Axis.horizontal,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                minWidth: math.max(constraints.maxWidth, 1000), // Enforce minimum width
+              ),
+              child: RefreshIndicator(
+                onRefresh: prov.load,
+                child: SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Billing', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
           if (data.readOnly) ...[
             const SizedBox(height: 8),
             Container(
@@ -87,10 +117,8 @@ class _BillingBody extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 8),
-                    SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: DataTable(
-                        columns: const [
+                    DataTable(
+                      columns: const [
                           DataColumn(label: Text('Task')),
                           DataColumn(label: Text('Status')),
                           DataColumn(label: Text('Bill amount')),
@@ -114,8 +142,7 @@ class _BillingBody extends StatelessWidget {
                                 DataCell(Text(t.completedAt == null ? '-' : fmtDateTimeIst(t.completedAt))),
                               ],
                             ),
-                        ],
-                      ),
+                      ],
                     ),
                   ],
                 ),
@@ -128,6 +155,12 @@ class _BillingBody extends StatelessWidget {
             ),
         ],
       ),
+    ),
+  ),
+),
+          ),
+        );
+      },
     );
   }
 }

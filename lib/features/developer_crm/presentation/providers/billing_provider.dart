@@ -1,14 +1,12 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../../core/api_client.dart';
 import '../../domain/entities/billing.dart';
 import 'auth_provider.dart';
 
 class BillingProvider extends ChangeNotifier {
-  final ApiClient api;
   final AuthProvider auth; // Need auth to check if user is accountant/manager
-  BillingProvider(this.api, this.auth);
+  BillingProvider(this.auth);
 
   bool loading = false;
   String? error;

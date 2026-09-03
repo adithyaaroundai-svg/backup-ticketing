@@ -1,7 +1,7 @@
+import '../../core/upload_part.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
-import '../../core/api_client.dart';
 import '../../core/enums.dart';
 import '../../domain/entities/user.dart';
 

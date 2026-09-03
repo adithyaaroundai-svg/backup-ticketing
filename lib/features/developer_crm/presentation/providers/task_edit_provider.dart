@@ -1,8 +1,8 @@
+import '../../core/upload_part.dart';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
 
-import '../../core/api_client.dart';
 import '../../domain/entities/advance.dart';
 import '../../domain/entities/status_history.dart';
 import '../../domain/entities/task.dart';
@@ -10,9 +10,8 @@ import '../../domain/entities/task_note.dart';
 import '../../domain/entities/user.dart';
 
 class TaskEditProvider extends ChangeNotifier {
-  final ApiClient api;
   final int taskId;
-  TaskEditProvider(this.api, this.taskId);
+  TaskEditProvider(this.taskId);
 
   bool loading = false;
   String? error;
@@ -135,6 +134,8 @@ class TaskEditProvider extends ChangeNotifier {
     List<int>? assigneeIds,
     List<int> removeFileIds = const [],
     List<UploadPart> newFiles = const [],
+    int? currentUserId,
+    String? currentUserName,
   }) async {
     final supabase = Supabase.instance.client;
     
@@ -148,6 +149,7 @@ class TaskEditProvider extends ChangeNotifier {
     if (billed != null) updates['billed'] = billed ? 1 : 0;
     if (cancelReason != null) updates['cancel_reason'] = cancelReason;
     if (startDate != null) updates['start_date'] = startDate;
+    if (status != null && currentUserId != null) updates['status_updated_by'] = currentUserId;
 
     if (updates.isNotEmpty) {
       await supabase.schema('aroundtally').from('tasks').update(updates).eq('id', taskId);
@@ -157,6 +159,7 @@ class TaskEditProvider extends ChangeNotifier {
       await supabase.schema('aroundtally').from('task_status_history').insert({
         'task_id': taskId,
         'message': statusMessage,
+        'user_id': currentUserId,
       });
     }
 
@@ -184,42 +187,129 @@ class TaskEditProvider extends ChangeNotifier {
       });
     }
 
+    if (currentUserId != null && currentUserName != null) {
+      try {
+        final tDesc = task?.description ?? '#$taskId';
+        String logMessage = '';
+        if (updates.isNotEmpty) {
+          if (status != null && status == 'completed') {
+            logMessage = 'completed task "$tDesc" → added to Work History';
+          } else if (status != null) {
+            logMessage = 'updated task "$tDesc" (status changed to $status)';
+          } else {
+            logMessage = 'edited task "$tDesc" details';
+          }
+        }
+        if (logMessage.isNotEmpty) {
+          await supabase.schema('aroundtally').from('activity_log').insert({
+            'user_id': currentUserId,
+            'user_name': currentUserName,
+            'message': logMessage,
+          });
+        }
+      } catch (e) {
+        debugPrint('Error logging save full activity: $e');
+      }
+    }
+
     await load();
   }
 
-  Future<void> addNote(String body) async {
+  Future<void> addNote(String body, {int? currentUserId, String? currentUserName}) async {
     await Supabase.instance.client.schema('aroundtally').from('task_notes').insert({
       'task_id': taskId,
       'body': body,
+      'created_by': currentUserId,
     });
+    if (currentUserId != null && currentUserName != null) {
+      try {
+        final tDesc = task?.description ?? '#$taskId';
+        await Supabase.instance.client.schema('aroundtally').from('activity_log').insert({
+          'user_id': currentUserId,
+          'user_name': currentUserName,
+          'message': 'added note "$body" to task "$tDesc"',
+        });
+      } catch (e) {}
+    }
     await load();
   }
 
-  Future<void> addAdvance(num amount, String? note) async {
+  Future<void> addAdvance(num amount, String? note, {int? currentUserId, String? currentUserName}) async {
     await Supabase.instance.client.schema('aroundtally').from('advances').insert({
       'task_id': taskId,
       'amount': amount,
-      if (note != null && note.isNotEmpty) 'note': note,
+      'note': note,
+      'created_by': currentUserId,
     });
+    if (currentUserId != null && currentUserName != null) {
+      try {
+        final tDesc = task?.description ?? '#$taskId';
+        await Supabase.instance.client.schema('aroundtally').from('activity_log').insert({
+          'user_id': currentUserId,
+          'user_name': currentUserName,
+          'message': 'added advance ${amount} to task "$tDesc"',
+        });
+      } catch (e) {}
+    }
     await load();
   }
 
-  Future<void> delete() async {
+  Future<void> delete({int? currentUserId, String? currentUserName}) async {
     await Supabase.instance.client.schema('aroundtally').from('tasks').delete().eq('id', taskId);
+    if (currentUserId != null && currentUserName != null) {
+      try {
+        final tDesc = task?.description ?? '#$taskId';
+        await Supabase.instance.client.schema('aroundtally').from('activity_log').insert({
+          'user_id': currentUserId,
+          'user_name': currentUserName,
+          'message': 'deleted task "$tDesc"',
+        });
+      } catch (e) {}
+    }
   }
 
-  Future<void> toPending() async {
+  Future<void> toPending({int? currentUserId, String? currentUserName}) async {
     await Supabase.instance.client.schema('aroundtally').from('tasks').update({'pending': 1}).eq('id', taskId);
+    if (currentUserId != null && currentUserName != null) {
+      try {
+        final tDesc = task?.description ?? '#$taskId';
+        await Supabase.instance.client.schema('aroundtally').from('activity_log').insert({
+          'user_id': currentUserId,
+          'user_name': currentUserName,
+          'message': 'moved task "$tDesc" into Pending',
+        });
+      } catch (e) {}
+    }
     await load();
   }
 
-  Future<void> activate() async {
+  Future<void> activate({int? currentUserId, String? currentUserName}) async {
     await Supabase.instance.client.schema('aroundtally').from('tasks').update({'pending': 0}).eq('id', taskId);
+    if (currentUserId != null && currentUserName != null) {
+      try {
+        final tDesc = task?.description ?? '#$taskId';
+        await Supabase.instance.client.schema('aroundtally').from('activity_log').insert({
+          'user_id': currentUserId,
+          'user_name': currentUserName,
+          'message': 'moved pending task "$tDesc" into Today\'s Tasks',
+        });
+      } catch (e) {}
+    }
     await load();
   }
 
-  Future<void> carryForward() async {
+  Future<void> carryForward({int? currentUserId, String? currentUserName}) async {
     await Supabase.instance.client.schema('aroundtally').rpc('carry_forward_one', params: {'p_task_id': taskId});
+    if (currentUserId != null && currentUserName != null) {
+      try {
+        final tDesc = task?.description ?? '#$taskId';
+        await Supabase.instance.client.schema('aroundtally').from('activity_log').insert({
+          'user_id': currentUserId,
+          'user_name': currentUserName,
+          'message': 'carried forward task "$tDesc" into today',
+        });
+      } catch (e) {}
+    }
     await load();
   }
 }

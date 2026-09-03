@@ -1,15 +1,16 @@
 import 'dart:collection';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../core/api_client.dart';
 import '../../core/time_utils.dart';
 import '../../domain/entities/client.dart';
 import '../../domain/entities/task.dart';
 import '../../domain/entities/user.dart';
-import '../providers/clients_provider.dart';
 import '../providers/task_board_provider.dart';
+import '../providers/clients_provider.dart';
+import '../providers/auth_provider.dart';
 import '../widgets/common.dart';
 import '../widgets/editable_task_table.dart';
 import '../widgets/task_form_dialog.dart';
@@ -24,8 +25,8 @@ class TaskBoardScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
-        ChangeNotifierProvider(create: (ctx) => TaskBoardProvider(ctx.read<ApiClient>())..load()),
-        ChangeNotifierProvider(create: (ctx) => ClientsProvider(ctx.read<ApiClient>())..load()),
+        ChangeNotifierProvider(create: (ctx) => TaskBoardProvider()..load()),
+        ChangeNotifierProvider(create: (ctx) => ClientsProvider()..load()),
       ],
       child: const _TaskBoardBody(),
     );
@@ -40,9 +41,16 @@ class _TaskBoardBody extends StatefulWidget {
 }
 
 class _TaskBoardBodyState extends State<_TaskBoardBody> {
+  final ScrollController _horizontalScrollController = ScrollController();
   List<UserRef> _assigneeOptions = [];
   bool _capturedOptions = false;
   bool _carryingForward = false;
+
+  @override
+  void dispose() {
+    _horizontalScrollController.dispose();
+    super.dispose();
+  }
 
   void _maybeCaptureAssigneeOptions(List<Task> tasks) {
     if (_capturedOptions) return;
@@ -58,9 +66,16 @@ class _TaskBoardBodyState extends State<_TaskBoardBody> {
     }
   }
 
-  Future<void> _quickUpdate(TaskBoardProvider prov, int taskId, {String? priority, String? status}) async {
+  Future<void> _quickUpdate(TaskBoardProvider prov, Task task, AuthProvider authProv, {String? priority, String? status}) async {
     try {
-      await prov.quickUpdate(taskId, priority: priority, status: status);
+      await prov.quickUpdate(
+        task.id,
+        priority: priority,
+        status: status,
+        taskDescription: task.description,
+        currentUserId: authProv.user?.id,
+        currentUserName: authProv.user?.name,
+      );
       if (mounted) showSavedSnack(context, ok: true);
     } catch (e) {
       if (mounted) showSavedSnack(context, ok: false, message: e.toString());
@@ -71,6 +86,7 @@ class _TaskBoardBodyState extends State<_TaskBoardBody> {
   Widget build(BuildContext context) {
     final prov = context.watch<TaskBoardProvider>();
     final clientsProv = context.watch<ClientsProvider>();
+    final authProv = context.watch<AuthProvider>();
     _maybeCaptureAssigneeOptions(prov.tasks);
 
     if (prov.loading && prov.tasks.isEmpty) return const CenterLoading();
@@ -84,12 +100,28 @@ class _TaskBoardBodyState extends State<_TaskBoardBody> {
       (grouped[key] ??= []).add(t);
     }
 
-    return RefreshIndicator(
-      onRefresh: () => prov.load(),
-      child: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          Wrap(
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return Scrollbar(
+          controller: _horizontalScrollController,
+          thumbVisibility: true,
+          trackVisibility: true,
+          child: SingleChildScrollView(
+            controller: _horizontalScrollController,
+            scrollDirection: Axis.horizontal,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                minWidth: math.max(constraints.maxWidth, 1000), // Enforce minimum width
+              ),
+              child: RefreshIndicator(
+                onRefresh: () => prov.load(),
+                child: SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Wrap(
             crossAxisAlignment: WrapCrossAlignment.center,
             spacing: 12,
             runSpacing: 8,
@@ -133,7 +165,7 @@ class _TaskBoardBodyState extends State<_TaskBoardBody> {
                     : () async {
                         setState(() => _carryingForward = true);
                         try {
-                          final count = await prov.carryForwardAll();
+                          final count = await prov.carryForwardAll(currentUserId: authProv.user?.id, currentUserName: authProv.user?.name);
                           if (mounted) showSavedSnack(context, message: 'Carried forward $count task(s) \u2713');
                         } catch (e) {
                           if (mounted) showSavedSnack(context, ok: false, message: e.toString());
@@ -159,14 +191,17 @@ class _TaskBoardBodyState extends State<_TaskBoardBody> {
             Card(
               child: EditableTaskTable(
                 tasks: entry.value,
-                onQuickUpdate: (id, {priority, status}) => _quickUpdate(prov, id, priority: priority, status: status),
+                onQuickUpdate: (id, {priority, status}) {
+                  final task = entry.value.firstWhere((t) => t.id == id);
+                  return _quickUpdate(prov, task, authProv, priority: priority, status: status);
+                },
                 rowActionsBuilder: (task) => [
                   IconButton(
                     tooltip: 'Move to pending',
                     icon: const Icon(Icons.arrow_forward, size: 18),
                     onPressed: () async {
                       try {
-                        await prov.toPending(task.id);
+                        await prov.toPending(task.id, taskDescription: task.description, currentUserId: authProv.user?.id, currentUserName: authProv.user?.name);
                         if (mounted) showSavedSnack(context, message: 'Moved to pending \u2713');
                       } catch (e) {
                         if (mounted) showSavedSnack(context, ok: false, message: e.toString());
@@ -178,7 +213,7 @@ class _TaskBoardBodyState extends State<_TaskBoardBody> {
                     icon: const Icon(Icons.refresh, size: 18),
                     onPressed: () async {
                       try {
-                        await prov.carryForwardOne(task.id);
+                        await prov.carryForwardOne(task.id, taskDescription: task.description, currentUserId: authProv.user?.id, currentUserName: authProv.user?.name);
                         if (mounted) showSavedSnack(context, message: 'Moved to today \u2713');
                       } catch (e) {
                         if (mounted) showSavedSnack(context, ok: false, message: e.toString());
@@ -190,13 +225,19 @@ class _TaskBoardBodyState extends State<_TaskBoardBody> {
             ),
             const SizedBox(height: 20),
           ],
-          if (grouped.isEmpty)
-            const Padding(
-              padding: EdgeInsets.all(24),
-              child: Text('No tasks for today.', style: TextStyle(color: Colors.grey)),
+                      if (grouped.isEmpty)
+                        const Padding(
+                          padding: EdgeInsets.all(24),
+                          child: Text('No tasks for today.', style: TextStyle(color: Colors.grey)),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
             ),
-        ],
-      ),
+          ),
+        );
+      },
     );
   }
 
@@ -231,8 +272,15 @@ class _TaskBoardBodyState extends State<_TaskBoardBody> {
     final formResult = await showTaskFormDialog(context, users: _assigneeOptions);
     if (formResult == null) return;
     try {
+      final authProv = context.read<AuthProvider>();
+      final clientName = clients.firstWhere(
+        (c) => c.id == clientId,
+        orElse: () => Client(id: clientId, name: ''),
+      ).name;
+
       await prov.createTask(
         clientId: clientId,
+        clientName: clientName,
         description: formResult.description,
         priority: formResult.priority,
         status: formResult.status,
@@ -242,6 +290,8 @@ class _TaskBoardBodyState extends State<_TaskBoardBody> {
         pending: formResult.pending,
         assigneeIds: formResult.assigneeIds,
         files: formResult.files,
+        currentUserId: authProv.user?.id,
+        currentUserName: authProv.user?.name,
       );
       if (context.mounted) showSavedSnack(context, message: 'Task created \u2713');
     } catch (e) {

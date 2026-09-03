@@ -1,9 +1,10 @@
+import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../core/upload_part.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
-import '../../core/api_client.dart';
 import '../../core/download.dart';
 import '../../core/enums.dart';
 import '../providers/work_item_edit_provider.dart';
@@ -16,7 +17,7 @@ class WorkItemEditScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
-      create: (ctx) => WorkItemEditProvider(ctx.read<ApiClient>(), workItemId)..load(),
+      create: (ctx) => WorkItemEditProvider(workItemId)..load(),
       child: const _WorkItemEditBody(),
     );
   }
@@ -145,7 +146,7 @@ class _WorkItemEditBodyState extends State<_WorkItemEditBody> {
               subtitle: const Text('Check to remove'),
               secondary: IconButton(
                 icon: const Icon(Icons.download),
-                onPressed: () => openDownload(context, context.read<ApiClient>().fileDownloadUrl(f.storagePath ?? '')),
+                onPressed: () => openDownload(context, Supabase.instance.client.storage.from('dev_crm_files').getPublicUrl(f.storagePath ?? '')),
               ),
             ),
           const SizedBox(height: 20),

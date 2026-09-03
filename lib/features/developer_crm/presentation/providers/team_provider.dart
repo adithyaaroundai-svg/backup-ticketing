@@ -1,12 +1,10 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../../core/api_client.dart';
 import '../../domain/entities/team.dart';
 
 class TeamProvider extends ChangeNotifier {
-  final ApiClient api;
-  TeamProvider(this.api);
+  TeamProvider();
 
   bool loading = false;
   String? error;

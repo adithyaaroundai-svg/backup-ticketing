@@ -28,9 +28,7 @@ class TaskTable extends StatelessWidget {
         child: Text(emptyMessage, style: const TextStyle(color: Colors.grey)),
       );
     }
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: DataTable(
+    return DataTable(
         columns: [
           if (showClient) const DataColumn(label: Text('Client')),
           const DataColumn(label: Text('Description')),
@@ -58,7 +56,6 @@ class TaskTable extends StatelessWidget {
               ],
             ),
         ],
-      ),
     );
   }
 }

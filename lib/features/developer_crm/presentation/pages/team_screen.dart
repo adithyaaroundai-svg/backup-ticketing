@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
-import '../../core/api_client.dart';
 import '../../core/enums.dart';
 import '../../core/time_utils.dart';
 import '../providers/team_provider.dart';
@@ -16,7 +15,7 @@ class TeamScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
-      create: (ctx) => TeamProvider(ctx.read<ApiClient>())..load(),
+      create: (ctx) => TeamProvider()..load(),
       child: const _TeamBody(),
     );
   }

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
-import '../../core/api_exception.dart';
 import '../providers/auth_provider.dart';
 
 class ChangePasswordScreen extends StatefulWidget {
@@ -53,8 +52,8 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
         _newCtrl.clear();
         _confirmCtrl.clear();
       }
-    } on ApiException catch (e) {
-      setState(() => _error = e.message);
+    } catch (e) {
+      setState(() => _error = e.toString());
     } finally {
       if (mounted) setState(() => _submitting = false);
     }

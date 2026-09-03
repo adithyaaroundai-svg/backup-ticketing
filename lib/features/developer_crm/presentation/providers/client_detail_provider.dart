@@ -1,17 +1,16 @@
+import '../../core/upload_part.dart';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
 
-import '../../core/api_client.dart';
 import '../../domain/entities/client.dart';
 import '../../domain/entities/task.dart';
 import '../../domain/entities/user.dart';
 import '../../domain/entities/work_item.dart';
 
 class ClientDetailProvider extends ChangeNotifier {
-  final ApiClient api;
   final int clientId;
-  ClientDetailProvider(this.api, this.clientId);
+  ClientDetailProvider(this.clientId);
 
   bool loading = false;
   String? error;
@@ -158,6 +157,8 @@ class ClientDetailProvider extends ChangeNotifier {
     bool pending = false,
     List<int> assigneeIds = const [],
     List<UploadPart> files = const [],
+    int? currentUserId,
+    String? currentUserName,
   }) async {
     final supabase = Supabase.instance.client;
     final taskDate = DateFormat('yyyy-MM-dd').format(DateTime.now().toUtc());
@@ -172,9 +173,24 @@ class ClientDetailProvider extends ChangeNotifier {
       'task_date': taskDate,
       'approved': approved ? 1 : 0,
       'pending': pending ? 1 : 0,
+      'created_by': currentUserId,
     }).select().single();
     
     final taskId = resp['id'];
+
+    if (currentUserId != null && currentUserName != null) {
+      final taskType = pending ? 'pending task' : 'today\'s task';
+      final cName = customer?.name ?? 'Client #$clientId';
+      try {
+        await supabase.schema('aroundtally').from('activity_log').insert({
+          'user_id': currentUserId,
+          'user_name': currentUserName,
+          'message': 'added $taskType "$description" for $cName',
+        });
+      } catch (e) {
+        debugPrint('Error logging activity: $e');
+      }
+    }
     
     for (final aId in assigneeIds) {
       await supabase.schema('aroundtally').from('task_assignees').insert({

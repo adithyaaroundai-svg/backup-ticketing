@@ -1,12 +1,10 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../../core/api_client.dart';
 import '../../domain/entities/client.dart';
 
 class ClientsProvider extends ChangeNotifier {
-  final ApiClient api;
-  ClientsProvider(this.api);
+  ClientsProvider();
 
   bool loading = false;
   String? error;
@@ -64,7 +62,7 @@ class ClientsProvider extends ChangeNotifier {
     }
   }
 
-  Future<Client?> createClient(String name, String? contact) async {
+  Future<Client?> createClient(String name, String? contact, {int? currentUserId, String? currentUserName}) async {
     try {
       final supabase = Supabase.instance.client;
       final resp = await supabase.schema('aroundtally').from('clients').insert({
@@ -77,6 +75,16 @@ class ClientsProvider extends ChangeNotifier {
         'open_count': '0',
         'ongoing': false,
       });
+      
+      if (currentUserId != null && currentUserName != null) {
+        try {
+          await supabase.schema('aroundtally').from('activity_log').insert({
+            'user_id': currentUserId,
+            'user_name': currentUserName,
+            'message': 'added new client "$name"',
+          });
+        } catch (e) {}
+      }
       
       clients = [client, ...clients];
       notifyListeners();

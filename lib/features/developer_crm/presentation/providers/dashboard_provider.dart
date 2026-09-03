@@ -1,12 +1,10 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../../core/api_client.dart';
 import '../../domain/entities/dashboard.dart';
 
 class DashboardProvider extends ChangeNotifier {
-  final ApiClient api;
-  DashboardProvider(this.api);
+  DashboardProvider();
 
   bool loading = false;
   String? error;

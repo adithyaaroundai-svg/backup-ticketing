@@ -1,12 +1,10 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../../core/api_client.dart';
 import '../../domain/entities/activity_entry.dart';
 
 class ActivityProvider extends ChangeNotifier {
-  final ApiClient api;
-  ActivityProvider(this.api);
+  ActivityProvider();
 
   bool loading = false;
   String? error;

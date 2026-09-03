@@ -1,7 +1,8 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../core/api_client.dart';
 import '../../core/money_utils.dart';
 import '../../core/time_utils.dart';
 import '../providers/dashboard_provider.dart';
@@ -13,14 +14,27 @@ class DashboardScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
-      create: (ctx) => DashboardProvider(ctx.read<ApiClient>())..load(),
+      create: (ctx) => DashboardProvider()..load(),
       child: const _DashboardBody(),
     );
   }
 }
 
-class _DashboardBody extends StatelessWidget {
+class _DashboardBody extends StatefulWidget {
   const _DashboardBody();
+
+  @override
+  State<_DashboardBody> createState() => _DashboardBodyState();
+}
+
+class _DashboardBodyState extends State<_DashboardBody> {
+  final ScrollController _horizontalScrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _horizontalScrollController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -30,147 +44,176 @@ class _DashboardBody extends StatelessWidget {
       return ErrorBanner(message: prov.error!, onRetry: () => prov.load());
     }
     final data = prov.data!;
-    return RefreshIndicator(
-      onRefresh: prov.load,
-      child: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text('Dashboard \u2014 week of ${fmtDate(data.weekStart)}',
-                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-              FilledButton.icon(
-                onPressed: prov.backingUp
-                    ? null
-                    : () async {
-                        await prov.backupNow();
-                        if (context.mounted) {
-                          showSavedSnack(context, ok: true, message: 'Backup triggered');
-                        }
-                      },
-                icon: prov.backingUp
-                    ? const SizedBox(
-                        height: 14, width: 14, child: CircularProgressIndicator(strokeWidth: 2))
-                    : const Icon(Icons.backup),
-                label: const Text('Back up now'),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final double contentWidth = math.max(constraints.maxWidth, 1000.0) - 32;
+        return Scrollbar(
+          controller: _horizontalScrollController,
+          thumbVisibility: true,
+          trackVisibility: true,
+          child: SingleChildScrollView(
+            controller: _horizontalScrollController,
+            scrollDirection: Axis.horizontal,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                minWidth: math.max(constraints.maxWidth, 1000.0), // Enforce minimum width
               ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            children: [
-              _HeadlineCard(label: 'Active tasks', value: '${data.cards.activeTasks}'),
-              _HeadlineCard(label: 'Overdue', value: '${data.cards.overdue}', warn: true),
-              _HeadlineCard(label: 'Working now', value: '${data.cards.workingNow}'),
-              _HeadlineCard(label: 'Completed this week', value: '${data.cards.completedWeek}'),
-            ],
-          ),
-          const SizedBox(height: 20),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: [
-                  _MoneyStat(label: 'Billed', value: data.money.billed),
-                  _MoneyStat(label: 'Advances', value: data.money.advances),
-                  _MoneyStat(label: 'Balance', value: data.money.balance),
-                ],
+              child: RefreshIndicator(
+                onRefresh: prov.load,
+                child: SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      SizedBox(
+                        width: contentWidth,
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text('Dashboard \u2014 week of ${fmtDate(data.weekStart)}',
+                                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                            FilledButton.icon(
+                              onPressed: prov.backingUp
+                                  ? null
+                                  : () async {
+                                      await prov.backupNow();
+                                      if (context.mounted) {
+                                        showSavedSnack(context, ok: true, message: 'Backup triggered');
+                                      }
+                                    },
+                              icon: prov.backingUp
+                                  ? const SizedBox(
+                                      height: 14, width: 14, child: CircularProgressIndicator(strokeWidth: 2))
+                                  : const Icon(Icons.backup),
+                              label: const Text('Back up now'),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      SizedBox(
+                        width: contentWidth,
+                        child: Wrap(
+                          spacing: 12,
+                          runSpacing: 12,
+                          children: [
+                            _HeadlineCard(label: 'Active tasks', value: '${data.cards.activeTasks}'),
+                            _HeadlineCard(label: 'Overdue', value: '${data.cards.overdue}', warn: true),
+                            _HeadlineCard(label: 'Working now', value: '${data.cards.workingNow}'),
+                            _HeadlineCard(label: 'Completed this week', value: '${data.cards.completedWeek}'),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      SizedBox(
+                        width: contentWidth,
+                        child: Card(
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceAround,
+                              children: [
+                                _MoneyStat(label: 'Billed', value: data.money.billed),
+                                _MoneyStat(label: 'Advances', value: data.money.advances),
+                                _MoneyStat(label: 'Balance', value: data.money.balance),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      const Text('Client profitability', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 8),
+                      Card(
+                        child: DataTable(
+                          columns: const [
+                              DataColumn(label: Text('Client')),
+                              DataColumn(label: Text('Billed')),
+                              DataColumn(label: Text('Advances')),
+                              DataColumn(label: Text('Balance')),
+                              DataColumn(label: Text('Hours')),
+                              DataColumn(label: Text('Rate/hr')),
+                            ],
+                            rows: [
+                              for (final c in data.clients)
+                                DataRow(cells: [
+                                  DataCell(Text(c.name)),
+                                  DataCell(Text(fmtMoney(c.billed))),
+                                  DataCell(Text(fmtMoney(c.advances))),
+                                  DataCell(Text(fmtMoney(c.balance))),
+                                  DataCell(Text(c.hours.toStringAsFixed(2))),
+                                  DataCell(Text(c.rate == null ? '-' : fmtMoney(c.rate))),
+                                ]),
+                              if (data.clients.isEmpty)
+                                const DataRow(cells: [
+                                  DataCell(Text('No billed/active clients yet')),
+                                  DataCell(Text('')),
+                                  DataCell(Text('')),
+                                  DataCell(Text('')),
+                                  DataCell(Text('')),
+                                  DataCell(Text('')),
+                                ]),
+                            ],
+                          ),
+                        ),
+                      const SizedBox(height: 20),
+                      const Text('Team this week', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 8),
+                      Card(
+                        child: DataTable(
+                          columns: const [
+                              DataColumn(label: Text('Name')),
+                              DataColumn(label: Text('Role')),
+                              DataColumn(label: Text('Active')),
+                              DataColumn(label: Text('Completed this week')),
+                              DataColumn(label: Text('Working now')),
+                              DataColumn(label: Text('Time logged')),
+                            ],
+                            rows: [
+                              for (final d in data.developers)
+                                DataRow(cells: [
+                                  DataCell(Text(d.name)),
+                                  DataCell(Text(d.role.replaceAll('_', ' '))),
+                                  DataCell(Text('${d.active}')),
+                                  DataCell(Text('${d.completedWeek}')),
+                                  DataCell(Text('${d.workingNow}')),
+                                  DataCell(Text(fmtDuration(d.seconds))),
+                                ]),
+                            ],
+                          ),
+                        ),
+                      const SizedBox(height: 20),
+                      const Text('Backups', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 8),
+                      SizedBox(
+                        width: contentWidth,
+                        child: Card(
+                          child: ListTile(
+                            leading: Icon(
+                              data.lastBackup?.status == 'ok' ? Icons.check_circle : Icons.error,
+                              color: data.lastBackup?.status == 'ok' ? Colors.green : Colors.red,
+                            ),
+                            title: Text(data.lastBackup == null
+                                ? 'No backups recorded yet'
+                                : (data.lastBackup!.objectKey ?? 'backup')),
+                            subtitle: data.lastBackup == null
+                                ? null
+                                : Text(
+                                    '${fmtDateTimeIst(data.lastBackup!.createdAt)}'
+                                    '${data.lastBackup!.sizeBytes != null ? ' \u2022 ${(data.lastBackup!.sizeBytes! / 1024).toStringAsFixed(1)} KB' : ''}'
+                                    ' \u2022 ${data.lastBackup!.status ?? ''}'),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ),
           ),
-          const SizedBox(height: 20),
-          const Text('Client profitability', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 8),
-          Card(
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: DataTable(
-                columns: const [
-                  DataColumn(label: Text('Client')),
-                  DataColumn(label: Text('Billed')),
-                  DataColumn(label: Text('Advances')),
-                  DataColumn(label: Text('Balance')),
-                  DataColumn(label: Text('Hours')),
-                  DataColumn(label: Text('Rate/hr')),
-                ],
-                rows: [
-                  for (final c in data.clients)
-                    DataRow(cells: [
-                      DataCell(Text(c.name)),
-                      DataCell(Text(fmtMoney(c.billed))),
-                      DataCell(Text(fmtMoney(c.advances))),
-                      DataCell(Text(fmtMoney(c.balance))),
-                      DataCell(Text(c.hours.toStringAsFixed(2))),
-                      DataCell(Text(c.rate == null ? '-' : fmtMoney(c.rate))),
-                    ]),
-                  if (data.clients.isEmpty)
-                    const DataRow(cells: [
-                      DataCell(Text('No billed/active clients yet')),
-                      DataCell(Text('')),
-                      DataCell(Text('')),
-                      DataCell(Text('')),
-                      DataCell(Text('')),
-                      DataCell(Text('')),
-                    ]),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 20),
-          const Text('Team this week', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 8),
-          Card(
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: DataTable(
-                columns: const [
-                  DataColumn(label: Text('Name')),
-                  DataColumn(label: Text('Role')),
-                  DataColumn(label: Text('Active')),
-                  DataColumn(label: Text('Completed this week')),
-                  DataColumn(label: Text('Working now')),
-                  DataColumn(label: Text('Time logged')),
-                ],
-                rows: [
-                  for (final d in data.developers)
-                    DataRow(cells: [
-                      DataCell(Text(d.name)),
-                      DataCell(Text(d.role.replaceAll('_', ' '))),
-                      DataCell(Text('${d.active}')),
-                      DataCell(Text('${d.completedWeek}')),
-                      DataCell(Text('${d.workingNow}')),
-                      DataCell(Text(fmtDuration(d.seconds))),
-                    ]),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 20),
-          const Text('Backups', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 8),
-          Card(
-            child: ListTile(
-              leading: Icon(
-                data.lastBackup?.status == 'ok' ? Icons.check_circle : Icons.error,
-                color: data.lastBackup?.status == 'ok' ? Colors.green : Colors.red,
-              ),
-              title: Text(data.lastBackup == null
-                  ? 'No backups recorded yet'
-                  : (data.lastBackup!.objectKey ?? 'backup')),
-              subtitle: data.lastBackup == null
-                  ? null
-                  : Text(
-                      '${fmtDateTimeIst(data.lastBackup!.createdAt)}'
-                      '${data.lastBackup!.sizeBytes != null ? ' \u2022 ${(data.lastBackup!.sizeBytes! / 1024).toStringAsFixed(1)} KB' : ''}'
-                      ' \u2022 ${data.lastBackup!.status ?? ''}'),
-            ),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 }

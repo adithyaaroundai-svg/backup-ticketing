@@ -1,11 +1,13 @@
+import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../core/upload_part.dart';
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
-import '../../core/api_client.dart';
 import '../../core/download.dart';
 import '../../core/enums.dart';
 import '../../core/money_utils.dart';
@@ -22,7 +24,7 @@ class TaskEditScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
-      create: (ctx) => TaskEditProvider(ctx.read<ApiClient>(), taskId)..load(),
+      create: (ctx) => TaskEditProvider(taskId)..load(),
       child: const _TaskEditBody(),
     );
   }
@@ -60,9 +62,11 @@ class _TaskEditBodyState extends State<_TaskEditBody> {
   bool _addingAdvance = false;
   String? _error;
   Timer? _ticker;
+  final ScrollController _horizontalScrollController = ScrollController();
 
   @override
   void dispose() {
+    _horizontalScrollController.dispose();
     _ticker?.cancel();
     _descCtrl.dispose();
     _expectedCtrl.dispose();
@@ -124,7 +128,7 @@ class _TaskEditBodyState extends State<_TaskEditBody> {
     if (result != null) setState(() => _newFiles.addAll(result.files));
   }
 
-  Future<void> _save(TaskEditProvider prov, bool isManager) async {
+  Future<void> _save(TaskEditProvider prov, AuthProvider authProv, bool isManager) async {
     setState(() {
       _saving = true;
       _error = null;
@@ -146,6 +150,8 @@ class _TaskEditBodyState extends State<_TaskEditBody> {
         newFiles: [
           for (final f in _newFiles) UploadPart(field: 'task_files', filename: f.name, bytes: f.bytes ?? [])
         ],
+        currentUserId: authProv.user?.id,
+        currentUserName: authProv.user?.name,
       );
       _removeFileIds.clear();
       _newFiles.clear();
@@ -200,17 +206,31 @@ class _TaskEditBodyState extends State<_TaskEditBody> {
                 ),
               );
               if (confirmed == true) {
-                await prov.delete();
+                final authProv = context.read<AuthProvider>();
+                await prov.delete(currentUserId: authProv.user?.id, currentUserName: authProv.user?.name);
                 if (context.mounted) context.go('/tasks');
               }
             },
           ),
         ],
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          if (_error != null) ...[
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          return Scrollbar(
+            controller: _horizontalScrollController,
+            thumbVisibility: true,
+            trackVisibility: true,
+            child: SingleChildScrollView(
+              controller: _horizontalScrollController,
+              scrollDirection: Axis.horizontal,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  minWidth: math.max(constraints.maxWidth, 1000), // Enforce minimum width
+                ),
+                child: ListView(
+                  padding: const EdgeInsets.all(16),
+                  children: [
+                    if (_error != null) ...[
             Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
@@ -341,7 +361,7 @@ class _TaskEditBodyState extends State<_TaskEditBody> {
               subtitle: const Text('Check to remove'),
               secondary: IconButton(
                 icon: const Icon(Icons.download),
-                onPressed: () => openDownload(context, context.read<ApiClient>().taskFileDownloadUrl(f.storagePath ?? '')),
+                onPressed: () => openDownload(context, Supabase.instance.client.storage.from('dev_crm_files').getPublicUrl(f.storagePath ?? '')),
               ),
             ),
           OutlinedButton.icon(
@@ -366,7 +386,8 @@ class _TaskEditBodyState extends State<_TaskEditBody> {
               }
               setState(() => _addingAdvance = true);
               try {
-                await prov.addAdvance(amount, _advanceNoteCtrl.text.trim());
+                final authProv = context.read<AuthProvider>();
+                await prov.addAdvance(amount, _advanceNoteCtrl.text.trim(), currentUserId: authProv.user?.id, currentUserName: authProv.user?.name);
                 _advanceAmountCtrl.clear();
                 _advanceNoteCtrl.clear();
                 if (mounted) showSavedSnack(context, message: 'Advance recorded \u2713');
@@ -379,7 +400,7 @@ class _TaskEditBodyState extends State<_TaskEditBody> {
           ),
           const SizedBox(height: 20),
           FilledButton(
-            onPressed: _saving ? null : () => _save(prov, isManager),
+            onPressed: _saving ? null : () => _save(prov, context.read<AuthProvider>(), isManager),
             child: _saving
                 ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2))
                 : const Text('Save task'),
@@ -405,7 +426,8 @@ class _TaskEditBodyState extends State<_TaskEditBody> {
                       if (_noteCtrl.text.trim().isEmpty) return;
                       setState(() => _savingNote = true);
                       try {
-                        await prov.addNote(_noteCtrl.text.trim());
+                        final authProv = context.read<AuthProvider>();
+                        await prov.addNote(_noteCtrl.text.trim(), currentUserId: authProv.user?.id, currentUserName: authProv.user?.name);
                         if (mounted) showSavedSnack(context, message: 'Note saved \u2713');
                       } catch (e) {
                         if (mounted) showSavedSnack(context, ok: false, message: e.toString());
@@ -436,9 +458,7 @@ class _TaskEditBodyState extends State<_TaskEditBody> {
                     padding: EdgeInsets.all(16),
                     child: Text('No status changes yet.', style: TextStyle(color: Colors.grey)),
                   )
-                : SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: DataTable(
+                : DataTable(
                       columns: const [
                         DataColumn(label: Text('From')),
                         DataColumn(label: Text('To')),
@@ -457,9 +477,13 @@ class _TaskEditBodyState extends State<_TaskEditBody> {
                           ]),
                       ],
                     ),
-                  ),
           ),
         ],
+                ),
+              ),
+            ),
+          );
+        },
       ),
     );
   }

@@ -1,13 +1,12 @@
+import '../../core/upload_part.dart';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../../core/api_client.dart';
 import '../../domain/entities/work_item.dart';
 
 class WorkItemEditProvider extends ChangeNotifier {
-  final ApiClient api;
   final int workItemId;
-  WorkItemEditProvider(this.api, this.workItemId);
+  WorkItemEditProvider(this.workItemId);
 
   bool loading = false;
   String? error;

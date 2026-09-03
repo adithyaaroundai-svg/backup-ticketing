@@ -2,12 +2,10 @@ import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
 
-import '../../core/api_client.dart';
 import '../../domain/entities/task.dart';
 
 class DeliverablesProvider extends ChangeNotifier {
-  final ApiClient api;
-  DeliverablesProvider(this.api);
+  DeliverablesProvider();
 
   bool loading = false;
   String? error;

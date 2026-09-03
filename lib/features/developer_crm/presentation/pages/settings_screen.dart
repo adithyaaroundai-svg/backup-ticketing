@@ -1,8 +1,9 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
-import '../../core/api_client.dart';
 import '../../core/enums.dart';
 import '../providers/auth_provider.dart';
 import '../providers/settings_provider.dart';
@@ -14,7 +15,7 @@ class SettingsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
-      create: (ctx) => SettingsProvider(ctx.read<ApiClient>())..load(),
+      create: (ctx) => SettingsProvider()..load(),
       child: const _SettingsBody(),
     );
   }
@@ -28,6 +29,7 @@ class _SettingsBody extends StatefulWidget {
 }
 
 class _SettingsBodyState extends State<_SettingsBody> {
+  final ScrollController _horizontalScrollController = ScrollController();
   final _codePwCtrl = TextEditingController();
   bool _savingCodePw = false;
 
@@ -40,6 +42,7 @@ class _SettingsBodyState extends State<_SettingsBody> {
 
   @override
   void dispose() {
+    _horizontalScrollController.dispose();
     _codePwCtrl.dispose();
     _nameCtrl.dispose();
     _emailCtrl.dispose();
@@ -57,15 +60,31 @@ class _SettingsBodyState extends State<_SettingsBody> {
       return ErrorBanner(message: prov.error!, onRetry: prov.load);
     }
 
-    return RefreshIndicator(
-      onRefresh: prov.load,
-      child: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text('Settings', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return Scrollbar(
+          controller: _horizontalScrollController,
+          thumbVisibility: true,
+          trackVisibility: true,
+          child: SingleChildScrollView(
+            controller: _horizontalScrollController,
+            scrollDirection: Axis.horizontal,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                minWidth: math.max(constraints.maxWidth, 1000), // Enforce minimum width
+              ),
+              child: RefreshIndicator(
+                onRefresh: prov.load,
+                child: SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text('Settings', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
               TextButton.icon(
                 icon: const Icon(Icons.history),
                 label: const Text('Activity log'),
@@ -206,10 +225,8 @@ class _SettingsBodyState extends State<_SettingsBody> {
           Text('Team members', style: Theme.of(context).textTheme.titleSmall),
           const SizedBox(height: 8),
           Card(
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: DataTable(
-                columns: const [
+            child: DataTable(
+              columns: const [
                   DataColumn(label: Text('Name')),
                   DataColumn(label: Text('Email')),
                   DataColumn(label: Text('Role')),
@@ -235,9 +252,14 @@ class _SettingsBodyState extends State<_SettingsBody> {
                 ],
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
+    ),
+  ),
+),
+        );
+      },
     );
   }
 

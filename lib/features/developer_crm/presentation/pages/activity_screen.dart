@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../core/api_client.dart';
 import '../../core/time_utils.dart';
 import '../providers/activity_provider.dart';
 import '../widgets/common.dart';
@@ -12,7 +11,7 @@ class ActivityScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
-      create: (ctx) => ActivityProvider(ctx.read<ApiClient>())..load(),
+      create: (ctx) => ActivityProvider()..load(),
       child: const _ActivityBody(),
     );
   }

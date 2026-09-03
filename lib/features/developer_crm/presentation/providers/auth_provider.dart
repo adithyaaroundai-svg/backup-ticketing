@@ -62,6 +62,8 @@ class AuthProvider extends ChangeNotifier {
           
       if (response != null) {
         _user = AppUser.fromJson(Map<String, dynamic>.from(response));
+        
+        await logActivity('Logged into Developer CRM');
         await refreshSidebarTasks();
       } else {
         _error = 'No Developer CRM user found for mapped ID: $mappedId';
@@ -79,13 +81,43 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
+  /// Global activity logger for the current user
+  Future<void> logActivity(String message) async {
+    if (_user == null) return;
+    try {
+      await Supabase.instance.client.schema('aroundtally').from('activity_log').insert({
+        'user_id': _user!.id,
+        'user_name': _user!.name,
+        'message': message,
+      });
+    } catch (e) {
+      debugPrint('Failed to log activity: $e');
+    }
+  }
+
   /// Refreshes the tasks in the sidebar
   Future<void> refreshSidebarTasks() async {
     if (_user == null) return;
     
     try {
-      // For now, return empty tasks until Phase 3 rewrites task entities
-      _sidebarTasks = [];
+      final resp = await Supabase.instance.client.schema('aroundtally').from('tasks').select('''
+        *,
+        clients ( name ),
+        task_assignees!inner ( user_id )
+      ''')
+      .eq('task_assignees.user_id', _user!.id)
+      .neq('status', 'completed')
+      .neq('status', 'cancelled')
+      .order('id', ascending: false);
+      
+      _sidebarTasks = (resp as List).map((row) {
+        final cName = (row['clients'] is Map) ? row['clients']['name'] : null;
+        return Task.fromJson({
+          ...row, 
+          'client': cName, 
+          'assignees': [] // We only care about displaying them in sidebar
+        });
+      }).toList();
       notifyListeners();
     } catch (e) {
       debugPrint('Error fetching sidebar tasks: $e');

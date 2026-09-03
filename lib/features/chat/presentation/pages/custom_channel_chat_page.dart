@@ -1282,6 +1282,32 @@ class _CustomChannelChatPageState extends ConsumerState<CustomChannelChatPage> {
                 ),
                 const SizedBox(width: 8),
               ],
+              if (channel!.name.toLowerCase() == 'aroundai all') ...[
+                Tooltip(
+                  message: 'Project Status',
+                  child: InkWell(
+                    onTap: () => context.push('/aroundai-project-status'),
+                    borderRadius: BorderRadius.circular(8),
+                    child: Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: context.isDarkMode ? Colors.indigo.withAlpha(40) : AppColors.primary.withAlpha(25),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: context.isDarkMode ? Colors.indigo.withAlpha(80) : AppColors.primary.withAlpha(75)),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(LucideIcons.kanbanSquare, size: 16, color: context.isDarkMode ? Colors.indigo.shade200 : AppColors.primary),
+                          const SizedBox(width: 6),
+                          Text('Project Status', style: TextStyle(color: context.isDarkMode ? Colors.indigo.shade200 : AppColors.primary, fontWeight: FontWeight.w600, fontSize: 13)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+              ],
               Tooltip(
                 message: 'Group Audio Call',
                 child: InkWell(

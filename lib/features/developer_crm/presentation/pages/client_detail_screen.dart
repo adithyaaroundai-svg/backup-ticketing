@@ -1,14 +1,18 @@
+import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../core/upload_part.dart';
+import 'dart:math' as math;
+
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
-import '../../core/api_client.dart';
 import '../../core/download.dart';
 import '../../core/enums.dart';
 import '../../core/time_utils.dart';
 import '../../domain/entities/work_item.dart';
 import '../providers/client_detail_provider.dart';
+import '../providers/auth_provider.dart';
 import '../widgets/common.dart';
 import '../widgets/task_form_dialog.dart';
 import '../widgets/task_table.dart';
@@ -20,7 +24,7 @@ class ClientDetailScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
-      create: (ctx) => ClientDetailProvider(ctx.read<ApiClient>(), clientId)..load(),
+      create: (ctx) => ClientDetailProvider(clientId)..load(),
       child: const _ClientDetailBody(),
     );
   }
@@ -118,56 +122,93 @@ class _ClientDetailBodyState extends State<_ClientDetailBody> with SingleTickerP
   }
 }
 
-class _TasksTab extends StatelessWidget {
+class _TasksTab extends StatefulWidget {
   final bool pending;
   const _TasksTab({required this.pending});
 
   @override
+  State<_TasksTab> createState() => _TasksTabState();
+}
+
+class _TasksTabState extends State<_TasksTab> {
+  final ScrollController _horizontalScrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _horizontalScrollController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final prov = context.watch<ClientDetailProvider>();
-    final tasks = pending ? prov.pendingTasks : prov.tasks;
-    return RefreshIndicator(
-      onRefresh: () => prov.load(tab: prov.tab, assignee: prov.filterAssignee),
-      child: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          Align(
+    final tasks = widget.pending ? prov.pendingTasks : prov.tasks;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return Scrollbar(
+          controller: _horizontalScrollController,
+          thumbVisibility: true,
+          trackVisibility: true,
+          child: SingleChildScrollView(
+            controller: _horizontalScrollController,
+            scrollDirection: Axis.horizontal,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                minWidth: math.max(constraints.maxWidth, 1000), // Enforce minimum width
+              ),
+              child: RefreshIndicator(
+                onRefresh: () => prov.load(tab: prov.tab, assignee: prov.filterAssignee),
+                child: SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Align(
             alignment: Alignment.centerRight,
             child: OutlinedButton.icon(
               icon: const Icon(Icons.add),
-              label: Text(pending ? 'Add pending task' : 'Add task'),
-              onPressed: () async {
-                final result =
-                    await showTaskFormDialog(context, users: prov.users, initialPending: pending);
-                if (result == null) return;
-                try {
-                  await prov.createTask(
-                    description: result.description,
-                    priority: result.priority,
-                    status: result.status,
-                    expectedFinish: result.expectedFinish,
-                    startDate: result.startDate,
-                    approved: result.approved,
-                    pending: result.pending,
-                    assigneeIds: result.assigneeIds,
-                    files: result.files,
-                  );
-                  if (context.mounted) showSavedSnack(context, message: 'Task created \u2713');
-                } catch (e) {
-                  if (context.mounted) showSavedSnack(context, ok: false, message: e.toString());
-                }
-              },
+                label: Text(widget.pending ? 'Add pending task' : 'Add task'),
+                onPressed: () async {
+                  final result =
+                      await showTaskFormDialog(context, users: prov.users, initialPending: widget.pending);
+                  if (result == null) return;
+                  try {
+                    await prov.createTask(
+                      description: result.description,
+                      priority: result.priority,
+                      status: result.status,
+                      expectedFinish: result.expectedFinish,
+                      startDate: result.startDate,
+                      approved: result.approved,
+                      pending: result.pending,
+                      assigneeIds: result.assigneeIds,
+                      files: result.files,
+                      currentUserId: context.read<AuthProvider>().user?.id,
+                      currentUserName: context.read<AuthProvider>().user?.name,
+                    );
+                    if (context.mounted) showSavedSnack(context, message: 'Task created \u2713');
+                  } catch (e) {
+                    if (context.mounted) showSavedSnack(context, ok: false, message: e.toString());
+                  }
+                },
+              ),
             ),
-          ),
-          const SizedBox(height: 8),
-          Card(
-            child: TaskTable(
-              tasks: tasks,
-              emptyMessage: pending ? 'No pending tasks.' : 'No tasks for today.',
+            const SizedBox(height: 8),
+            Card(
+              child: TaskTable(
+                tasks: tasks,
+                emptyMessage: widget.pending ? 'No pending tasks.' : 'No tasks for today.',
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
+    ),
+  ),
+),
+        );
+      },
     );
   }
 }
@@ -426,8 +467,11 @@ class _WorkItemCard extends StatelessWidget {
                         avatar: const Icon(Icons.download, size: 16),
                         label: Text(f.filename),
                         onPressed: () {
-                          final api = context.read<ApiClient>();
-                          openDownload(context, api.fileDownloadUrl(f.storagePath ?? ''));
+                          openDownload(
+                              context,
+                              Supabase.instance.client.storage
+                                  .from('dev_crm_files')
+                                  .getPublicUrl(f.storagePath ?? ''));
                         },
                       ),
                   ],

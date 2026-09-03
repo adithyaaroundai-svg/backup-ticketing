@@ -45,9 +45,9 @@ const List<String> kUserRoles = [
 String taskStatusLabel(String status) {
   switch (status) {
     case 'not_started':
-      return 'Not started';
+      return 'Yet to start';
     case 'working':
-      return 'Working';
+      return 'Presently working';
     case 'ready_for_testing':
       return 'Ready for testing';
     case 'ready_for_implementation':
