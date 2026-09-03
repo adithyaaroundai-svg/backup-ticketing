@@ -21,6 +21,8 @@ class AroundaiProjectStatusScreen extends ConsumerStatefulWidget {
 }
 
 class _AroundaiProjectStatusScreenState extends ConsumerState<AroundaiProjectStatusScreen> {
+  String _selectedFilter = 'all';
+
   @override
   void initState() {
     super.initState();
@@ -471,6 +473,11 @@ class _AroundaiProjectStatusScreenState extends ConsumerState<AroundaiProjectSta
     final state = ref.watch(aroundaiProjectStatusProvider);
     final prov = ref.read(aroundaiProjectStatusProvider.notifier);
 
+    final filteredTasks = state.tasks.where((t) {
+      if (_selectedFilter == 'all') return true;
+      return t.taskStatus == _selectedFilter;
+    }).toList();
+
     return Scaffold(
       backgroundColor: const Color(0xFFF1F5F9), // Slate-100
       appBar: AppBar(
@@ -552,7 +559,11 @@ class _AroundaiProjectStatusScreenState extends ConsumerState<AroundaiProjectSta
                           padding: const EdgeInsets.all(32),
                           child: ConstrainedBox(
                             constraints: const BoxConstraints(maxWidth: 1400),
-                            child: Container(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _buildFilterTabs(),
+                                Container(
                               decoration: BoxDecoration(
                                 color: Colors.white,
                                 borderRadius: BorderRadius.circular(12),
@@ -587,7 +598,7 @@ class _AroundaiProjectStatusScreenState extends ConsumerState<AroundaiProjectSta
                                         DataColumn(label: Text('Updated At')),
                                         DataColumn(label: Text('Actions'), numeric: true),
                                       ],
-                                      rows: state.tasks.map((task) {
+                                      rows: filteredTasks.map((task) {
                                         Color baseRowColor;
                                         if (task.taskStatus == 'completed') {
                                           baseRowColor = Colors.green.shade50.withOpacity(0.3);
@@ -691,10 +702,56 @@ class _AroundaiProjectStatusScreenState extends ConsumerState<AroundaiProjectSta
                                 ),
                               ),
                             ),
-                          ),
+                          ],
                         ),
                       ),
                     ),
+                  ),
+                ),
+    );
+  }
+
+  Widget _buildFilterTabs() {
+    final filters = [
+      {'label': 'All Tasks', 'value': 'all'},
+      {'label': 'Yet to Start', 'value': 'not started'},
+      {'label': 'Presently Working', 'value': 'working'},
+      {'label': 'Paused', 'value': 'paused'},
+      {'label': 'Trial', 'value': 'trial'},
+      {'label': 'Completed', 'value': 'completed'},
+    ];
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 24),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: filters.map((f) {
+          final isSelected = _selectedFilter == f['value'];
+          return ChoiceChip(
+            label: Text(f['label']!),
+            selected: isSelected,
+            onSelected: (selected) {
+              if (selected) {
+                setState(() {
+                  _selectedFilter = f['value']!;
+                });
+              }
+            },
+            selectedColor: Colors.indigo.shade600,
+            labelStyle: TextStyle(
+              color: isSelected ? Colors.white : Colors.grey.shade700,
+              fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+            ),
+            backgroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+              side: BorderSide(color: isSelected ? Colors.indigo.shade600 : Colors.grey.shade300),
+            ),
+            showCheckmark: false,
+          );
+        }).toList(),
+      ),
     );
   }
 }

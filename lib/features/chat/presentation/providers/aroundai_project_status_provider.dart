@@ -34,6 +34,17 @@ class AroundaiProjectStatusNotifier extends Notifier<AroundaiProjectStatusState>
     return AroundaiProjectStatusState();
   }
 
+  int _getStatusRank(String status) {
+    switch (status) {
+      case 'not started': return 0;
+      case 'working': return 1;
+      case 'paused': return 2;
+      case 'trial': return 3;
+      case 'completed': return 4;
+      default: return 5;
+    }
+  }
+
   Future<void> load() async {
     state = state.copyWith(loading: true, error: null);
 
@@ -44,6 +55,16 @@ class AroundaiProjectStatusNotifier extends Notifier<AroundaiProjectStatusState>
           .order('id', ascending: false);
 
       final tasks = (response as List).map((row) => AroundaiProjectStatus.fromJson(row)).toList();
+      
+      tasks.sort((a, b) {
+        final rankA = _getStatusRank(a.taskStatus);
+        final rankB = _getStatusRank(b.taskStatus);
+        if (rankA != rankB) {
+          return rankA.compareTo(rankB);
+        }
+        return b.id.compareTo(a.id); // newer tasks within the same status at the top
+      });
+
       state = state.copyWith(loading: false, tasks: tasks);
     } catch (e) {
       debugPrint('Error loading AroundAI Project Status: $e');
