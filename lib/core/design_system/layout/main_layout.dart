@@ -534,7 +534,19 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context),
+              onPressed: () async {
+                final prefs = await SharedPreferences.getInstance();
+                final notified = prefs.getStringList('notified_followups') ?? [];
+                for (var lead in leads) {
+                  final key = '${lead.id}_$todayStr';
+                  if (!notified.contains(key)) notified.add(key);
+                }
+                await prefs.setStringList('notified_followups', notified);
+                
+                if (context.mounted) {
+                  Navigator.pop(context);
+                }
+              },
               child: const Text('Dismiss'),
             ),
             ElevatedButton(

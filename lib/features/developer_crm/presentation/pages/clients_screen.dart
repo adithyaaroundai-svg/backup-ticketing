@@ -119,8 +119,10 @@ class _ClientsBodyState extends State<_ClientsBody> {
               margin: const EdgeInsets.only(top: 12),
               child: Padding(
                 padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                child: SizedBox(
+                  width: 400,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     if (_formError != null) ...[
                       Text(_formError!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
@@ -144,6 +146,7 @@ class _ClientsBodyState extends State<_ClientsBody> {
                           : const Text('Create client'),
                     ),
                   ],
+                ),
                 ),
               ),
             ),

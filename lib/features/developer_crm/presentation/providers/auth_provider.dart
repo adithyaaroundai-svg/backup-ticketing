@@ -33,6 +33,7 @@ class AuthProvider extends ChangeNotifier {
     '583fcb1b-31f5-4aaa-aab8-214d5f833ef7': 5, // Archana
     '35f3d913-0cf4-4d80-93dd-593114e7e41c': 6, // Athulya
     'd8aa6435-9e02-4bab-9acc-ae1f5f3d6a1c': 8, // Sidharth
+    'f398fe3a-ea5f-4f98-9720-b3e32e798a63': 9, // Vismaya
   };
 
   /// Fetches the user from Supabase `aroundtally.users` using their mapped ID.

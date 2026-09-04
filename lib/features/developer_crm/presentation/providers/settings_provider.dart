@@ -15,24 +15,43 @@ class SettingsProvider extends ChangeNotifier {
     loading = true;
     error = null;
     notifyListeners();
+
+    final supabase = Supabase.instance.client;
+
+    // Load users — separate try/catch so app_settings failure doesn't block this
     try {
-      final supabase = Supabase.instance.client;
-      final usersResp = await supabase.schema('aroundtally').from('users').select('*').order('name');
-      users = (usersResp as List).map((e) => AppUser.fromJson(Map<String, dynamic>.from(e))).toList();
-      
-      final settingsResp = await supabase.schema('aroundtally').from('app_settings').select('code_password_hash').eq('id', 1).maybeSingle();
-      if (settingsResp != null && settingsResp['code_password_hash'] != null && settingsResp['code_password_hash'].toString().isNotEmpty) {
-        hasCodePw = true;
-      } else {
-        hasCodePw = false;
-      }
+      final usersResp = await supabase
+          .schema('aroundtally')
+          .from('users')
+          .select('*')
+          .order('name');
+      users = (usersResp as List)
+          .map((e) => AppUser.fromJson(Map<String, dynamic>.from(e)))
+          .toList();
+      debugPrint('Settings: loaded ${users.length} users');
     } catch (e) {
-      debugPrint('Error loading settings: $e');
-      error = e.toString();
-    } finally {
-      loading = false;
-      notifyListeners();
+      debugPrint('Error loading users in settings: $e');
+      error = 'Failed to load users: $e';
     }
+
+    // Load app_settings — failure is non-fatal
+    try {
+      final settingsResp = await supabase
+          .schema('aroundtally')
+          .from('app_settings')
+          .select('code_password_hash')
+          .eq('id', 1)
+          .maybeSingle();
+      hasCodePw = settingsResp != null &&
+          settingsResp['code_password_hash'] != null &&
+          settingsResp['code_password_hash'].toString().isNotEmpty;
+    } catch (e) {
+      debugPrint('app_settings not available (non-fatal): $e');
+      hasCodePw = false;
+    }
+
+    loading = false;
+    notifyListeners();
   }
 
   Future<void> setCodePassword(String password) async {

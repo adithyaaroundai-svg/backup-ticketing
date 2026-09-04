@@ -107,7 +107,8 @@ class _SettingsBodyState extends State<_SettingsBody> {
                   ),
                   const SizedBox(height: 8),
                   Row(children: [
-                    Expanded(
+                    SizedBox(
+                      width: 300,
                       child: TextField(
                         controller: _codePwCtrl,
                         obscureText: true,
@@ -175,6 +176,7 @@ class _SettingsBodyState extends State<_SettingsBody> {
                       width: 200,
                       child: DropdownButtonFormField<String>(
                         initialValue: _role,
+                        isExpanded: true,
                         decoration: const InputDecoration(labelText: 'Role'),
                         items: [
                           for (final r in kUserRoles) DropdownMenuItem(value: r, child: Text(userRoleLabel(r)))
