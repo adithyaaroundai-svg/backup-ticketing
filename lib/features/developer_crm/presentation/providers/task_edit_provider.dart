@@ -192,9 +192,40 @@ class TaskEditProvider extends ChangeNotifier {
         final tDesc = task?.description ?? '#$taskId';
         String logMessage = '';
         if (updates.isNotEmpty) {
+          if (status != null && task != null && status != task!.status) {
+            // Task status has changed! Broadcast to chat.
+            final oldStatus = task!.status;
+            final chatContent = '__TASK_STATUS_CHANGE__: $taskId|$oldStatus|$status|$currentUserName|${statusMessage ?? ""}';
+            
+            // Map the currentUserId (integer) back to the chat agent UUID
+            String senderId = 'system';
+            try {
+              // Note: this assumes AuthProvider is in scope or we import it, but we can also just use the global Supabase auth user
+              final chatUserId = Supabase.instance.client.auth.currentSession?.user.id;
+              if (chatUserId != null) {
+                senderId = chatUserId;
+              }
+            } catch (e) {
+              debugPrint('Error finding chat user id: $e');
+            }
+
+            try {
+              await supabase.from('chat_messages').insert({
+                'sender_id': senderId,
+                'sender_name': currentUserName,
+                'sender_role': 'agent',
+                'content': chatContent,
+                'channel': 'software development',
+                'is_forwarded': false,
+              });
+            } catch (e) {
+              debugPrint('Error broadcasting task status change to chat: $e');
+            }
+          }
+
           if (status != null && status == 'completed') {
             logMessage = 'completed task "$tDesc" → added to Work History';
-          } else if (status != null) {
+          } else if (status != null && task != null && status != task!.status) {
             logMessage = 'updated task "$tDesc" (status changed to $status)';
           } else {
             logMessage = 'edited task "$tDesc" details';

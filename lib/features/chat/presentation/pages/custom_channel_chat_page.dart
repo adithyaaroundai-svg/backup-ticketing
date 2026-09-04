@@ -2049,6 +2049,11 @@ class _ChatBubbleState extends ConsumerState<_ChatBubble> {
       return _CallActivityCard(content: message.content, createdAt: message.createdAt);
     }
 
+    // Task status change messages — rendered as custom cards
+    if (message.content.startsWith('__TASK_STATUS_CHANGE__:') && !isDeleted) {
+      return _TaskStatusChangeCard(content: message.content, createdAt: message.createdAt);
+    }
+
     return TapRegion(
       onTapOutside: (_) {
         if (_hovered) setState(() => _hovered = false);
@@ -2475,6 +2480,189 @@ class _ActionBtn extends StatelessWidget {
 }
 
 // ── Call Activity Card ────────────────────────────────────────────────────────
+class _TaskStatusChangeCard extends StatelessWidget {
+  final String content;
+  final DateTime? createdAt;
+  const _TaskStatusChangeCard({required this.content, this.createdAt});
+
+  @override
+  Widget build(BuildContext context) {
+    // Format: __TASK_STATUS_CHANGE__: <taskId>|<oldStatus>|<newStatus>|<user>|<message>
+    final payload = content.replaceFirst('__TASK_STATUS_CHANGE__: ', '');
+    final parts = payload.split('|');
+    if (parts.length < 5) return const SizedBox.shrink();
+
+    final taskId = parts[0];
+    final oldStatus = parts[1];
+    final newStatus = parts[2];
+    final user = parts[3];
+    final message = parts[4];
+
+    final timeStr = createdAt != null
+        ? "${createdAt!.toLocal().hour}:${createdAt!.toLocal().minute.toString().padLeft(2, '0')}"
+        : "";
+
+    // Parse status color to make it look premium
+    Color statusColor = AppColors.primary;
+    if (newStatus.toLowerCase() == 'completed') statusColor = Colors.green.shade600;
+    if (newStatus.toLowerCase() == 'cancelled') statusColor = Colors.red.shade600;
+    if (newStatus.toLowerCase() == 'working') statusColor = Colors.orange.shade600;
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Column(
+        children: [
+          Center(
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              decoration: BoxDecoration(
+                color: context.isDarkMode ? Colors.white10 : Colors.black.withAlpha(12),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                timeStr,
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w600,
+                  color: context.isDarkMode ? Colors.white70 : AppColors.slate500,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: context.isDarkMode ? context.adaptiveCard : Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: context.isDarkMode ? Colors.white12 : Colors.black.withAlpha(15),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withAlpha(5),
+                  blurRadius: 10,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: statusColor.withAlpha(25),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(LucideIcons.arrowRightLeft, size: 16, color: statusColor),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Task #$taskId Status Change',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                              color: context.isDarkMode ? Colors.white : AppColors.slate800,
+                            ),
+                          ),
+                          Text(
+                            'Updated by $user',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: context.isDarkMode ? Colors.white70 : AppColors.slate500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: context.isDarkMode ? Colors.white.withAlpha(10) : Colors.black.withAlpha(10),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    children: [
+                      Text(
+                        oldStatus.isEmpty ? 'New' : oldStatus,
+                        style: TextStyle(
+                          color: context.isDarkMode ? Colors.white70 : AppColors.slate600,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 8.0),
+                        child: Icon(LucideIcons.arrowRight, size: 14, color: AppColors.slate400),
+                      ),
+                      Text(
+                        newStatus,
+                        style: TextStyle(
+                          color: statusColor,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (message.trim().isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(LucideIcons.messageSquare, size: 14, color: AppColors.slate400),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          '"$message"',
+                          style: TextStyle(
+                            fontStyle: FontStyle.italic,
+                            color: context.isDarkMode ? Colors.white70 : AppColors.slate600,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+                const SizedBox(height: 12),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton.icon(
+                    onPressed: () {
+                      context.go('/developer-crm');
+                    },
+                    icon: Icon(LucideIcons.kanbanSquare, size: 14, color: AppColors.primary),
+                    label: Text(
+                      'View in Project Tracker',
+                      style: TextStyle(fontSize: 13, color: AppColors.primary, fontWeight: FontWeight.w600),
+                    ),
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      backgroundColor: AppColors.primary.withAlpha(20),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _CallActivityCard extends StatelessWidget {
   final String content;
   final DateTime createdAt;

@@ -6,9 +6,11 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../../features/auth/presentation/providers/auth_provider.dart';
 import '../theme/app_colors.dart';
 import '../theme/theme_provider.dart';
+import '../../../features/sales/domain/entities/lead.dart';
 import '../../../features/developer_crm/presentation/providers/auth_provider.dart' as dev_crm_auth;
 
 import '../../../features/tickets/presentation/providers/ticket_provider.dart';
@@ -84,6 +86,7 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
         _hasInitialized = true;
         _setupChatListener();
         _startLastSeenUpdates();
+        _checkFollowUpNotifications();
       }
     });
   }
@@ -443,6 +446,120 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
           bottomNavigationBar: _BottomNav(currentPath: widget.currentPath),
         ),
       ),
+    );
+  }
+
+  Future<void> _checkFollowUpNotifications() async {
+    final c = _container;
+    if (c == null || !mounted) return;
+
+    final currentUser = c.read(authProvider);
+    if (currentUser == null) return;
+
+    final name = currentUser.fullName.toLowerCase();
+    if (!name.contains('sidharth') && !name.contains('athira') && !name.contains('anil')) {
+      return;
+    }
+
+    try {
+      final client = Supabase.instance.client;
+      final data = await client
+          .from('leads')
+          .select()
+          .eq('pipeline_type', 'global');
+      final allLeads = (data as List).map((json) => Lead.fromJson(json)).toList();
+      
+      final now = DateTime.now();
+      final todayStr = now.toIso8601String().substring(0, 10);
+      
+      final prefs = await SharedPreferences.getInstance();
+      final notified = prefs.getStringList('notified_followups') ?? [];
+
+      final dueTodayLeads = allLeads.where((lead) {
+        if (lead.followUpDate == null) return false;
+        if (lead.status.toLowerCase() == 'win' || lead.status.toLowerCase() == 'won' || lead.status.toLowerCase() == 'loss' || lead.status.toLowerCase() == 'lost') return false;
+        final fDate = lead.followUpDate!.toLocal();
+        final isDueToday = fDate.year == now.year && fDate.month == now.month && fDate.day == now.day;
+        if (!isDueToday) return false;
+        
+        final key = '${lead.id}_$todayStr';
+        return !notified.contains(key);
+      }).toList();
+
+      if (dueTodayLeads.isNotEmpty && mounted) {
+        _showDueLeadsDialog(dueTodayLeads, todayStr);
+      }
+    } catch (e) {
+      debugPrint('Error checking follow ups: $e');
+    }
+  }
+
+  void _showDueLeadsDialog(List<Lead> leads, String todayStr) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Row(
+            children: [
+              Icon(LucideIcons.bellRing, color: AppColors.error),
+              const SizedBox(width: 8),
+              const Text('Follow-ups Due Today'),
+            ],
+          ),
+          content: ConstrainedBox(
+            constraints: const BoxConstraints(maxHeight: 300, maxWidth: 400),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('You have ${leads.length} lead(s) requiring follow-up today.', style: TextStyle(color: context.adaptiveSlate700)),
+                const SizedBox(height: 16),
+                Expanded(
+                  child: ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: leads.length,
+                    itemBuilder: (context, index) {
+                      final l = leads[index];
+                      return ListTile(
+                        leading: Icon(LucideIcons.calendarClock, size: 20, color: Colors.orange.shade700),
+                        title: Text(l.companyName, style: TextStyle(fontWeight: FontWeight.w600, color: context.adaptiveSlate800)),
+                        subtitle: Text(l.product ?? 'No product specified', style: TextStyle(fontSize: 12, color: context.adaptiveSlate500)),
+                        dense: true,
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Dismiss'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                final prefs = await SharedPreferences.getInstance();
+                final notified = prefs.getStringList('notified_followups') ?? [];
+                for (var lead in leads) {
+                  final key = '${lead.id}_$todayStr';
+                  if (!notified.contains(key)) notified.add(key);
+                }
+                await prefs.setStringList('notified_followups', notified);
+
+                if (context.mounted) {
+                  Navigator.pop(context);
+                  context.go('/leads');
+                }
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
+              child: const Text('Go to Sales Pipeline'),
+            ),
+          ],
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          backgroundColor: context.isDarkMode ? context.adaptiveCard : Colors.white,
+        );
+      },
     );
   }
 }

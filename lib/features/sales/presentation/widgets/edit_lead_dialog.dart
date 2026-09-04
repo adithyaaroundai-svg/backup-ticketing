@@ -214,7 +214,7 @@ class _EditLeadDialogState extends ConsumerState<EditLeadDialog> {
       'source': sourceValue,
       'product': _selectedProduct,
       'follow_up_date': _selectedFollowUpDate != null
-          ? DateFormat('yyyy-MM-dd').format(_selectedFollowUpDate!)
+          ? DateTime(_selectedFollowUpDate!.year, _selectedFollowUpDate!.month, _selectedFollowUpDate!.day, 10, 0).toUtc().toIso8601String()
           : null,
     };
 

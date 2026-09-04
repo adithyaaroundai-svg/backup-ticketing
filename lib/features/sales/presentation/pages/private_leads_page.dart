@@ -935,12 +935,12 @@ class _LeadCard extends StatelessWidget {
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(LucideIcons.calendar, size: 14, color: context.adaptiveSlate400),
+                            Icon(LucideIcons.calendarClock, size: 14, color: context.adaptiveSlate400),
                             const SizedBox(width: 6),
                             Flexible(
-                              child: Text(
-                                DateFormat('yyyy-MM-dd').format(lead.createdAt),
-                                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.error),
+                                child: Text(
+                                  lead.followUpDate != null ? DateFormat('dd-MM-yyyy').format(lead.followUpDate!) : 'No follow-up',
+                                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: lead.followUpDate != null ? AppColors.error : context.adaptiveSlate500),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
@@ -950,23 +950,6 @@ class _LeadCard extends StatelessWidget {
                       ),
                     ],
                   ),
-                  if (lead.followUpDate != null) ...[
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Icon(LucideIcons.clock, size: 14, color: Colors.orange.shade700),
-                        const SizedBox(width: 6),
-                        Expanded(
-                          child: Text(
-                            'Follow-up: ${DateFormat('MMM d, yyyy').format(lead.followUpDate!)}',
-                            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.orange.shade800),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
                   if (lead.description != null && lead.description!.isNotEmpty) ...[
                     const SizedBox(height: 12),
                     Text(

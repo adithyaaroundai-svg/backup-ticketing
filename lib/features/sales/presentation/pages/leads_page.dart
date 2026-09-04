@@ -7,6 +7,8 @@ import '../../../../core/design_system/theme/app_colors.dart';
 import '../providers/lead_provider.dart';
 import '../../domain/entities/lead.dart';
 import '../widgets/edit_lead_dialog.dart';
+import '../widgets/follow_up_sidebar.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 class LeadsPage extends ConsumerStatefulWidget {
   final bool isEmbedded;
@@ -223,7 +225,7 @@ class _LeadsPageState extends ConsumerState<LeadsPage> {
                                   }).toList(),
                                 ),
                         ),
-                        const SizedBox(width: 16),
+                        if (!isMobile) FollowUpSidebar(leads: leads),
                       ],
                     ),
                   );
@@ -238,14 +240,43 @@ class _LeadsPageState extends ConsumerState<LeadsPage> {
     );
 
     if (widget.isEmbedded) {
+      final isMobile = MediaQuery.sizeOf(context).width < 800;
+      if (isMobile) {
+        return Scaffold(
+          backgroundColor: Colors.transparent,
+          body: content,
+          endDrawer: leadsAsync.hasValue ? FollowUpSidebar(leads: leadsAsync.value!) : null,
+          floatingActionButton: Builder(
+            builder: (context) => FloatingActionButton.extended(
+              onPressed: () => Scaffold.of(context).openEndDrawer(),
+              icon: const Icon(LucideIcons.calendarClock, size: 18),
+              label: const Text('Follow-Ups'),
+              backgroundColor: AppColors.primary,
+              foregroundColor: Colors.white,
+            ),
+          ),
+        );
+      }
       return content;
     }
+
+    final isMobileGlobal = MediaQuery.sizeOf(context).width < 800;
 
     return MainLayout(
       currentPath: '/leads',
       child: Scaffold(
         backgroundColor: context.isDarkMode ? context.adaptiveBackground : AppColors.slate50,
         body: content,
+        endDrawer: isMobileGlobal && leadsAsync.hasValue ? FollowUpSidebar(leads: leadsAsync.value!) : null,
+        floatingActionButton: isMobileGlobal ? Builder(
+          builder: (context) => FloatingActionButton.extended(
+            onPressed: () => Scaffold.of(context).openEndDrawer(),
+            icon: const Icon(LucideIcons.calendarClock, size: 18),
+            label: const Text('Follow-Ups'),
+            backgroundColor: AppColors.primary,
+            foregroundColor: Colors.white,
+          ),
+        ) : null,
       ),
     );
   }
@@ -919,12 +950,12 @@ class _LeadCard extends StatelessWidget {
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(LucideIcons.calendar, size: 14, color: context.adaptiveSlate400),
+                            Icon(LucideIcons.calendarClock, size: 14, color: context.adaptiveSlate400),
                             const SizedBox(width: 6),
                             Flexible(
-                              child: Text(
-                                DateFormat('yyyy-MM-dd').format(lead.createdAt),
-                                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.error),
+                                child: Text(
+                                  lead.followUpDate != null ? DateFormat('dd-MM-yyyy').format(lead.followUpDate!) : 'No follow-up',
+                                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: lead.followUpDate != null ? AppColors.error : context.adaptiveSlate500),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
@@ -934,23 +965,6 @@ class _LeadCard extends StatelessWidget {
                       ),
                     ],
                   ),
-                  if (lead.followUpDate != null) ...[
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Icon(LucideIcons.clock, size: 14, color: Colors.orange.shade700),
-                        const SizedBox(width: 6),
-                        Expanded(
-                          child: Text(
-                            'Follow-up: ${DateFormat('MMM d, yyyy').format(lead.followUpDate!)}',
-                            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.orange.shade800),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
                   if (lead.description != null && lead.description!.isNotEmpty) ...[
                     const SizedBox(height: 12),
                     Text(
