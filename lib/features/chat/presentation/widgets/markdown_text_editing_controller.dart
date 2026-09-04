@@ -7,14 +7,13 @@ class MarkdownTextEditingController extends TextEditingController {
   MarkdownTextEditingController({super.text});
 
   static final _pattern = RegExp(
-    r'\*\*\*(.+?)\*\*\*'   // bold+italic  group 1
-    r'|\*\*(.+?)\*\*'      // bold         group 2
-    r'|__(.+?)__'          // bold alt     group 3
-    r'|~~(.+?)~~'          // strike       group 4
-    r'|<u>(.+?)<\/u>'      // underline    group 5
-    r'|_(.+?)_'            // italic       group 6
-    r'|\*(.+?)\*'          // italic alt   group 7
-    r'|`([^`]+)`',         // code         group 8
+    r'\*\*\*(.+?)\*\*\*'      // bold+italic  group 1
+    r'|\*\*(.+?)\*\*'         // bold         group 2
+    r'|__(.+?)__'             // bold alt     group 3
+    r'|~~(.+?)~~'             // strike       group 4
+    r'|<u>(.+?)<\/u>'        // underline    group 5
+    r'|<i>(.+?)<\/i>'        // italic (button only) group 6
+    r'|`([^`]+)`',            // code         group 7
     dotAll: true,
   );
 
@@ -78,14 +77,10 @@ class MarkdownTextEditingController extends TextEditingController {
         );
       } else if (match.group(6) != null) {
         content = match.group(6)!;
-        openMarker = '_'; closeMarker = '_';
-        contentStyle = (style ?? const TextStyle()).copyWith(fontStyle: FontStyle.italic);
-      } else if (match.group(7) != null) {
-        content = match.group(7)!;
-        openMarker = '*'; closeMarker = '*';
+        openMarker = '<i>'; closeMarker = '</i>';
         contentStyle = (style ?? const TextStyle()).copyWith(fontStyle: FontStyle.italic);
       } else {
-        content = match.group(8)!;
+        content = match.group(7)!;
         openMarker = '`'; closeMarker = '`';
         contentStyle = (style ?? const TextStyle()).copyWith(
           fontFamily: 'monospace',
@@ -118,7 +113,7 @@ class MarkdownTextEditingController extends TextEditingController {
   List<InlineSpan> _hideOrphanMarkers(
       String text, TextStyle? style, TextStyle invisible) {
     // Ordered longest-first so *** is checked before ** before *
-    const markers = ['***', '**', '__', '~~', '<u>', '</u>', '_', '*', '`'];
+    const markers = ['***', '**', '__', '~~', '<u>', '</u>', '<i>', '</i>', '`'];
     final spans = <InlineSpan>[];
     int pos = 0;
 

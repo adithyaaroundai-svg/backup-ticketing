@@ -207,6 +207,13 @@ class _PrivateLeadsPageState extends ConsumerState<PrivateLeadsPage> {
                                                 .read(leadControllerProvider.notifier)
                                                 .deleteLead(lead.id);
                                           },
+                                          onAddRemark: (lead, remark) {
+                                            final dateStr = DateFormat('MMM d h:mm a').format(DateTime.now());
+                                            final newDesc = (lead.description == null || lead.description!.isEmpty) 
+                                                ? '[$dateStr]: $remark' 
+                                                : '${lead.description}\n[$dateStr]: $remark';
+                                            ref.read(leadControllerProvider.notifier).updateLeadDetails(lead.id, {'description': newDesc});
+                                          },
                                         ),
                                       );
                                     }).toList(),
@@ -233,6 +240,13 @@ class _PrivateLeadsPageState extends ConsumerState<PrivateLeadsPage> {
                                           ref
                                               .read(leadControllerProvider.notifier)
                                               .deleteLead(lead.id);
+                                        },
+                                        onAddRemark: (lead, remark) {
+                                          final dateStr = DateFormat('MMM d h:mm a').format(DateTime.now());
+                                          final newDesc = (lead.description == null || lead.description!.isEmpty) 
+                                              ? '[$dateStr]: $remark' 
+                                              : '${lead.description}\n[$dateStr]: $remark';
+                                          ref.read(leadControllerProvider.notifier).updateLeadDetails(lead.id, {'description': newDesc});
                                         },
                                       ),
                                     );
@@ -391,6 +405,7 @@ class _VerticalStatusTab extends StatelessWidget {
   final List<Lead> leads;
   final void Function(Lead, String) onStageChange;
   final void Function(Lead) onDelete;
+  final void Function(Lead, String) onAddRemark;
 
   const _VerticalStatusTab({
     required this.status,
@@ -399,6 +414,7 @@ class _VerticalStatusTab extends StatelessWidget {
     required this.leads,
     required this.onStageChange,
     required this.onDelete,
+    required this.onAddRemark,
   });
 
   void _showKanbanPopup(BuildContext context) {
@@ -417,6 +433,7 @@ class _VerticalStatusTab extends StatelessWidget {
                 leads: leads,
                 onStageChange: onStageChange,
                 onDelete: onDelete,
+                onAddRemark: onAddRemark,
               ),
             ),
           ),
@@ -459,12 +476,14 @@ class _KanbanColumn extends StatelessWidget {
   final List<Lead> leads;
   final void Function(Lead, String) onStageChange;
   final void Function(Lead) onDelete;
+  final void Function(Lead, String) onAddRemark;
 
   const _KanbanColumn({
     required this.status,
     required this.leads,
     required this.onStageChange,
     required this.onDelete,
+    required this.onAddRemark,
   });
 
   Color get statusColor {
@@ -537,12 +556,14 @@ class _KanbanColumn extends StatelessWidget {
                               color: statusColor,
                               onStageChange: (newStage) => onStageChange(leads[index], newStage),
                               onDelete: () => onDelete(leads[index]),
+                              onAddRemark: (remark) => onAddRemark(leads[index], remark),
                             )
                           : _LeadCard(
                               lead: leads[index],
                               color: statusColor,
                               onStageChange: (newStage) => onStageChange(leads[index], newStage),
                               onDelete: () => onDelete(leads[index]),
+                              onAddRemark: (remark) => onAddRemark(leads[index], remark),
                             ),
                     ),
             ),
@@ -558,12 +579,14 @@ class _CustomerCard extends StatelessWidget {
   final Color color;
   final void Function(String) onStageChange;
   final VoidCallback onDelete;
+  final void Function(String) onAddRemark;
 
   const _CustomerCard({
     required this.lead,
     required this.color,
     required this.onStageChange,
     required this.onDelete,
+    required this.onAddRemark,
   });
 
   @override
@@ -769,12 +792,14 @@ class _LeadCard extends StatelessWidget {
   final Color color;
   final void Function(String) onStageChange;
   final VoidCallback onDelete;
+  final void Function(String) onAddRemark;
 
   const _LeadCard({
     required this.lead,
     required this.color,
     required this.onStageChange,
     required this.onDelete,
+    required this.onAddRemark,
   });
 
   @override
@@ -834,6 +859,7 @@ class _LeadCard extends StatelessWidget {
   }
 
   void _showLeadDetailsPopup(BuildContext context) {
+    final remarkController = TextEditingController();
     showDialog(
       context: context,
       builder: (context) {
@@ -992,6 +1018,51 @@ class _LeadCard extends StatelessWidget {
                             Icon(LucideIcons.chevronDown, size: 18, color: context.adaptiveSlate500),
                           ],
                         ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: remarkController,
+                    maxLines: 2,
+                    style: TextStyle(fontSize: 13, color: context.adaptiveSlate700),
+                    decoration: InputDecoration(
+                      hintText: 'Add a remark after follow-up...',
+                      hintStyle: TextStyle(fontSize: 13, color: context.adaptiveSlate400),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      filled: true,
+                      fillColor: context.isDarkMode ? Colors.black.withValues(alpha: 0.2) : Colors.white,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide(color: context.adaptiveBorder),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide(color: context.adaptiveBorder),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide(color: AppColors.primaryLight),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: () {
+                        if (remarkController.text.trim().isNotEmpty) {
+                          onAddRemark(remarkController.text.trim());
+                          Navigator.pop(context);
+                        }
+                      },
+                      icon: const Icon(LucideIcons.save, size: 16),
+                      label: const Text('Save Remark'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                       ),
                     ),
                   ),

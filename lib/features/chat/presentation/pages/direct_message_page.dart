@@ -208,7 +208,7 @@ class _DirectMessagePageState extends ConsumerState<DirectMessagePage> {
           mainAxisSize: MainAxisSize.min,
           children: [
             _formatBtn(Icons.format_bold, 'Bold', '**', '**'),
-            _formatBtn(Icons.format_italic, 'Italic', '_', '_'),
+            _formatBtn(Icons.format_italic, 'Italic', '<i>', '</i>'),
             _formatBtn(Icons.format_underline, 'Underline', '<u>', '</u>'),
             _formatBtn(Icons.format_strikethrough, 'Strikethrough', '~~', '~~'),
             Container(
