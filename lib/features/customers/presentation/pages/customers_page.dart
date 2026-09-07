@@ -43,6 +43,16 @@ class _CustomersPageState extends ConsumerState<CustomersPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Top search bar — prominently placed above everything
+              AppSearchBar(
+                hintText: 'Search clients by name...',
+                onChanged: (value) {
+                  setState(() {
+                    _searchQuery = value;
+                  });
+                },
+              ),
+              const SizedBox(height: 16),
               SectionHeader(
                 title: 'Customers',
                 subtitle: 'Company directory',
@@ -89,8 +99,8 @@ class _CustomersPageState extends ConsumerState<CustomersPage> {
                   ],
                 ),
               ),
-              const SizedBox(height: 20),
-              _buildSearchAndFilters(),
+              const SizedBox(height: 16),
+              _buildFilters(),
               const SizedBox(height: 16),
               Expanded(
                 child: ticketsAsync.when(
@@ -172,35 +182,21 @@ class _CustomersPageState extends ConsumerState<CustomersPage> {
     );
   }
 
-  Widget _buildSearchAndFilters() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        AppSearchBar(
-          hintText: 'Search customers...',
-          onChanged: (value) {
-            setState(() {
-              _searchQuery = value;
-            });
-          },
-        ),
-        const SizedBox(height: 12),
-        FilterChipGroup(
-          options: const [
-            'All',
-            'Active',
-            'Expired',
-            'Pending Bills',
-            'Pinned',
-          ],
-          selected: _amcFilter,
-          onSelected: (value) {
-            setState(() {
-              _amcFilter = value ?? 'All';
-            });
-          },
-        ),
+  Widget _buildFilters() {
+    return FilterChipGroup(
+      options: const [
+        'All',
+        'Active',
+        'Expired',
+        'Pending Bills',
+        'Pinned',
       ],
+      selected: _amcFilter,
+      onSelected: (value) {
+        setState(() {
+          _amcFilter = value ?? 'All';
+        });
+      },
     );
   }
 }

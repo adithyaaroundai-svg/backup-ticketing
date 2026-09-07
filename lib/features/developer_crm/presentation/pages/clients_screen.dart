@@ -33,6 +33,8 @@ class _ClientsBodyState extends State<_ClientsBody> {
   bool _showForm = false;
   final _nameCtrl = TextEditingController();
   final _contactCtrl = TextEditingController();
+  final _searchCtrl = TextEditingController();
+  String _searchQuery = '';
   String? _formError;
   bool _submitting = false;
 
@@ -41,6 +43,7 @@ class _ClientsBodyState extends State<_ClientsBody> {
     _horizontalScrollController.dispose();
     _nameCtrl.dispose();
     _contactCtrl.dispose();
+    _searchCtrl.dispose();
     super.dispose();
   }
 
@@ -151,6 +154,49 @@ class _ClientsBodyState extends State<_ClientsBody> {
               ),
             ),
           const SizedBox(height: 16),
+          // Search bar — fixed width to avoid unbounded constraint from horizontal scroll parent
+          SizedBox(
+            width: math.max(constraints.maxWidth - 32, 400),
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFFCDD5DF), width: 1.5),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.06),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: TextField(
+                controller: _searchCtrl,
+                onChanged: (value) => setState(() => _searchQuery = value),
+                style: const TextStyle(fontSize: 14, color: Colors.black87),
+                decoration: InputDecoration(
+                  hintText: 'Search clients by name...',
+                  hintStyle: const TextStyle(fontSize: 14, color: Color(0xFF9AA3AF)),
+                  prefixIcon: const Icon(Icons.search, color: Color(0xFF9AA3AF), size: 22),
+                  suffixIcon: _searchQuery.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.clear, size: 18, color: Color(0xFF9AA3AF)),
+                          onPressed: () {
+                            _searchCtrl.clear();
+                            setState(() => _searchQuery = '');
+                          },
+                        )
+                      : null,
+                  filled: false,
+                  border: InputBorder.none,
+                  enabledBorder: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
           Card(
             child: DataTable(
               columns: const [
@@ -161,7 +207,9 @@ class _ClientsBodyState extends State<_ClientsBody> {
                   DataColumn(label: Text('Last activity')),
                 ],
                 rows: [
-                  for (final c in prov.clients)
+                  for (final c in _searchQuery.isEmpty
+                      ? prov.clients
+                      : prov.clients.where((c) => c.name.toLowerCase().contains(_searchQuery.toLowerCase())).toList())
                     DataRow(
                       onSelectChanged: (_) => context.push('/clients/${c.id}'),
                       cells: [
