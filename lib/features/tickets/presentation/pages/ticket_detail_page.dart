@@ -973,7 +973,7 @@ class _TicketDetailPageState extends ConsumerState<TicketDetailPage> {
                         _SubStatusButton(
                           label: 'Call Back',
                           icon: LucideIcons.phoneCall,
-                          color: const Color(0xFF7C3AED),
+                          color: const Color(0xFFEA580C),
                           active: ticket.status == 'CallBack',
                           onTap: () async {
                             final newStatus =
@@ -1555,7 +1555,7 @@ class _TicketDetailPageState extends ConsumerState<TicketDetailPage> {
     } else if (status == 'Paused') {
       variant = StatusVariant.warning;
     } else if (status == 'CallBack') {
-      variant = StatusVariant.neutral;
+      variant = StatusVariant.warning;
     } else if (status == 'WontPay') {
       variant = StatusVariant.warning;
     } else if (status.contains('Resolved')) {

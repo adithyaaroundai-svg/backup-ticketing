@@ -758,7 +758,7 @@ class _TicketCard extends StatelessWidget {
       case 'Paused':
         return const Color(0xFFD97706);
       case 'CallBack':
-        return const Color(0xFF7C3AED);
+        return const Color(0xFFEA580C);
       case 'WontPay':
         return const Color(0xFFEA580C);
       default:

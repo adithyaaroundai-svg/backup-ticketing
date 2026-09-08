@@ -1357,7 +1357,7 @@ class _TicketsTableViewState extends ConsumerState<TicketsTableView> {
       case 'paused':
         return isDark ? Colors.amber.shade300 : const Color(0xFFD97706);
       case 'callback':
-        return isDark ? Colors.purple.shade300 : const Color(0xFF7C3AED);
+        return isDark ? Colors.orange.shade300 : const Color(0xFFEA580C);
       case 'wontpay':
         return isDark ? Colors.orange.shade300 : const Color(0xFFEA580C);
       default:
