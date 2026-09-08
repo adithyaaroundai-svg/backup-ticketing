@@ -470,7 +470,6 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
       final allLeads = (data as List).map((json) => Lead.fromJson(json)).toList();
       
       final now = DateTime.now();
-      final todayStr = now.toIso8601String().substring(0, 10);
       
       final prefs = await SharedPreferences.getInstance();
       final notified = prefs.getStringList('notified_followups') ?? [];
@@ -482,19 +481,20 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
         final isDueToday = fDate.year == now.year && fDate.month == now.month && fDate.day == now.day;
         if (!isDueToday) return false;
         
-        final key = '${lead.id}_$todayStr';
+        // Key tied specifically to the followUpDate timestamp so dismissing prevents recurrence unless date is modified
+        final key = '${lead.id}_${lead.followUpDate!.toIso8601String()}';
         return !notified.contains(key);
       }).toList();
 
       if (dueTodayLeads.isNotEmpty && mounted) {
-        _showDueLeadsDialog(dueTodayLeads, todayStr);
+        _showDueLeadsDialog(dueTodayLeads);
       }
     } catch (e) {
       debugPrint('Error checking follow ups: $e');
     }
   }
 
-  void _showDueLeadsDialog(List<Lead> leads, String todayStr) {
+  void _showDueLeadsDialog(List<Lead> leads) {
     showDialog(
       context: context,
       builder: (context) {
@@ -538,8 +538,10 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
                 final prefs = await SharedPreferences.getInstance();
                 final notified = prefs.getStringList('notified_followups') ?? [];
                 for (var lead in leads) {
-                  final key = '${lead.id}_$todayStr';
-                  if (!notified.contains(key)) notified.add(key);
+                  if (lead.followUpDate != null) {
+                    final key = '${lead.id}_${lead.followUpDate!.toIso8601String()}';
+                    if (!notified.contains(key)) notified.add(key);
+                  }
                 }
                 await prefs.setStringList('notified_followups', notified);
                 
@@ -554,8 +556,10 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
                 final prefs = await SharedPreferences.getInstance();
                 final notified = prefs.getStringList('notified_followups') ?? [];
                 for (var lead in leads) {
-                  final key = '${lead.id}_$todayStr';
-                  if (!notified.contains(key)) notified.add(key);
+                  if (lead.followUpDate != null) {
+                    final key = '${lead.id}_${lead.followUpDate!.toIso8601String()}';
+                    if (!notified.contains(key)) notified.add(key);
+                  }
                 }
                 await prefs.setStringList('notified_followups', notified);
 
