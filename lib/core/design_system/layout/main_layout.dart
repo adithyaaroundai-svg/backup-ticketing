@@ -4010,7 +4010,16 @@ class _TicketTile extends ConsumerWidget {
     final Color badgeColor;
     final status = ticket.status;
 
-    if (status == 'BillProcessed' || status == 'BillRaised') {
+    if (status == 'Paused') {
+      badgeLabel = 'Paused';
+      badgeColor = const Color(0xFFEA580C);
+    } else if (status == 'CallBack' || status == 'Call Back') {
+      badgeLabel = 'Call Back';
+      badgeColor = const Color(0xFFEA580C);
+    } else if (status == 'WontPay' || status == "Won't Pay") {
+      badgeLabel = "Won't Pay";
+      badgeColor = const Color(0xFFEA580C);
+    } else if (status == 'BillProcessed' || status == 'BillRaised') {
       badgeLabel = 'Billed';
       badgeColor = const Color(0xFF7C3AED); // purple
     } else if (status == 'Resolved' || status == 'Closed') {
@@ -4027,7 +4036,14 @@ class _TicketTile extends ConsumerWidget {
     // Card background/border also reflects status
     final Color cardColor;
     final Color cardBorderColor;
-    if (status == 'BillProcessed' || status == 'BillRaised') {
+    if (status == 'Paused' ||
+        status == 'CallBack' ||
+        status == 'Call Back' ||
+        status == 'WontPay' ||
+        status == "Won't Pay") {
+      cardColor = const Color(0xFFEA580C).withValues(alpha: 0.08);
+      cardBorderColor = const Color(0xFFEA580C).withValues(alpha: 0.35);
+    } else if (status == 'BillProcessed' || status == 'BillRaised') {
       cardColor = const Color(0xFF7C3AED).withValues(alpha: 0.08);
       cardBorderColor = const Color(0xFF7C3AED).withValues(alpha: 0.3);
     } else if (status == 'Resolved' || status == 'Closed') {
