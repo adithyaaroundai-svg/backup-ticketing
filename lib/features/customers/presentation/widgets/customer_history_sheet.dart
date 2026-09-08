@@ -746,6 +746,7 @@ class _TicketCard extends StatelessWidget {
       case 'BillProcessed':
         return AppColors.success;
       case 'InProgress':
+      case 'In Progress':
       case 'Open':
       case 'Reopened':
         return AppColors.primary;
@@ -754,6 +755,12 @@ class _TicketCard extends StatelessWidget {
         return AppColors.warning;
       case 'BillRaised':
         return AppColors.warning;
+      case 'Paused':
+        return const Color(0xFFD97706);
+      case 'CallBack':
+        return const Color(0xFF7C3AED);
+      case 'WontPay':
+        return const Color(0xFFEA580C);
       default:
         return context.adaptiveSlate500;
     }

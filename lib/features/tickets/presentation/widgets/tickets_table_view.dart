@@ -1354,6 +1354,12 @@ class _TicketsTableViewState extends ConsumerState<TicketsTableView> {
       case 'billprocessed':
       case 'bill_processed':
         return isDark ? Colors.green.shade400 : const Color(0xFF059669);
+      case 'paused':
+        return isDark ? Colors.amber.shade300 : const Color(0xFFD97706);
+      case 'callback':
+        return isDark ? Colors.purple.shade300 : const Color(0xFF7C3AED);
+      case 'wontpay':
+        return isDark ? Colors.orange.shade300 : const Color(0xFFEA580C);
       default:
         return isDark ? AppColors.slate300 : AppColors.slate600;
     }
@@ -1384,6 +1390,12 @@ class _TicketsTableViewState extends ConsumerState<TicketsTableView> {
       case 'billprocessed':
       case 'bill_processed':
         return 'Billed';
+      case 'paused':
+        return 'Paused';
+      case 'callback':
+        return 'Call Back';
+      case 'wontpay':
+        return "Won't Pay";
       default:
         return status;
     }

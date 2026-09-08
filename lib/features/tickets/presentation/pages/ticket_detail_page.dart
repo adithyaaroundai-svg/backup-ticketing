@@ -943,6 +943,85 @@ class _TicketDetailPageState extends ConsumerState<TicketDetailPage> {
                             if (!mounted) return;
                           },
                         ),
+                        // Sub-statuses: available while ticket is In Progress
+                        _SubStatusButton(
+                          label: 'Paused',
+                          icon: LucideIcons.pauseCircle,
+                          color: const Color(0xFFD97706),
+                          active: ticket.status == 'Paused',
+                          onTap: () async {
+                            final newStatus =
+                                ticket.status == 'Paused' ? 'In Progress' : 'Paused';
+                            final error = await ref
+                                .read(ticketStatusUpdaterProvider.notifier)
+                                .updateStatus(ticket.ticketId, newStatus);
+                            if (!mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(error == null
+                                    ? (newStatus == 'Paused'
+                                        ? 'Ticket paused'
+                                        : 'Ticket resumed')
+                                    : 'Failed: $error'),
+                                backgroundColor: error == null
+                                    ? AppColors.success
+                                    : AppColors.error,
+                              ),
+                            );
+                          },
+                        ),
+                        _SubStatusButton(
+                          label: 'Call Back',
+                          icon: LucideIcons.phoneCall,
+                          color: const Color(0xFF7C3AED),
+                          active: ticket.status == 'CallBack',
+                          onTap: () async {
+                            final newStatus =
+                                ticket.status == 'CallBack' ? 'In Progress' : 'CallBack';
+                            final error = await ref
+                                .read(ticketStatusUpdaterProvider.notifier)
+                                .updateStatus(ticket.ticketId, newStatus);
+                            if (!mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(error == null
+                                    ? (newStatus == 'CallBack'
+                                        ? 'Marked as Call Back'
+                                        : 'Resumed from Call Back')
+                                    : 'Failed: $error'),
+                                backgroundColor: error == null
+                                    ? AppColors.success
+                                    : AppColors.error,
+                              ),
+                            );
+                          },
+                        ),
+                        _SubStatusButton(
+                          label: "Won't Pay",
+                          icon: LucideIcons.banknote,
+                          color: const Color(0xFFEA580C),
+                          active: ticket.status == 'WontPay',
+                          onTap: () async {
+                            final newStatus =
+                                ticket.status == 'WontPay' ? 'In Progress' : 'WontPay';
+                            final error = await ref
+                                .read(ticketStatusUpdaterProvider.notifier)
+                                .updateStatus(ticket.ticketId, newStatus);
+                            if (!mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(error == null
+                                    ? (newStatus == 'WontPay'
+                                        ? "Marked as Won't Pay"
+                                        : "Cleared Won't Pay")
+                                    : 'Failed: $error'),
+                                backgroundColor: error == null
+                                    ? AppColors.success
+                                    : AppColors.error,
+                              ),
+                            );
+                          },
+                        ),
                       ],
                     ),
 
@@ -1473,12 +1552,19 @@ class _TicketDetailPageState extends ConsumerState<TicketDetailPage> {
       variant = StatusVariant.info;
     } else if (status.contains('Progress')) {
       variant = StatusVariant.warning;
+    } else if (status == 'Paused') {
+      variant = StatusVariant.warning;
+    } else if (status == 'CallBack') {
+      variant = StatusVariant.neutral;
+    } else if (status == 'WontPay') {
+      variant = StatusVariant.warning;
     } else if (status.contains('Resolved')) {
       variant = StatusVariant.success;
     } else {
       variant = StatusVariant.neutral;
     }
-    return StatusBadge(label: status, variant: variant);
+    final label = status == 'CallBack' ? 'Call Back' : status == 'WontPay' ? "Won't Pay" : status;
+    return StatusBadge(label: label, variant: variant);
   }
 
   Widget _buildInfoChip({
@@ -1631,3 +1717,61 @@ class _TicketDetailPageState extends ConsumerState<TicketDetailPage> {
 
 
 
+
+/// A toggleable sub-status pill button shown alongside Resolve actions.
+/// Tapping it sets the given status; tapping again while active reverts to
+/// 'In Progress'.
+class _SubStatusButton extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final Color color;
+  final bool active;
+  final VoidCallback onTap;
+
+  const _SubStatusButton({
+    required this.label,
+    required this.icon,
+    required this.color,
+    required this.active,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(20),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: active ? color.withValues(alpha: 0.15) : Colors.transparent,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: active ? color : color.withValues(alpha: 0.45),
+            width: active ? 1.8 : 1.2,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 15, color: color),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+                color: color,
+              ),
+            ),
+            if (active) ...[
+              const SizedBox(width: 5),
+              Icon(Icons.check_circle_rounded, size: 14, color: color),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}

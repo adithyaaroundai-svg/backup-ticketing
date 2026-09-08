@@ -68,7 +68,7 @@ class SupabaseTicketRepository implements TicketRepository {
 
     // 1. Status Filter
     if (statusFilter == 'Open') {
-      query = query.inFilter('status', ['New', 'Open', 'In Progress', 'Waiting for Customer', 'BillRaised']);
+      query = query.inFilter('status', ['New', 'Open', 'In Progress', 'Paused', 'CallBack', 'WontPay', 'Waiting for Customer', 'BillRaised']);
     } else if (statusFilter == 'Closed') {
       query = query.inFilter('status', ['Resolved', 'Closed', 'BillProcessed']);
     }
@@ -119,7 +119,7 @@ class SupabaseTicketRepository implements TicketRepository {
       final list = rows.map((r) => Ticket.fromJson(r)).toList();
       if (statusFilter == 'Open') {
         return list.where((t) => [
-          'New', 'Open', 'In Progress', 'Waiting for Customer', 'BillRaised'
+          'New', 'Open', 'In Progress', 'Paused', 'CallBack', 'WontPay', 'Waiting for Customer', 'BillRaised'
         ].contains(t.status)).toList();
       } else if (statusFilter == 'Closed') {
         return list.where((t) => [
@@ -480,7 +480,7 @@ class SupabaseTicketRepository implements TicketRepository {
         final status = map['status'] as String? ?? 'New';
         if (['New', 'Open', 'Waiting for Customer'].contains(status)) {
           stats['Open'] = (stats['Open'] ?? 0) + 1;
-        } else if (status == 'In Progress') {
+        } else if (status == 'In Progress' || status == 'Paused' || status == 'CallBack' || status == 'WontPay') {
           stats['In Progress'] = (stats['In Progress'] ?? 0) + 1;
         } else if (['Resolved', 'Closed'].contains(status)) {
           stats['Resolved'] = (stats['Resolved'] ?? 0) + 1;
