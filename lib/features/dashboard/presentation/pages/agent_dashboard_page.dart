@@ -179,11 +179,11 @@ class _AgentDashboardPageState extends ConsumerState<AgentDashboardPage> {
             Expanded(
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 24),
-                child: ticketsAsync.when(
+                child: ticketsAsync.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
                   data: (tickets) {
                     final customersAsync = ref.watch(customersListProvider);
 
-                    return customersAsync.when(
+                    return customersAsync.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
                       data: (customers) {
                         final customerMap = {for (var c in customers) c.id: c};
                         final today = DateTime.now();

@@ -92,7 +92,7 @@ class _ModeratorDashboardPageState extends ConsumerState<ModeratorDashboardPage>
         floatingActionButton: AnimatedCreateTicketFab(
           onPressed: _showCreateTicketDialog,
         ),
-        body: ticketsAsync.when(
+        body: ticketsAsync.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
           data: (tickets) {
             // Calculate statistics
             final unclaimedTickets = tickets

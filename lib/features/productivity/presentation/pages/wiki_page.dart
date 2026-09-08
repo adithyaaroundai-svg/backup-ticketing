@@ -214,7 +214,7 @@ class _WikiPageState extends ConsumerState<WikiPage> {
                   ),
                   const SizedBox(height: 12),
                   Expanded(
-                    child: articlesAsync.when(
+                    child: articlesAsync.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
                       data: (articles) {
                         final filtered = articles.where((a) {
                           if (_searchQuery.isEmpty) return true;

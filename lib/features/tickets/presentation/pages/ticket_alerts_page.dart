@@ -139,7 +139,7 @@ class _TicketAlertsShell extends StatelessWidget {
         ),
         Divider(height: 1, color: context.adaptiveBorder),
         Expanded(
-          child: alertsAsync.when(
+          child: alertsAsync.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
             data: (alerts) {
               final agents = agentsAsync.asData?.value ??
                   const <Map<String, dynamic>>[];

@@ -1,3 +1,4 @@
+import '../widgets/edit_message_dialog.dart';
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -16,6 +17,7 @@ import 'package:intl/intl.dart';
 
 import '../../../../core/design_system/design_system.dart';
 import '../../../tickets/presentation/providers/ticket_provider.dart';
+import '../../../tickets/domain/entities/ticket.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
 import '../providers/chat_provider.dart';
 import '../providers/custom_channel_provider.dart';
@@ -38,7 +40,6 @@ import '../../../../core/services/zoho_launcher.dart';
 import '../../../../core/services/zoho_api_service.dart';
 import '../../../../features/calls/domain/models/call_history_item.dart';
 import '../../../../features/calls/presentation/providers/call_history_provider.dart';
-import '../../../../features/developer_crm/presentation/providers/auth_provider.dart' as dev_crm_auth;
 
 IconData _getFileIcon(String? fileType) {
   if (fileType == null) return Icons.insert_drive_file;
@@ -360,7 +361,7 @@ class _CustomChannelChatPageState extends ConsumerState<CustomChannelChatPage> {
     final agentsAsync = ref.watch(agentsListProvider);
     final channelsAsync = ref.watch(customChannelsProvider);
 
-    return agentsAsync.when(
+    return agentsAsync.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
       data: (agents) {
         CustomChannel? channel;
         if (channelsAsync.hasValue) {
@@ -1255,59 +1256,6 @@ class _CustomChannelChatPageState extends ConsumerState<CustomChannelChatPage> {
           elevation: 0,
           actions: [
             if (channel != null) ...[
-              if (channel!.name.toLowerCase() == 'software development' && 
-                  dev_crm_auth.AuthProvider.agentToDevCrmIdMap.containsKey(ref.watch(authProvider)?.id ?? '')) ...[
-                Tooltip(
-                  message: 'Project Tracker',
-                  child: InkWell(
-                    onTap: () => context.go('/developer-crm'),
-                    borderRadius: BorderRadius.circular(8),
-                    child: Container(
-                      margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: context.isDarkMode ? Colors.indigo.withAlpha(40) : AppColors.primary.withAlpha(25),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: context.isDarkMode ? Colors.indigo.withAlpha(80) : AppColors.primary.withAlpha(75)),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(LucideIcons.kanbanSquare, size: 16, color: context.isDarkMode ? Colors.indigo.shade200 : AppColors.primary),
-                          const SizedBox(width: 6),
-                          Text('Project Tracker', style: TextStyle(color: context.isDarkMode ? Colors.indigo.shade200 : AppColors.primary, fontWeight: FontWeight.w600, fontSize: 13)),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-              ],
-              if (channel!.name.toLowerCase() == 'aroundai all') ...[
-                Tooltip(
-                  message: 'Project Status',
-                  child: InkWell(
-                    onTap: () => context.push('/aroundai-project-status'),
-                    borderRadius: BorderRadius.circular(8),
-                    child: Container(
-                      margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: context.isDarkMode ? Colors.indigo.withAlpha(40) : AppColors.primary.withAlpha(25),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: context.isDarkMode ? Colors.indigo.withAlpha(80) : AppColors.primary.withAlpha(75)),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(LucideIcons.kanbanSquare, size: 16, color: context.isDarkMode ? Colors.indigo.shade200 : AppColors.primary),
-                          const SizedBox(width: 6),
-                          Text('Project Status', style: TextStyle(color: context.isDarkMode ? Colors.indigo.shade200 : AppColors.primary, fontWeight: FontWeight.w600, fontSize: 13)),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-              ],
               Tooltip(
                 message: 'Group Audio Call',
                 child: InkWell(
@@ -1351,7 +1299,7 @@ class _CustomChannelChatPageState extends ConsumerState<CustomChannelChatPage> {
             Column(
               children: [
                 Expanded(
-                  child: messagesAsync.when(
+                  child: messagesAsync.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
                 data: (messages) {
                   _markVisibleMessagesRead(messages);
                   if (messages.isEmpty) {
@@ -1923,7 +1871,351 @@ class _ChatBubble extends ConsumerStatefulWidget {
 }
 
 class _ChatBubbleState extends ConsumerState<_ChatBubble> {
+
+  String? _extractTicketId(String content) {
+    for (final line in content.split('\n')) {
+      if (line.startsWith('TicketID: ')) {
+        return line.substring('TicketID: '.length).trim();
+      }
+    }
+    if (content.contains('TicketID:')) {
+      final match = RegExp(r'TicketID:\s*([^\s\n]+)').firstMatch(content);
+      if (match != null) return match.group(1);
+    }
+    final uuidMatch = RegExp(
+      r'([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})',
+      caseSensitive: false,
+    ).firstMatch(content);
+    if (uuidMatch != null) return uuidMatch.group(1);
+    return null;
+  }
+
+  String _extractIssueFromContent(String content) {
+    for (final line in content.split('\n')) {
+      if (line.startsWith('Issue: ')) {
+        return line.substring('Issue: '.length).trim();
+      }
+    }
+    return '';
+  }
+
+  String _extractCompanyFromContent(String content) {
+    for (final line in content.split('\n')) {
+      if (line.startsWith('Company: ')) {
+        return line.substring('Company: '.length).trim();
+      }
+    }
+    return '';
+  }
+
+  String _visibleTicketContent(String content) {
+    return content
+        .split('\n')
+        .where((line) => !line.startsWith('TicketID: '))
+        .join('\n');
+  }
+
+  bool _isResolvedStatus(String? status) {
+    return status == 'Resolved' ||
+        status == 'Closed' ||
+        status == 'BillRaised' ||
+        status == 'BillProcessed';
+  }
+
+  Color _statusBorderColor(String? status, {bool isClaimed = false}) {
+    if (_isResolvedStatus(status)) {
+      return AppColors.success;
+    }
+    if (status == 'Paused' || status == 'CallBack' || status == 'WontPay' || status == 'InProgress') {
+      return const Color(0xFFF59E0B); // Amber/Orange
+    }
+    if (isClaimed) {
+      return AppColors.warning;
+    }
+    switch (status) {
+      case 'New':
+      case 'Open':
+      case 'OnHold':
+      case 'WaitingForCustomer':
+      case 'Reopened':
+      case null:
+        return AppColors.error;
+      default:
+        return AppColors.error;
+    }
+  }
+
+  Color _getAdaptiveStatusBorderColor(
+    BuildContext context,
+    String? status, {
+    bool isClaimed = false,
+  }) {
+    final color = _statusBorderColor(status, isClaimed: isClaimed);
+    if (context.isDarkMode) {
+      return Color.lerp(color, Colors.white, 0.3) ?? color;
+    }
+    return color;
+  }
+
+  Color _getAdaptiveStatusColor(BuildContext context, String? status) {
+    if (context.isDarkMode) {
+      switch (status) {
+        case 'New':
+        case 'Open':
+          return Colors.red.shade200;
+        case 'InProgress':
+        case 'OnHold':
+        case 'WaitingForCustomer':
+        case 'Paused':
+        case 'CallBack':
+        case 'WontPay':
+          return Colors.orange.shade300;
+        case 'BillRaised':
+          return Colors.red.shade200;
+        case 'Resolved':
+        case 'Closed':
+        case 'Reopened':
+        case 'BillProcessed':
+          return Colors.green.shade300;
+        default:
+          return Colors.grey.shade400;
+      }
+    }
+    return _getStatusColor(status);
+  }
+
+  Color _getStatusColor(String? status) {
+    switch (status) {
+      case 'New':
+      case 'Open':
+        return AppColors.error;
+      case 'InProgress':
+      case 'OnHold':
+      case 'WaitingForCustomer':
+      case 'Paused':
+      case 'CallBack':
+      case 'WontPay':
+        return AppColors.warning;
+      case 'Resolved':
+      case 'Closed':
+      case 'Reopened':
+      case 'BillRaised':
+      case 'BillProcessed':
+        return AppColors.success;
+      default:
+        return AppColors.slate500;
+    }
+  }
+
+  String _getAssignedAgentName(
+    String? assignedTo,
+    List<Map<String, dynamic>> agents,
+  ) {
+    if (assignedTo == null || assignedTo.isEmpty) {
+      return 'Claimed';
+    }
+    final agent = agents.where((a) => a['id'] == assignedTo).firstOrNull;
+    if (agent != null) {
+      return agent['full_name'] ?? agent['username'] ?? 'Claimed';
+    }
+    return 'Claimed';
+  }
+
+  String _getFormattedStatus(String? status) {
+    if (status == null) return 'Open';
+    switch (status) {
+      case 'Resolved':
+      case 'Closed':
+      case 'BillRaised':
+      case 'BillProcessed':
+        return 'Resolved';
+      case 'InProgress':
+        return 'In Progress';
+      case 'Paused':
+        return 'Paused';
+      case 'CallBack':
+        return 'Call Back';
+      case 'WontPay':
+        return "Won't Pay";
+      case 'WaitingForCustomer':
+        return 'Waiting';
+      case 'OnHold':
+        return 'On Hold';
+      default:
+        return status;
+    }
+  }
+
+  Widget _buildTicketCard(BuildContext context, WidgetRef ref, ChatMessage message) {
+    final ticketId = _extractTicketId(message.content);
+    final ticketsAsync = ref.watch(allTicketsStreamProvider);
+    final agentsAsync = ref.watch(agentsListProvider);
+
+    return ticketsAsync.when(
+      skipLoadingOnReload: true,
+      skipLoadingOnRefresh: true,
+      data: (tickets) {
+        Ticket? ticket;
+        if (ticketId != null) {
+          ticket = tickets.where((t) => t.ticketId == ticketId).firstOrNull;
+        }
+        if (ticket == null && ticketId == null) {
+          final issue = _extractIssueFromContent(message.content);
+          for (final item in tickets) {
+            final tIssue = item.description?.trim() ?? item.title.trim();
+            if (tIssue.toLowerCase() == issue.toLowerCase()) {
+              ticket = item;
+              break;
+            }
+          }
+        }
+
+        final status = ticket?.status ?? 'Open';
+        final isClaimed = ticket?.assignedTo != null && ticket!.assignedTo!.isNotEmpty;
+        final targetTicketId = ticket?.ticketId ?? ticketId;
+
+        return InkWell(
+          onTap: targetTicketId != null ? () => context.push('/ticket/$targetTicketId') : null,
+          borderRadius: BorderRadius.circular(8),
+          child: Container(
+            constraints: const BoxConstraints(minWidth: 260, maxWidth: 400),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: context.adaptiveCard,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: _getAdaptiveStatusBorderColor(context, status, isClaimed: isClaimed),
+                width: 1.5,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.04),
+                  blurRadius: 4,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Icon(
+                      LucideIcons.ticket,
+                      size: 15,
+                      color: _getAdaptiveStatusBorderColor(context, status, isClaimed: isClaimed),
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        _extractIssueFromContent(message.content),
+                        style: TextStyle(
+                          color: context.adaptiveSlate800,
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        _extractCompanyFromContent(message.content),
+                        style: TextStyle(
+                          color: context.isDarkMode ? Colors.white70 : AppColors.slate600,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: _getAdaptiveStatusColor(context, status).withValues(alpha: 0.18),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        _getFormattedStatus(status),
+                        style: TextStyle(
+                          color: _getAdaptiveStatusColor(context, status),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                if (isClaimed) ...[
+                  const SizedBox(height: 4),
+                  Text.rich(
+                    TextSpan(
+                      children: [
+                        TextSpan(
+                          text: 'Assigned to: ',
+                          style: TextStyle(
+                            color: context.isDarkMode ? Colors.white60 : AppColors.slate600,
+                            fontSize: 11,
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
+                        TextSpan(
+                          text: _getAssignedAgentName(ticket!.assignedTo, agentsAsync.value ?? []),
+                          style: TextStyle(
+                            color: context.isDarkMode ? Colors.white.withValues(alpha: 0.9) : AppColors.slate800,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        );
+      },
+      loading: () => const SizedBox(
+        width: 200,
+        height: 60,
+        child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+      ),
+      error: (_, __) => Text(
+        _visibleTicketContent(message.content),
+        style: TextStyle(
+          color: context.isDarkMode ? Colors.white : AppColors.slate800,
+          fontSize: 13,
+        ),
+      ),
+    );
+  }
+
   bool _hovered = false;
+
+  void _edit(BuildContext context, ChatMessage message) {
+    showDialog(
+      context: context,
+      builder: (context) => EditMessageDialog(
+        initialContent: message.content,
+        onSave: (newContent) async {
+          await ref.read(chatControllerProvider.notifier).editMessage(
+            message.id,
+            newContent,
+            channel: message.channel,
+          );
+        },
+      ),
+    );
+  }
 
   void _delete(BuildContext context) async {
     final confirm = await showDialog<bool>(
@@ -2049,10 +2341,9 @@ class _ChatBubbleState extends ConsumerState<_ChatBubble> {
       return _CallActivityCard(content: message.content, createdAt: message.createdAt);
     }
 
-    // Task status change messages — rendered as custom cards
-    if (message.content.startsWith('__TASK_STATUS_CHANGE__:') && !isDeleted) {
-      return _TaskStatusChangeCard(content: message.content, createdAt: message.createdAt);
-    }
+    final isTicketMessage = !isDeleted &&
+        message.content.startsWith('Company: ') &&
+        message.content.contains('\nIssue: ');
 
     return TapRegion(
       onTapOutside: (_) {
@@ -2187,7 +2478,9 @@ class _ChatBubbleState extends ConsumerState<_ChatBubble> {
                                             color: AppColors.slate400,
                                           ),
                                         )
-                                      : SelectableLinkify(
+                                      : isTicketMessage
+                                          ? _buildTicketCard(context, ref, message)
+                                          : SelectableLinkify(
                                           text: message.content,
                                           onOpen: (link) async {
                                             final uri = Uri.parse(link.url);
@@ -2417,6 +2710,24 @@ class _ChatBubbleState extends ConsumerState<_ChatBubble> {
                             ],
                           ),
                         ),
+                        if (isMe && !message.isDeleted)
+                          PopupMenuItem<String>(
+                            value: 'edit',
+                            onTap: () {
+                              Future.delayed(const Duration(milliseconds: 100), () {
+                                if (context.mounted) {
+                                  _edit(context, message);
+                                }
+                              });
+                            },
+                            child: Row(
+                              children: [
+                                Icon(Icons.edit_outlined, size: 20, color: context.isDarkMode ? Colors.white70 : Colors.black87),
+                                const SizedBox(width: 12),
+                                Text('Edit', style: TextStyle(color: context.isDarkMode ? Colors.white70 : Colors.black87)),
+                              ],
+                            ),
+                          ),
                         if (isMe)
                           PopupMenuItem<String>(
                             value: 'delete',
@@ -2480,189 +2791,6 @@ class _ActionBtn extends StatelessWidget {
 }
 
 // ── Call Activity Card ────────────────────────────────────────────────────────
-class _TaskStatusChangeCard extends StatelessWidget {
-  final String content;
-  final DateTime? createdAt;
-  const _TaskStatusChangeCard({required this.content, this.createdAt});
-
-  @override
-  Widget build(BuildContext context) {
-    // Format: __TASK_STATUS_CHANGE__: <taskId>|<oldStatus>|<newStatus>|<user>|<message>
-    final payload = content.replaceFirst('__TASK_STATUS_CHANGE__: ', '');
-    final parts = payload.split('|');
-    if (parts.length < 5) return const SizedBox.shrink();
-
-    final taskId = parts[0];
-    final oldStatus = parts[1];
-    final newStatus = parts[2];
-    final user = parts[3];
-    final message = parts[4];
-
-    final timeStr = createdAt != null
-        ? "${createdAt!.toLocal().hour}:${createdAt!.toLocal().minute.toString().padLeft(2, '0')}"
-        : "";
-
-    // Parse status color to make it look premium
-    Color statusColor = AppColors.primary;
-    if (newStatus.toLowerCase() == 'completed') statusColor = Colors.green.shade600;
-    if (newStatus.toLowerCase() == 'cancelled') statusColor = Colors.red.shade600;
-    if (newStatus.toLowerCase() == 'working') statusColor = Colors.orange.shade600;
-
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: Column(
-        children: [
-          Center(
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-              decoration: BoxDecoration(
-                color: context.isDarkMode ? Colors.white10 : Colors.black.withAlpha(12),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Text(
-                timeStr,
-                style: TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w600,
-                  color: context.isDarkMode ? Colors.white70 : AppColors.slate500,
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 8),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: context.isDarkMode ? context.adaptiveCard : Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: context.isDarkMode ? Colors.white12 : Colors.black.withAlpha(15),
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withAlpha(5),
-                  blurRadius: 10,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: statusColor.withAlpha(25),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(LucideIcons.arrowRightLeft, size: 16, color: statusColor),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Task #$taskId Status Change',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 14,
-                              color: context.isDarkMode ? Colors.white : AppColors.slate800,
-                            ),
-                          ),
-                          Text(
-                            'Updated by $user',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: context.isDarkMode ? Colors.white70 : AppColors.slate500,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  decoration: BoxDecoration(
-                    color: context.isDarkMode ? Colors.white.withAlpha(10) : Colors.black.withAlpha(10),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Row(
-                    children: [
-                      Text(
-                        oldStatus.isEmpty ? 'New' : oldStatus,
-                        style: TextStyle(
-                          color: context.isDarkMode ? Colors.white70 : AppColors.slate600,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      const Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 8.0),
-                        child: Icon(LucideIcons.arrowRight, size: 14, color: AppColors.slate400),
-                      ),
-                      Text(
-                        newStatus,
-                        style: TextStyle(
-                          color: statusColor,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                if (message.trim().isNotEmpty) ...[
-                  const SizedBox(height: 12),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Icon(LucideIcons.messageSquare, size: 14, color: AppColors.slate400),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          '"$message"',
-                          style: TextStyle(
-                            fontStyle: FontStyle.italic,
-                            color: context.isDarkMode ? Colors.white70 : AppColors.slate600,
-                            fontSize: 13,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-                const SizedBox(height: 12),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton.icon(
-                    onPressed: () {
-                      context.go('/developer-crm');
-                    },
-                    icon: Icon(LucideIcons.kanbanSquare, size: 14, color: AppColors.primary),
-                    label: Text(
-                      'View in Project Tracker',
-                      style: TextStyle(fontSize: 13, color: AppColors.primary, fontWeight: FontWeight.w600),
-                    ),
-                    style: TextButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      backgroundColor: AppColors.primary.withAlpha(20),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _CallActivityCard extends StatelessWidget {
   final String content;
   final DateTime createdAt;

@@ -1,3 +1,4 @@
+import '../widgets/edit_message_dialog.dart';
 import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
@@ -208,7 +209,7 @@ class _DirectMessagePageState extends ConsumerState<DirectMessagePage> {
           mainAxisSize: MainAxisSize.min,
           children: [
             _formatBtn(Icons.format_bold, 'Bold', '**', '**'),
-            _formatBtn(Icons.format_italic, 'Italic', '<i>', '</i>'),
+            _formatBtn(Icons.format_italic, 'Italic', '_', '_'),
             _formatBtn(Icons.format_underline, 'Underline', '<u>', '</u>'),
             _formatBtn(Icons.format_strikethrough, 'Strikethrough', '~~', '~~'),
             Container(
@@ -308,8 +309,11 @@ class _DirectMessagePageState extends ConsumerState<DirectMessagePage> {
       },
     );
 
-    // Mark conversation as read and set currently open conversation
+    // Sync latest messages, mark conversation as read and set currently open conversation
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        ref.read(dmStreamProvider(widget.partnerId).notifier).softRefresh();
+      }
       if (mounted && (ModalRoute.of(context)?.isCurrent ?? false)) {
         ref.read(currentOpenConversationProvider.notifier).state = widget.partnerId;
         _markConversationAsRead();
@@ -322,6 +326,9 @@ class _DirectMessagePageState extends ConsumerState<DirectMessagePage> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.partnerId != widget.partnerId) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          ref.read(dmStreamProvider(widget.partnerId).notifier).softRefresh();
+        }
         if (mounted && (ModalRoute.of(context)?.isCurrent ?? false)) {
           ref.read(currentOpenConversationProvider.notifier).state = widget.partnerId;
           _markConversationAsRead();
@@ -1021,7 +1028,7 @@ class _DirectMessagePageState extends ConsumerState<DirectMessagePage> {
                   child: Column(
                     children: [
                       Expanded(
-                        child: messagesAsync.when(
+                        child: messagesAsync.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
                           data: (messages) {
                             if (messages.isEmpty) {
                               return Center(
@@ -1138,6 +1145,9 @@ class _DirectMessagePageState extends ConsumerState<DirectMessagePage> {
                                         },
                                         onReply: () {
                                           _handleReply(msg);
+                                        },
+                                        onEdit: () {
+                                          _handleEdit(msg);
                                         },
                                       ),
                                     ],
@@ -1275,7 +1285,7 @@ class _DirectMessagePageState extends ConsumerState<DirectMessagePage> {
   Widget _buildMentionsList() {
     final agentsAsync = ref.watch(agentsListProvider);
 
-    return agentsAsync.when(
+    return agentsAsync.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
       data: (agents) {
         final filteredAgents =
             agents.where((a) {
@@ -1803,6 +1813,20 @@ class _DirectMessagePageState extends ConsumerState<DirectMessagePage> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+    void _handleEdit(ChatMessage message) {
+    showDialog(
+      context: context,
+      builder: (context) => EditMessageDialog(
+        initialContent: message.content,
+        onSave: (newContent) async {
+          await ref
+              .read(chatControllerProvider.notifier)
+              .editMessage(message.id, newContent, receiverId: widget.partnerId);
+        },
       ),
     );
   }
@@ -2852,6 +2876,7 @@ class _ChatBubble extends ConsumerWidget {
 
   final VoidCallback onDelete;
   final VoidCallback onReply;
+  final VoidCallback onEdit;
 
   const _ChatBubble({
     super.key,
@@ -2863,6 +2888,7 @@ class _ChatBubble extends ConsumerWidget {
 
     required this.onDelete,
     required this.onReply,
+    required this.onEdit,
   });
 
   Color _userColor(String name) {
@@ -3350,6 +3376,7 @@ class _ChatBubble extends ConsumerWidget {
                 isMe: isMe,
                 onReply: onReply,
                 onDelete: onDelete,
+                onEdit: onEdit,
                 message: message,
                 child: Stack(
                   clipBehavior: Clip.none,
@@ -3502,7 +3529,7 @@ class _ChatBubble extends ConsumerWidget {
 
           final agentsAsync = ref.watch(agentsListProvider);
 
-          return ticketsAsync.when(
+          return ticketsAsync.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
             data: (tickets) {
               Ticket? ticket;
 
@@ -4323,6 +4350,7 @@ class _HoverableMessageRow extends StatefulWidget {
   final bool isMe;
   final VoidCallback onReply;
   final VoidCallback onDelete;
+  final VoidCallback onEdit;
   final Widget child;
   final ChatMessage message;
 
@@ -4330,6 +4358,7 @@ class _HoverableMessageRow extends StatefulWidget {
     required this.isMe,
     required this.onReply,
     required this.onDelete,
+    required this.onEdit,
     required this.child,
     required this.message,
   });
@@ -4376,6 +4405,7 @@ class _HoverableMessageRowState extends State<_HoverableMessageRow> {
           isMe: widget.isMe,
           onReply: widget.onReply,
           onDelete: widget.onDelete,
+          onEdit: widget.onEdit,
           onAddReaction: (context, reaction, messageId) =>
               _addReaction(context, reaction, messageId),
           onShowMoreReactions: (context, messageId) =>
@@ -4399,6 +4429,7 @@ class _HoverableActionMenuContext extends InheritedWidget {
   final bool isMe;
   final VoidCallback onReply;
   final VoidCallback onDelete;
+  final VoidCallback onEdit;
   final Function(BuildContext, String, String) onAddReaction;
   final Function(BuildContext, String) onShowMoreReactions;
   final Function(BuildContext, String) onHandleStarMessage;
@@ -4411,6 +4442,7 @@ class _HoverableActionMenuContext extends InheritedWidget {
     required this.isMe,
     required this.onReply,
     required this.onDelete,
+    required this.onEdit,
     required this.onAddReaction,
     required this.onShowMoreReactions,
     required this.onHandleStarMessage,
@@ -4592,6 +4624,18 @@ class _HoverableActionMenu extends StatelessWidget {
               ],
             ),
           ),
+          if (hoverContext.isMe && !hoverContext.message.isDeleted)
+            PopupMenuItem<String>(
+              value: 'edit',
+              onTap: hoverContext.onEdit,
+              child: Row(
+                children: [
+                  Icon(Icons.edit_outlined, size: 20, color: isDark ? Colors.white70 : Colors.black87),
+                  const SizedBox(width: 12),
+                  Text('Edit', style: TextStyle(color: isDark ? Colors.white70 : Colors.black87)),
+                ],
+              ),
+            ),
           if (hoverContext.isMe)
             PopupMenuItem<String>(
               value: 'delete',

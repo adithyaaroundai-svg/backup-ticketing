@@ -73,7 +73,7 @@ class _AddMembersPageState extends ConsumerState<AddMembersPage> {
           Divider(color: isDarkMode ? Colors.white12 : Colors.black12, height: 1),
           // Agents List
           Expanded(
-            child: agentsAsync.when(
+            child: agentsAsync.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
               data: (agents) {
                 // Filter out those who are already in the channel
                 final nonMembers = agents.where((a) => !widget.existingMemberIds.contains(a['id'])).toList();

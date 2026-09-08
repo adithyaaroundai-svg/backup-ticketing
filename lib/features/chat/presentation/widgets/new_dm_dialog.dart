@@ -73,7 +73,7 @@ class _NewDmDialogState extends ConsumerState<NewDmDialog> {
               const SizedBox(height: 16),
 
               Expanded(
-                child: agentsAsync.when(
+                child: agentsAsync.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
                   data: (agents) {
                     final hiddenAgentIds = const {
                       '2d58eb0a-916a-4cb6-9245-b5b124caa0a3',

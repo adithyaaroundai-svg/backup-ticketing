@@ -63,7 +63,7 @@ class SalesDashboardPage extends ConsumerWidget {
                 _WelcomeHeader(userName: currentUser?.username ?? 'Sales'),
                 
                 // Stats Cards
-                ticketsAsync.when(
+                ticketsAsync.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
                   data: (allTickets) {
                     final myTickets = currentUser == null
                         ? <Ticket>[]
@@ -124,9 +124,9 @@ class SalesDashboardPage extends ConsumerWidget {
                 const SizedBox(height: 12),
                 
                 // Tickets List
-                ticketsAsync.when(
+                ticketsAsync.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
                   data: (allTickets) {
-                    return customersAsync.when(
+                    return customersAsync.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
                       data: (customers) {
                         final customersById = {for (final c in customers) c.id: c};
                         final myTickets = currentUser == null

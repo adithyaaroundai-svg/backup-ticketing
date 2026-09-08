@@ -1,3 +1,4 @@
+import 'edit_message_dialog.dart';
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -290,7 +291,7 @@ class _SalesTeamChatViewState extends ConsumerState<SalesTeamChatView> {
   Widget _buildMentionsList() {
     final agentsAsync = ref.watch(agentsListProvider);
 
-    return agentsAsync.when(
+    return agentsAsync.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
       data: (agents) {
         const allowedSalesChannelIds = {
           '14db36db-0cb9-44ef-8032-d9610b3bc797',
@@ -618,7 +619,7 @@ class _SalesTeamChatViewState extends ConsumerState<SalesTeamChatView> {
       child: Column(
         children: [
           Expanded(
-            child: messagesAsync.when(
+            child: messagesAsync.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
               data: (rawMessages) {
                 var messages = rawMessages;
                 const restrictedAgentIds = {
@@ -1206,6 +1207,20 @@ class _ChatBubble extends ConsumerStatefulWidget {
 class _ChatBubbleState extends ConsumerState<_ChatBubble> {
   bool _hovered = false;
 
+    void _edit(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => EditMessageDialog(
+        initialContent: widget.message.content,
+        onSave: (newContent) async {
+          await ref
+              .read(chatControllerProvider.notifier)
+              .editMessage(widget.message.id, newContent, channel: widget.message.channel);
+        },
+      ),
+    );
+  }
+
   void _delete(BuildContext context) async {
     final confirm = await showDialog<bool>(
       context: context,
@@ -1752,6 +1767,24 @@ class _ChatBubbleState extends ConsumerState<_ChatBubble> {
                             ],
                           ),
                         ),
+                        if (isMe && !message.isDeleted)
+                          PopupMenuItem<String>(
+                            value: 'edit',
+                            onTap: () {
+                              Future.delayed(const Duration(milliseconds: 100), () {
+                                if (context.mounted) {
+                                  _edit(context);
+                                }
+                              });
+                            },
+                            child: Row(
+                              children: [
+                                Icon(Icons.edit_outlined, size: 20, color: context.isDarkMode ? Colors.white70 : Colors.black87),
+                                const SizedBox(width: 12),
+                                Text('Edit', style: TextStyle(color: context.isDarkMode ? Colors.white70 : Colors.black87)),
+                              ],
+                            ),
+                          ),
                         if (isMe)
                           PopupMenuItem<String>(
                             value: 'delete',
@@ -1970,7 +2003,7 @@ class _LeadChatCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final isDark = context.isDarkMode;
-    final timeStr = DateFormat('h:mm a').format(message.createdAt.toLocal());
+    final timeStr = DateFormat('h:mm a').format(message.createdAt.toLocal()) + (message.isEdited ? ' (edited)' : '');
 
     final leadId = _extractLeadId(message.content);
     final displayText = _displayContent(message.content);

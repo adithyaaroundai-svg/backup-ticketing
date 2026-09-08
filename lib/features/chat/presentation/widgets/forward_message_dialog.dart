@@ -87,7 +87,7 @@ class _ForwardMessageDialogState extends ConsumerState<ForwardMessageDialog> {
             const SizedBox(height: 16),
 
             Expanded(
-              child: agentsAsync.when(
+              child: agentsAsync.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
                 data: (agents) {
                   // Filter agents
                   final filteredAgents = agents.where((agent) {

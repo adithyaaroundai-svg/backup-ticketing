@@ -76,7 +76,7 @@ class ActiveClaimedTicketsPage extends ConsumerWidget {
             ),
             const Divider(height: 1, color: AppColors.slate200),
             Expanded(
-              child: ticketsAsync.when(
+              child: ticketsAsync.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
                 data: (allTickets) {
                   final activeClaimed = allTickets.where((t) {
                     final isClaimed =
@@ -89,7 +89,7 @@ class ActiveClaimedTicketsPage extends ConsumerWidget {
                         child: Text('No active claimed tickets.'));
                   }
 
-                  return agentsAsync.when(
+                  return agentsAsync.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
                     data: (agentsList) {
                       return ListView.builder(
                         padding: const EdgeInsets.all(24),

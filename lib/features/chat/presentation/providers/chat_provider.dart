@@ -13,6 +13,7 @@ import '../../../tickets/presentation/providers/ticket_provider.dart';
 import '../../data/local/chat_cache_service.dart';
 import '../../data/local/chat_cache_constants.dart';
 import '../../../../core/services/chat_sound_service.dart';
+import 'custom_channel_provider.dart';
 
 import 'dart:io';
 import 'package:http/http.dart' as http;
@@ -216,8 +217,15 @@ class ChatStream extends _$ChatStream {
             channel != 'support-chat' && 
             channel != 'all-aroundtally') {
           // This is a custom channel message from someone else
-          ref.read(customChannelNewMessageEventProvider.notifier).notify(newMsg);
-          ChatSoundService.playPing();
+          // Only notify if current user is actually a member of this channel
+          final channels = ref.read(customChannelsProvider).value ?? [];
+          final currentChannel = channels.where((c) => c.id == channel).firstOrNull;
+          final isMember = currentChannel != null && 
+              (currentChannel.memberIds.contains(currentUserId) || currentChannel.createdBy == currentUserId);
+          if (isMember) {
+            ref.read(customChannelNewMessageEventProvider.notifier).notify(newMsg);
+            ChatSoundService.playPing();
+          }
         }
       }
     } else if (payload.eventType == PostgresChangeEvent.update) {
@@ -249,6 +257,21 @@ class ChatStream extends _$ChatStream {
     final currentList = state.value ?? [];
     if (!currentList.any((m) => m.id == message.id)) {
       _updateState([...currentList, message]);
+    }
+  }
+
+  void optimisticEdit(String messageId, String newContent) {
+    final currentList = state.value ?? [];
+    final index = currentList.indexWhere((m) => m.id == messageId);
+    if (index != -1) {
+      final newList = List<ChatMessage>.from(currentList);
+      final oldMsg = newList[index];
+      newList[index] = oldMsg.copyWith(
+        content: newContent,
+        isEdited: true,
+        editedAt: DateTime.now().toUtc(),
+      );
+      _updateState(newList);
     }
   }
 
@@ -371,14 +394,14 @@ class DmStream extends _$DmStream {
       final t = a.createdAt.toUtc().compareTo(b.createdAt.toUtc());
       return t != 0 ? t : a.id.compareTo(b.id);
     });
-    
+
     final messageIds = finalMessages.map((m) => m.id).toList();
     if (messageIds.isNotEmpty) {
       final receipts = await repository.fetchReceiptsForMessages(messageIds);
       ReadReceiptsTracker.injectReceipts(receipts);
     }
     
-    _updateState(finalMessages);
+    _dmCache[cacheKey] = finalMessages;
     _dmHasMoreCache[cacheKey] = _hasMore;
     
     _channelSub = repository.subscribeToMessages(
@@ -401,6 +424,64 @@ class DmStream extends _$DmStream {
     });
     
     return finalMessages;
+  }
+
+  void refresh() {
+    ref.invalidateSelf();
+  }
+
+  Future<void> softRefresh() async {
+    final myId = ref.read(authProvider)?.id;
+    if (myId == null) return;
+    final repository = ref.read(chatRepositoryProvider);
+    final currentList = state.value ?? [];
+    
+    // Reconnect subscriptions
+    _channelSub?.unsubscribe();
+    _receiptsSub?.unsubscribe();
+    _channelSub = repository.subscribeToMessages(
+      channelName: 'dm',
+      currentUserId: myId,
+      chatPartnerId: chatPartnerId,
+      onEvent: _handlePostgresEvent,
+    );
+    _receiptsSub = repository.subscribeToReadReceipts(
+      channelName: 'dm',
+      currentUserId: myId,
+      chatPartnerId: chatPartnerId,
+      onEvent: _handleReadReceiptEvent,
+    );
+    
+    // Fetch latest messages and append missing ones
+    final messages = await repository.getPaginatedMessages(
+      currentUserId: myId,
+      chatPartnerId: chatPartnerId,
+      limit: 30,
+    );
+    
+    if (currentList.isNotEmpty) {
+      final newMessages = messages.where((m) => !currentList.any((c) => c.id == m.id)).toList();
+      if (newMessages.isNotEmpty) {
+        final combined = [...currentList, ...newMessages];
+        combined.sort((a, b) {
+          final t = a.createdAt.toUtc().compareTo(b.createdAt.toUtc());
+          return t != 0 ? t : a.id.compareTo(b.id);
+        });
+        
+        final messageIds = combined.map((m) => m.id).toList();
+        final receipts = await repository.fetchReceiptsForMessages(messageIds);
+        ReadReceiptsTracker.injectReceipts(receipts);
+        
+        _updateState(combined);
+      }
+    } else {
+      if (messages.isNotEmpty) {
+        final messageIds = messages.map((m) => m.id).toList();
+        final receipts = await repository.fetchReceiptsForMessages(messageIds);
+        ReadReceiptsTracker.injectReceipts(receipts);
+        _updateState(messages);
+      }
+    }
   }
 
   void _updateState(List<ChatMessage> newList) {
@@ -491,6 +572,21 @@ class DmStream extends _$DmStream {
     ref.read(dmConversationsProvider.notifier).onOptimisticMessageSent(message);
   }
 
+  void optimisticEdit(String messageId, String newContent) {
+    final currentList = state.value ?? [];
+    final index = currentList.indexWhere((m) => m.id == messageId);
+    if (index != -1) {
+      final newList = List<ChatMessage>.from(currentList);
+      final oldMsg = newList[index];
+      newList[index] = oldMsg.copyWith(
+        content: newContent,
+        isEdited: true,
+        editedAt: DateTime.now().toUtc(),
+      );
+      _updateState(newList);
+    }
+  }
+
   void optimisticDelete(String messageId) {
     final currentList = state.value ?? [];
     final index = currentList.indexWhere((m) => m.id == messageId);
@@ -538,10 +634,6 @@ class DmStream extends _$DmStream {
     } finally {
       _isLoadingMore = false;
     }
-  }
-
-  void refresh() {
-    ref.invalidateSelf();
   }
 }
 
@@ -1445,6 +1537,21 @@ class ChatController extends _$ChatController {
       },
     );
     return messageId;
+  }
+
+  Future<void> editMessage(String messageId, String newContent, {String? receiverId, String channel = 'support-chat'}) async {
+    state = const AsyncLoading();
+
+    // Optimistic edit
+    if (receiverId != null) {
+      ref.read(dmStreamProvider(receiverId).notifier).optimisticEdit(messageId, newContent);
+    } else {
+      ref.read(chatStreamProvider(channel).notifier).optimisticEdit(messageId, newContent);
+    }
+
+    state = await AsyncValue.guard(
+      () => ref.read(chatRepositoryProvider).editMessage(messageId, newContent),
+    );
   }
 
   Future<void> deleteMessage(String messageId, {String? receiverId, String channel = 'support-chat'}) async {

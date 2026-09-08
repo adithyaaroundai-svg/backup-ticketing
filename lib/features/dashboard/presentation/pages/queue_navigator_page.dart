@@ -18,7 +18,7 @@ class QueueNavigatorPage extends ConsumerWidget {
       currentPath: '/queue-navigator',
       child: Scaffold(
         backgroundColor: Colors.transparent,
-        body: ticketsAsync.when(
+        body: ticketsAsync.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
           data: (allTickets) {
             final myTickets = allTickets
                 .where((t) => t.assignedTo == currentUser?.id)

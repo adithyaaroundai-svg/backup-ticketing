@@ -141,23 +141,38 @@ class ChatRepository {
         ? 'chat_dm_${currentUserId}_${chatPartnerId}_$uniqueId'
         : 'chat_${channelName}_$uniqueId';
 
-    return _client
-        .channel(realtimeChannelName)
-        .onPostgresChanges(
-          event: PostgresChangeEvent.all,
-          schema: 'public',
-          table: 'chat_messages',
-          filter: PostgresChangeFilter(
-            type: PostgresChangeFilterType.eq,
-            column: 'channel',
-            value: chatPartnerId != null ? 'dm' : channelName,
-          ),
-          callback: onEvent,
-        )
-        .subscribe((status, [error]) {
-          print('Realtime subscribeToMessages ($realtimeChannelName) status: $status');
-          if (error != null) print('Realtime error: $error');
-        });
+    final channelBuilder = _client.channel(realtimeChannelName);
+    
+    if (chatPartnerId != null) {
+      return channelBuilder
+          .onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: 'chat_messages',
+            callback: onEvent,
+          )
+          .subscribe((status, [error]) {
+            print('Realtime subscribeToMessages ($realtimeChannelName) status: $status');
+            if (error != null) print('Realtime error: $error');
+          });
+    } else {
+      return channelBuilder
+          .onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: 'chat_messages',
+            filter: PostgresChangeFilter(
+              type: PostgresChangeFilterType.eq,
+              column: 'channel',
+              value: channelName,
+            ),
+            callback: onEvent,
+          )
+          .subscribe((status, [error]) {
+            print('Realtime subscribeToMessages ($realtimeChannelName) status: $status');
+            if (error != null) print('Realtime error: $error');
+          });
+    }
   }
 
   RealtimeChannel subscribeToReadReceipts({

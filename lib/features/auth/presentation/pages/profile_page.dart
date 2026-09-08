@@ -150,7 +150,7 @@ class ProfilePage extends ConsumerWidget {
                 ),
                 const SizedBox(height: 16),
                 AppCard(
-                  child: ticketsAsync.when(
+                  child: ticketsAsync.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
                     data: (tickets) {
                       final currentUser = user;
                       if (currentUser == null) {

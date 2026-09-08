@@ -22,7 +22,7 @@ class AmcReminderPage extends ConsumerWidget {
         body: SafeArea(
           child: Padding(
             padding: const EdgeInsets.all(24),
-            child: customersAsync.when(
+            child: customersAsync.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
               data: (customers) {
                 final now = DateTime.now();
                 final upcoming = customers

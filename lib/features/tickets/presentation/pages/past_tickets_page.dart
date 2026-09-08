@@ -74,7 +74,7 @@ class _PastTicketsPageState extends ConsumerState<PastTicketsPage> {
       child: Scaffold(
         backgroundColor: AppColors.slate50,
         body: SafeArea(
-          child: ticketsAsync.when(
+          child: ticketsAsync.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
             data: (tickets) {
               final closedTickets = tickets
                   .where(

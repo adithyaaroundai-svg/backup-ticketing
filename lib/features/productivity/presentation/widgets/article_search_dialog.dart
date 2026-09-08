@@ -70,7 +70,7 @@ class _ArticleSearchDialogState extends ConsumerState<ArticleSearchDialog> {
               ),
               const SizedBox(height: 16),
               Expanded(
-                child: articlesAsync.when(
+                child: articlesAsync.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
                   data: (articles) {
                     final filtered = articles.where((a) {
                       if (_searchQuery.isEmpty) return true;

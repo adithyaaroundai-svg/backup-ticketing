@@ -213,11 +213,11 @@ class _BillsPageState extends ConsumerState<BillsPage> {
                 },
               )
             : null,
-        body: ticketsAsync.when(
+        body: ticketsAsync.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
           data: (tickets) {
-            return customersAsync.when(
+            return customersAsync.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
               data: (customers) {
-                return agentsAsync.when(
+                return agentsAsync.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
                   data: (agents) {
                     // Filter logic (Server already filtered by status and bill_amount)
                     final filteredTickets = tickets.where((t) {

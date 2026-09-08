@@ -56,7 +56,7 @@ class _LeadSearchDialogState extends ConsumerState<LeadSearchDialog> {
             ),
             const SizedBox(height: 16),
             Expanded(
-              child: leadsAsync.when(
+              child: leadsAsync.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
                 data: (leads) {
                   final filtered = leads.where((l) {
                     if (_searchQuery.isEmpty) return true;

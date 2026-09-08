@@ -66,7 +66,7 @@ class _SharedMediaViewState extends ConsumerState<SharedMediaView> with SingleTi
 
   Widget _buildMediaTab() {
     final mediaAsync = ref.watch(sharedMediaProvider((channelName: widget.channelName, partnerId: widget.partnerId)));
-    return mediaAsync.when(
+    return mediaAsync.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (e, st) => Center(child: Text('Error: $e')),
       data: (messages) {
@@ -124,7 +124,7 @@ class _SharedMediaViewState extends ConsumerState<SharedMediaView> with SingleTi
 
   Widget _buildDocsTab() {
     final mediaAsync = ref.watch(sharedMediaProvider((channelName: widget.channelName, partnerId: widget.partnerId)));
-    return mediaAsync.when(
+    return mediaAsync.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (e, st) => Center(child: Text('Error: $e')),
       data: (messages) {

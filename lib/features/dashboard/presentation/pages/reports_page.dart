@@ -429,7 +429,7 @@ class _ReportsPageState extends ConsumerState<ReportsPage> {
                     SizedBox(height: 32),
 
                     // Statistics Cards
-                    ticketsAsync.when(
+                    ticketsAsync.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
                       data: (data) {
                         final tickets = data.cast<Ticket>();
                         final filteredTickets = _applyMetaFilters(tickets);

@@ -140,7 +140,7 @@ class _CommentsSectionState extends ConsumerState<CommentsSection> {
                 Consumer(
                   builder: (context, ref, child) {
                     final commentsAsync = ref.watch(commentsStreamProvider(widget.ticketId));
-                    return commentsAsync.when(
+                    return commentsAsync.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
                       data: (comments) {
                         if (comments.isNotEmpty) {
                           final firstComment = comments.first;
@@ -209,7 +209,7 @@ class _CommentsSectionState extends ConsumerState<CommentsSection> {
 
           // Comments List
           Expanded(
-            child: commentsAsync.when(
+            child: commentsAsync.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
               data: (comments) {
                 // Check if there are no comments or only the first comment (which is shown in header)
                 final remainingComments = comments.length > 1 ? comments.skip(1).toList() : <TicketComment>[];

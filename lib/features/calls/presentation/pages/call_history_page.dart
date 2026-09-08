@@ -220,7 +220,7 @@ class _CallHistoryList extends ConsumerWidget {
           Expanded(
             child: RefreshIndicator(
               onRefresh: () => ref.read(callHistoryControllerProvider.notifier).refresh(),
-              child: historyAsync.when(
+              child: historyAsync.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
                 data: (_) {
                   if (filteredHistory.isEmpty) {
                     return _EmptyState();

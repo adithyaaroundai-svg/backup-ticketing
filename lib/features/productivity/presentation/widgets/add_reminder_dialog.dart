@@ -194,7 +194,7 @@ class _AddReminderDialogState extends ConsumerState<AddReminderDialog> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // ── Company autocomplete ─────────────────────────────────
-            customersAsync.when(
+            customersAsync.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
               data: (customers) {
                 final uniqueCompanyNames = customers
                     .map((c) => c.companyName)

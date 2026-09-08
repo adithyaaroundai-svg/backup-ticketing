@@ -172,7 +172,7 @@ class _SupportDashboardPageState extends ConsumerState<SupportDashboardPage> {
         floatingActionButton: AnimatedCreateTicketFab(
           onPressed: _showCreateTicketDialog,
         ),
-        body: ticketsAsync.when(
+        body: ticketsAsync.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
           data: (allTickets) {
             final myTickets =
                 allTickets.where((t) => t.assignedTo == currentUser?.id).toList();

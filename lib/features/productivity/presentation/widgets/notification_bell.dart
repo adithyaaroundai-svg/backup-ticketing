@@ -12,7 +12,7 @@ class NotificationBell extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final notificationsAsync = ref.watch(notificationsProvider);
 
-    return notificationsAsync.when(
+    return notificationsAsync.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
       data: (notifications) {
         final unreadCount = notifications.where((n) => !n.isRead).length;
 

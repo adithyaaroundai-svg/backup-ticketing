@@ -451,9 +451,9 @@ class _TicketsTableViewState extends ConsumerState<TicketsTableView> {
                       ],
                     ),
                   )
-                : customersAsync.when(
+                : customersAsync.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
                     data: (customers) {
-                      return agentsAsync.when(
+                      return agentsAsync.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
                         data: (agents) {
                           // Optimize lookups by creating maps
                           final agentsMap = {for (final a in agents) a['id'].toString(): a};
@@ -933,9 +933,9 @@ class _TicketsTableViewState extends ConsumerState<TicketsTableView> {
         color: context.adaptiveSlate50,
         borderRadius: BorderRadius.circular(12),
       ),
-      child: customersAsync.when(
+      child: customersAsync.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
         data: (customers) {
-          return agentsAsync.when(
+          return agentsAsync.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
             data: (agents) {
               final agentsMap = {for (final a in agents) a['id'].toString(): a};
               final customersMap = {for (final c in customers) c.id.toString(): c};

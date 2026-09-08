@@ -512,7 +512,7 @@ class _EditLeadDialogState extends ConsumerState<EditLeadDialog> {
                                 ),
                               ),
                               const SizedBox(height: 6),
-                              agentsAsync.when(
+                              agentsAsync.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
                                 data: (agents) {
                                   final allowedOwnerIds = {
                                     '0a5aeeb8-9544-4dc8-920f-e26c192b0dd3',

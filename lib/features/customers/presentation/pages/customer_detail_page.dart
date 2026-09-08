@@ -642,7 +642,7 @@ class CustomerDetailPage extends ConsumerWidget {
                     SizedBox(height: 16),
 
                     // Tickets List & Analytics
-                    ticketsAsync.when(
+                    ticketsAsync.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
                       data: (allTickets) {
                         final customerTickets = allTickets
                             .where((t) => t.customerId == customerId)

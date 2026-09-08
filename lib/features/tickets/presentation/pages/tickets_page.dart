@@ -367,7 +367,7 @@ class _TicketsPageState extends ConsumerState<TicketsPage>
             builder: (context, ref, child) {
               final ticketsAsync = ref.watch(paginatedTicketsProvider);
 
-              return ticketsAsync.when(
+              return ticketsAsync.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
                 data: (tickets) {
                   return Padding(
                     padding: EdgeInsets.all(20),
@@ -449,7 +449,7 @@ class _TicketsPageState extends ConsumerState<TicketsPage>
 
             final currentUser = ref.watch(authProvider);
 
-            return alertsAsync.when(
+            return alertsAsync.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
               data: (entries) {
                 final tickets = entries.map((e) => e.ticket).toList();
 
@@ -803,7 +803,7 @@ class _TicketsPageState extends ConsumerState<TicketsPage>
 
         final currentUser = ref.watch(authProvider);
 
-        return ticketsAsync.when(
+        return ticketsAsync.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
           data: (allTickets) {
             // Filter in-progress tickets assigned to current user
 
@@ -1035,7 +1035,7 @@ class _TicketsPageState extends ConsumerState<TicketsPage>
 
         final currentUser = ref.watch(authProvider);
 
-        return ticketsAsync.when(
+        return ticketsAsync.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
           data: (allTickets) {
             // Filter my tickets (assigned to current user)
 
@@ -1331,7 +1331,7 @@ class _TicketsPageState extends ConsumerState<TicketsPage>
       builder: (context, ref, child) {
         final ticketsAsync = ref.watch(paginatedTicketsProvider);
 
-        return ticketsAsync.when(
+        return ticketsAsync.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
           data: (allTickets) {
             // Filter unclaimed tickets
 
@@ -1851,7 +1851,7 @@ class _AgentAssignmentSidebarState
           SizedBox(height: 16),
 
           Expanded(
-            child: agentsAsync.when(
+            child: agentsAsync.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
               data: (agents) {
                 if (visibleTickets.isEmpty) {
                   return _buildEmptyState();
@@ -3048,7 +3048,7 @@ class _TicketsViewState extends ConsumerState<TicketsView>
           ],
 
           Expanded(
-            child: ticketsAsync.when(
+            child: ticketsAsync.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
               data: (allTickets) {
                 // Filter tickets based on view type
 
@@ -3515,7 +3515,7 @@ class _TicketsViewState extends ConsumerState<TicketsView>
 
     String assigneeFilter,
   ) {
-    return agentsAsync.when(
+    return agentsAsync.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
       data: (agents) {
         final items = <DropdownMenuItem<String>>[
           const DropdownMenuItem(value: 'all', child: Text('All assignees')),

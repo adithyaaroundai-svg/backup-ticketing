@@ -70,7 +70,7 @@ class NotificationsPage extends ConsumerWidget {
                 onAmcTap: () => context.push('/amc-reminder'),
               ),
               const SizedBox(height: 24),
-              notificationsAsync.when(
+              notificationsAsync.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
                 data: (notifications) {
                   if (notifications.isEmpty) {
                     return Center(

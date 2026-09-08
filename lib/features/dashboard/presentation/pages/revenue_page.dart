@@ -50,9 +50,9 @@ class _RevenuePageState extends ConsumerState<RevenuePage> {
       currentPath: '/revenue',
       child: Scaffold(
         backgroundColor: Colors.transparent,
-        body: ticketsAsync.when(
-          data: (tickets) => agentsAsync.when(
-            data: (agentsRaw) => customersAsync.when(
+        body: ticketsAsync.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
+          data: (tickets) => agentsAsync.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
+            data: (agentsRaw) => customersAsync.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
               data: (customers) => _buildContent(
                 currentUser: currentUser,
                 tickets: tickets,

@@ -272,7 +272,7 @@ class _TicketRemarksSectionState extends ConsumerState<TicketRemarksSection> {
       children: [
         SizedBox(
           height: 500,
-          child: remarksAsync.when(
+          child: remarksAsync.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
             data: (remarks) {
               final merged = <Map<String, dynamic>>[
                 ..._optimisticRemarks,

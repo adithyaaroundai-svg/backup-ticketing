@@ -110,7 +110,7 @@ class _SalesOpportunityPageState extends ConsumerState<SalesOpportunityPage>
                   ),
                   const SizedBox(height: 20),
                   // Quick Stats
-                  ticketsAsync.when(
+                  ticketsAsync.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
                     data: (allTickets) {
                       final myTickets = currentUser == null
                           ? <Ticket>[]
@@ -182,7 +182,7 @@ class _SalesOpportunityPageState extends ConsumerState<SalesOpportunityPage>
             
             // Tab Content
             Expanded(
-              child: ticketsAsync.when(
+              child: ticketsAsync.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
                 data: (allTickets) {
                   final unclaimedTickets = allTickets
                       .where((t) => t.assignedTo == null || t.assignedTo!.isEmpty)
@@ -194,7 +194,7 @@ class _SalesOpportunityPageState extends ConsumerState<SalesOpportunityPage>
                       : allTickets.where((t) => t.createdBy == currentUser.id).toList()
                     ..sort((a, b) => (b.createdAt ?? DateTime(0)).compareTo(a.createdAt ?? DateTime(0)));
 
-                  return customersAsync.when(
+                  return customersAsync.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
                     data: (customers) {
                       final customersById = {for (final c in customers) c.id: c};
 

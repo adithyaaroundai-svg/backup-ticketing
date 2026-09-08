@@ -89,7 +89,7 @@ class _PrivateLeadsPageState extends ConsumerState<PrivateLeadsPage> {
                   const SizedBox(height: 56), // Provide space for floating top buttons
 
                 // Pipeline Stats
-                leadsAsync.when(
+                leadsAsync.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
                   data: (leads) {
                     final totalCount = leads.length;
                     final wonCount = leads.where((d) => d.status.toLowerCase() == 'win' || d.status.toLowerCase() == 'won').length;
@@ -167,7 +167,7 @@ class _PrivateLeadsPageState extends ConsumerState<PrivateLeadsPage> {
 
             // Kanban Board
             Expanded(
-              child: leadsAsync.when(
+              child: leadsAsync.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
                 data: (leads) {
                   var columns = ['New Lead', 'Contacted', 'Qualified', 'Negotiation'];
                   

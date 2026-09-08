@@ -109,7 +109,7 @@ class _DealsPageState extends ConsumerState<DealsPage> {
             Expanded(
               child: dealsAsync.when(
                 data: (deals) {
-                  return customersAsync.when(
+                  return customersAsync.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
                     data: (customers) {
                       final customerMap = {
                         for (var c in customers) c.id: c.companyName,

@@ -6,12 +6,9 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../../../features/auth/presentation/providers/auth_provider.dart';
 import '../theme/app_colors.dart';
 import '../theme/theme_provider.dart';
-import '../../../features/sales/domain/entities/lead.dart';
-import '../../../features/developer_crm/presentation/providers/auth_provider.dart' as dev_crm_auth;
 
 import '../../../features/tickets/presentation/providers/ticket_provider.dart';
 import '../../../features/customers/presentation/providers/customer_provider.dart';
@@ -86,7 +83,6 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
         _hasInitialized = true;
         _setupChatListener();
         _startLastSeenUpdates();
-        _checkFollowUpNotifications();
       }
     });
   }
@@ -341,14 +337,6 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
               }
             } catch (e) {
               debugPrint('Error processing custom channel notification: $e');
-              // Still try to show notification even if membership check fails
-              try {
-                final msg = ChatMessage.fromJson(record);
-                c.read(customChannelNewMessageEventProvider.notifier).notify(msg);
-                ChatSoundService.playPing();
-              } catch (e2) {
-                debugPrint('Error parsing custom channel message: $e2');
-              }
             }
           },
         )
@@ -446,136 +434,6 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
           bottomNavigationBar: _BottomNav(currentPath: widget.currentPath),
         ),
       ),
-    );
-  }
-
-  Future<void> _checkFollowUpNotifications() async {
-    final c = _container;
-    if (c == null || !mounted) return;
-
-    final currentUser = c.read(authProvider);
-    if (currentUser == null) return;
-
-    final name = currentUser.fullName.toLowerCase();
-    if (!name.contains('sidharth') && !name.contains('athira') && !name.contains('anil')) {
-      return;
-    }
-
-    try {
-      final client = Supabase.instance.client;
-      final data = await client
-          .from('leads')
-          .select()
-          .eq('pipeline_type', 'global');
-      final allLeads = (data as List).map((json) => Lead.fromJson(json)).toList();
-      
-      final now = DateTime.now();
-      
-      final prefs = await SharedPreferences.getInstance();
-      final notified = prefs.getStringList('notified_followups') ?? [];
-
-      final dueTodayLeads = allLeads.where((lead) {
-        if (lead.followUpDate == null) return false;
-        if (lead.status.toLowerCase() == 'win' || lead.status.toLowerCase() == 'won' || lead.status.toLowerCase() == 'loss' || lead.status.toLowerCase() == 'lost') return false;
-        final fDate = lead.followUpDate!.toLocal();
-        final isDueToday = fDate.year == now.year && fDate.month == now.month && fDate.day == now.day;
-        if (!isDueToday) return false;
-        
-        // Key tied specifically to the followUpDate timestamp so dismissing prevents recurrence unless date is modified
-        final key = '${lead.id}_${lead.followUpDate!.toIso8601String()}';
-        return !notified.contains(key);
-      }).toList();
-
-      if (dueTodayLeads.isNotEmpty && mounted) {
-        _showDueLeadsDialog(dueTodayLeads);
-      }
-    } catch (e) {
-      debugPrint('Error checking follow ups: $e');
-    }
-  }
-
-  void _showDueLeadsDialog(List<Lead> leads) {
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: Row(
-            children: [
-              Icon(LucideIcons.bellRing, color: AppColors.error),
-              const SizedBox(width: 8),
-              const Text('Follow-ups Due Today'),
-            ],
-          ),
-          content: ConstrainedBox(
-            constraints: const BoxConstraints(maxHeight: 300, maxWidth: 400),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('You have ${leads.length} lead(s) requiring follow-up today.', style: TextStyle(color: context.adaptiveSlate700)),
-                const SizedBox(height: 16),
-                Expanded(
-                  child: ListView.builder(
-                    shrinkWrap: true,
-                    itemCount: leads.length,
-                    itemBuilder: (context, index) {
-                      final l = leads[index];
-                      return ListTile(
-                        leading: Icon(LucideIcons.calendarClock, size: 20, color: Colors.orange.shade700),
-                        title: Text(l.companyName, style: TextStyle(fontWeight: FontWeight.w600, color: context.adaptiveSlate800)),
-                        subtitle: Text(l.product ?? 'No product specified', style: TextStyle(fontSize: 12, color: context.adaptiveSlate500)),
-                        dense: true,
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () async {
-                final prefs = await SharedPreferences.getInstance();
-                final notified = prefs.getStringList('notified_followups') ?? [];
-                for (var lead in leads) {
-                  if (lead.followUpDate != null) {
-                    final key = '${lead.id}_${lead.followUpDate!.toIso8601String()}';
-                    if (!notified.contains(key)) notified.add(key);
-                  }
-                }
-                await prefs.setStringList('notified_followups', notified);
-                
-                if (context.mounted) {
-                  Navigator.pop(context);
-                }
-              },
-              child: const Text('Dismiss'),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                final prefs = await SharedPreferences.getInstance();
-                final notified = prefs.getStringList('notified_followups') ?? [];
-                for (var lead in leads) {
-                  if (lead.followUpDate != null) {
-                    final key = '${lead.id}_${lead.followUpDate!.toIso8601String()}';
-                    if (!notified.contains(key)) notified.add(key);
-                  }
-                }
-                await prefs.setStringList('notified_followups', notified);
-
-                if (context.mounted) {
-                  Navigator.pop(context);
-                  context.go('/leads');
-                }
-              },
-              style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
-              child: const Text('Go to Sales Pipeline'),
-            ),
-          ],
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          backgroundColor: context.isDarkMode ? context.adaptiveCard : Colors.white,
-        );
-      },
     );
   }
 }
@@ -768,7 +626,6 @@ class _TopNav extends ConsumerWidget {
                 currentPath.startsWith('/tickets') ||
                 currentPath.startsWith('/ticket'),
           ),
-        // Dev CRM button moved to Software Development channel
         // Support Dashboard for Accountants
         if (!isRestrictedAgent && currentUser?.isAccountant == true)
           _TopNavItem(
@@ -2916,8 +2773,6 @@ class _ChannelsListState extends ConsumerState<_ChannelsList> {
         !isRestrictedAgent;
     final canAccessDealsTracker =
         currentUser?.id == '0a5aeeb8-9544-4dc8-920f-e26c192b0dd3';
-    final canAccessPrivateLeads =
-        currentUser?.id == 'd8aa6435-9e02-4bab-9acc-ae1f5f3d6a1c';
     final restrictedFromAroundAi = {
       'd7a9e726-9520-4cc8-95a6-b38a4afd1d7b',
       'dedce60a-56bd-49fd-bbe2-f88534b8e36f',
@@ -3172,51 +3027,6 @@ class _ChannelsListState extends ConsumerState<_ChannelsList> {
               ),
             ),
           ),
-        // Private Pipeline
-        if (canAccessPrivateLeads)
-          Material(
-            color: Colors.transparent,
-            child: InkWell(
-              onTap: () => context.go('/private-leads'),
-              child: Container(
-                margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 6,
-                ),
-                decoration: BoxDecoration(
-                  color: currentPath.startsWith('/private-leads')
-                      ? activeBgColor
-                      : Colors.transparent,
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      LucideIcons.briefcase,
-                      size: 16,
-                      color: currentPath.startsWith('/private-leads')
-                          ? textColorPrimary
-                          : textColor54,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Private Pipeline',
-                      style: TextStyle(
-                        color: currentPath.startsWith('/private-leads')
-                            ? textColorPrimary
-                            : textColor70,
-                        fontSize: 13,
-                        fontWeight: currentPath.startsWith('/private-leads')
-                            ? FontWeight.w600
-                            : FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
         // Deals Tracker Channel
         if (canAccessDealsTracker)
           Material(
@@ -3422,7 +3232,7 @@ class _ChannelsListState extends ConsumerState<_ChannelsList> {
             ),
           ),
           // Agents List
-          agentsAsync.when(
+          agentsAsync.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
               data: (agents) {
                 // Filter out specific agents and those without conversations
                 final hiddenAgentIds = const {
@@ -3512,8 +3322,6 @@ class _ChannelsListState extends ConsumerState<_ChannelsList> {
                   },
                 );
               },
-              skipLoadingOnReload: true,
-              skipLoadingOnRefresh: true,
               loading: () => Center(
                 child: SizedBox(
                   height: 16,
@@ -3818,7 +3626,7 @@ class _RecentTicketsList extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final ticketsAsync = ref.watch(ticketsStreamProvider);
 
-    return ticketsAsync.when(
+    return ticketsAsync.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
       data: (tickets) {
         print('DEBUG: Total tickets: ${tickets.length}');
 

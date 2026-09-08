@@ -65,7 +65,7 @@ class CustomerHistoryPage extends ConsumerWidget {
                 return _ErrorNotice('Customer not found');
               }
 
-              return ticketsAsync.when(
+              return ticketsAsync.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
                 data: (tickets) {
                   final agentNames = agentsAsync.maybeWhen(
                     data: (agents) => {

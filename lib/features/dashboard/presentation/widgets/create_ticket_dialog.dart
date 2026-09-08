@@ -392,7 +392,7 @@ class _CreateTicketDialogState extends ConsumerState<CreateTicketDialog> {
                       ),
                       const SizedBox(height: 6),
                       if (!_showQuickCustomerForm)
-                        customersAsync.when(
+                        customersAsync.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
                           data: (customers) => LayoutBuilder(
                             builder: (context, constraints) => Autocomplete<Customer>(
                               displayStringForOption: (option) => option.companyName,

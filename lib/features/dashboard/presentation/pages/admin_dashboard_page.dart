@@ -257,7 +257,7 @@ class _AdminDashboardPageState extends ConsumerState<AdminDashboardPage> {
                         ),
                       ),
                       AppCard(
-                        child: ticketsAsync.when(
+                        child: ticketsAsync.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
                           data: (tickets) {
                             final now = DateTime.now();
                             var createdToday = 0;
@@ -306,7 +306,7 @@ class _AdminDashboardPageState extends ConsumerState<AdminDashboardPage> {
 
               const SizedBox(height: 16),
 
-              ticketsAsync.when(
+              ticketsAsync.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
                 data: (tickets) {
                   if (tickets.isEmpty) {
                     return Center(
@@ -424,7 +424,7 @@ class _AdminDashboardPageState extends ConsumerState<AdminDashboardPage> {
                     children: [
                       const SizedBox(height: 8),
                       if (enableRevenueRadar)
-                        customersAsync.when(
+                        customersAsync.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
                           data: (customers) {
                             final lookbackStart = now.subtract(
                               const Duration(days: 15),

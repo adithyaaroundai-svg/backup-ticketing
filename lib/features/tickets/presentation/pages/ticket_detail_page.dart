@@ -157,7 +157,7 @@ class _TicketDetailPageState extends ConsumerState<TicketDetailPage> {
       }
     });
 
-    agentsAsync.when(
+    agentsAsync.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
       data: (agents) {
         final visibleAgents = agents.where((a) {
           final role = (a['role'] as String?)?.toLowerCase();
@@ -542,7 +542,7 @@ class _TicketDetailPageState extends ConsumerState<TicketDetailPage> {
                                   ),
                                   const SizedBox(width: 6),
                                   Expanded(
-                                    child: agentsAsync.when(
+                                    child: agentsAsync.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
                                       data: (agents) {
                                         final idToName = <String, String>{};
                                         final usernameToName = <String, String>{};
@@ -648,7 +648,7 @@ class _TicketDetailPageState extends ConsumerState<TicketDetailPage> {
                               ],
                               const SizedBox(height: 8),
                               // Assignee row
-                              agentsAsync.when(
+                              agentsAsync.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
                                 data: (agents) {
                                   final idToName = <String, String>{};
                                   for (final a in agents) {
@@ -1050,7 +1050,7 @@ class _TicketDetailPageState extends ConsumerState<TicketDetailPage> {
                                   agentsListProvider,
                                 );
 
-                                return agentsAsync.when(
+                                return agentsAsync.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
                                   data: (agents) {
                                     final agentNames = <String, String>{};
                                     final usernameToName = <String, String>{};

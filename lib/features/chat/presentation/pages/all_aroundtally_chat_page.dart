@@ -1,3 +1,4 @@
+import '../widgets/edit_message_dialog.dart';
 import 'dart:async';
 import 'dart:io';
 
@@ -479,7 +480,7 @@ class _AllAroundTallyChatPageState extends ConsumerState<AllAroundTallyChatPage>
   Widget _buildMentionsList() {
     final agentsAsync = ref.watch(agentsListProvider);
 
-    return agentsAsync.when(
+    return agentsAsync.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
       data: (agents) {
         final filteredAgents = agents.where((a) {
           final name = (a['full_name'] ?? a['username'] ?? '').toString().toLowerCase();
@@ -655,13 +656,14 @@ class _AllAroundTallyChatPageState extends ConsumerState<AllAroundTallyChatPage>
           foregroundColor: Colors.white,
           iconTheme: const IconThemeData(color: Colors.white),
           elevation: 0,
+
         ),
         body: Stack(
           children: [
             Column(
               children: [
                 Expanded(
-                  child: messagesAsync.when(
+                  child: messagesAsync.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
                 data: (messages) {
                   _markVisibleMessagesRead(messages);
                   if (messages.isEmpty) {
@@ -1231,6 +1233,22 @@ class _ChatBubble extends ConsumerStatefulWidget {
 class _ChatBubbleState extends ConsumerState<_ChatBubble> {
   bool _hovered = false;
 
+  void _edit(BuildContext context, ChatMessage message) {
+    showDialog(
+      context: context,
+      builder: (context) => EditMessageDialog(
+        initialContent: message.content,
+        onSave: (newContent) async {
+          await ref.read(chatControllerProvider.notifier).editMessage(
+            message.id,
+            newContent,
+            channel: message.channel,
+          );
+        },
+      ),
+    );
+  }
+
   void _delete(BuildContext context) async {
     final confirm = await showDialog<bool>(
       context: context,
@@ -1346,7 +1364,7 @@ class _ChatBubbleState extends ConsumerState<_ChatBubble> {
     final showSender = widget.showSender;
     final isDeleted = widget.isDeleted;
     final nameColor = _senderColor(currentSenderName);
-    final timeStr = DateFormat('h:mm a').format(message.createdAt.toLocal());
+    final timeStr = DateFormat('h:mm a').format(message.createdAt.toLocal()) + (message.isEdited ? ' (edited)' : '');
 
     // Call activity messages — rendered as centered notification cards
     if (message.content.startsWith('__CALL_') && !isDeleted) {
@@ -1908,6 +1926,24 @@ class _ChatBubbleState extends ConsumerState<_ChatBubble> {
                             ],
                           ),
                         ),
+                        if (isMe && !message.isDeleted)
+                          PopupMenuItem<String>(
+                            value: 'edit',
+                            onTap: () {
+                              Future.delayed(const Duration(milliseconds: 100), () {
+                                if (context.mounted) {
+                                  _edit(context, message);
+                                }
+                              });
+                            },
+                            child: Row(
+                              children: [
+                                Icon(Icons.edit_outlined, size: 20, color: context.isDarkMode ? Colors.white70 : Colors.black87),
+                                const SizedBox(width: 12),
+                                Text('Edit', style: TextStyle(color: context.isDarkMode ? Colors.white70 : Colors.black87)),
+                              ],
+                            ),
+                          ),
                         if (isMe)
                           PopupMenuItem<String>(
                             value: 'delete',

@@ -103,14 +103,14 @@ class _CustomersPageState extends ConsumerState<CustomersPage> {
               _buildFilters(),
               const SizedBox(height: 16),
               Expanded(
-                child: ticketsAsync.when(
+                child: ticketsAsync.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
                   data: (tickets) {
                     final pendingBillCustomerIds = tickets
                         .where((t) => t.status == 'BillRaised')
                         .map((t) => t.customerId)
                         .toSet();
 
-                    return customersAsync.when(
+                    return customersAsync.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
                       data: (customers) {
                         final filtered = customers.where((customer) {
                           final matchesSearch =

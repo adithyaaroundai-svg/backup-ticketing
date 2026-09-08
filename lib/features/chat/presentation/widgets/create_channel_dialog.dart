@@ -120,7 +120,7 @@ class _CreateChannelDialogState extends ConsumerState<CreateChannelDialog> {
                 const Text('Invite Members', style: TextStyle(fontWeight: FontWeight.w600)),
                 const SizedBox(height: 8),
                 Expanded(
-                  child: agentsAsync.when(
+                  child: agentsAsync.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
                     data: (agents) {
                       if (agents.isEmpty) return const Text('No agents found.');
                       return ListView.builder(
