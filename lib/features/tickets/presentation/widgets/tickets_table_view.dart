@@ -40,6 +40,85 @@ class TicketsTableView extends ConsumerStatefulWidget {
 }
 
 class _TicketsTableViewState extends ConsumerState<TicketsTableView> {
+
+  Widget _buildStatusFilterButton({
+    required String filterKey,
+    required String label,
+    required IconData icon,
+    required int count,
+    required Color activeColor,
+    required BuildContext context,
+  }) {
+    final isSelected = _taskStatusFilter == filterKey;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return InkWell(
+      onTap: () {
+        setState(() {
+          _taskStatusFilter = filterKey;
+        });
+      },
+      borderRadius: BorderRadius.circular(6),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? (isDark ? activeColor.withValues(alpha: 0.25) : activeColor.withValues(alpha: 0.12))
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(
+            color: isSelected ? activeColor.withValues(alpha: 0.6) : Colors.transparent,
+            width: 1,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 14,
+              color: isSelected
+                  ? activeColor
+                  : (isDark ? Colors.white60 : AppColors.slate500),
+            ),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                color: isSelected
+                    ? (isDark ? Colors.white : activeColor)
+                    : (isDark ? Colors.white70 : AppColors.slate700),
+              ),
+            ),
+            const SizedBox(width: 6),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+              decoration: BoxDecoration(
+                color: isSelected
+                    ? activeColor
+                    : (isDark ? Colors.white12 : AppColors.slate200),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                count.toString(),
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                  color: isSelected
+                      ? Colors.white
+                      : (isDark ? Colors.white70 : AppColors.slate600),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   final ScrollController _scrollController = ScrollController();
   final ScrollController _verticalScrollController = ScrollController();
   String? _addingTicketGroup;
@@ -54,6 +133,7 @@ class _TicketsTableViewState extends ConsumerState<TicketsTableView> {
   DateTime? _newReportedDate;
   bool _isSavingNewTicket = false;
   String _searchQuery = '';
+  String _taskStatusFilter = 'active';
 
   @override
   void initState() {
@@ -265,18 +345,43 @@ class _TicketsTableViewState extends ConsumerState<TicketsTableView> {
       }
     }
 
-    // Filter tickets by search query and apply optimistic overrides
+    // Filter tickets by search query, status filter, and apply optimistic overrides
     final statusOverrides = ref.watch(ticketOptimisticStatusOverridesProvider);
     final assigneeOverrides = ref.watch(
       ticketOptimisticAssigneeOverridesProvider,
     );
-    var filteredTickets =
-        widget.tickets.map((t) {
-          return t.copyWith(
-            status: statusOverrides[t.ticketId] ?? t.status,
-            assignedTo: assigneeOverrides[t.ticketId] ?? t.assignedTo,
-          );
-        }).toList();
+
+    bool isCompleted(String? s) {
+      if (s == null) return false;
+      final norm = s.trim().toLowerCase();
+      return norm == 'resolved' || norm == 'closed' || norm == 'billraised' || norm == 'billprocessed' || norm == 'completed';
+    }
+    bool isCancelled(String? s) {
+      if (s == null) return false;
+      final norm = s.trim().toLowerCase();
+      return norm == 'cancelled' || norm == 'canceled';
+    }
+
+    final allWithOverrides = widget.tickets.map((t) {
+      return t.copyWith(
+        status: statusOverrides[t.ticketId] ?? t.status,
+        assignedTo: assigneeOverrides[t.ticketId] ?? t.assignedTo,
+      );
+    }).toList();
+
+    final activeCount = allWithOverrides.where((t) => !isCompleted(t.status) && !isCancelled(t.status)).length;
+    final completedCount = allWithOverrides.where((t) => isCompleted(t.status)).length;
+    final cancelledCount = allWithOverrides.where((t) => isCancelled(t.status)).length;
+
+    var filteredTickets = List<Ticket>.from(allWithOverrides);
+
+    if (_taskStatusFilter == 'completed') {
+      filteredTickets = filteredTickets.where((t) => isCompleted(t.status)).toList();
+    } else if (_taskStatusFilter == 'cancelled') {
+      filteredTickets = filteredTickets.where((t) => isCancelled(t.status)).toList();
+    } else if (_taskStatusFilter == 'active') {
+      filteredTickets = filteredTickets.where((t) => !isCompleted(t.status) && !isCancelled(t.status)).toList();
+    }
 
     if (_searchQuery.isNotEmpty) {
       final query = _searchQuery.toLowerCase();
@@ -339,9 +444,53 @@ class _TicketsTableViewState extends ConsumerState<TicketsTableView> {
         children: [
           Padding(
             padding: const EdgeInsets.all(16.0),
-            child: Row(
+            child: Wrap(
+              spacing: 12,
+              runSpacing: 10,
+              crossAxisAlignment: WrapCrossAlignment.center,
               children: [
-                Expanded(
+                // Filter tabs: Active Tasks, Completed, Cancelled
+                Container(
+                  padding: const EdgeInsets.all(3),
+                  decoration: BoxDecoration(
+                    color: context.adaptiveSlate100,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: context.adaptiveBorder),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _buildStatusFilterButton(
+                        filterKey: 'active',
+                        label: 'Active Tasks',
+                        icon: LucideIcons.listTodo,
+                        count: activeCount,
+                        activeColor: AppColors.primary,
+                        context: context,
+                      ),
+                      const SizedBox(width: 4),
+                      _buildStatusFilterButton(
+                        filterKey: 'completed',
+                        label: 'Completed',
+                        icon: LucideIcons.checkCircle2,
+                        count: completedCount,
+                        activeColor: const Color(0xFF16A34A),
+                        context: context,
+                      ),
+                      const SizedBox(width: 4),
+                      _buildStatusFilterButton(
+                        filterKey: 'cancelled',
+                        label: 'Cancelled',
+                        icon: LucideIcons.xCircle,
+                        count: cancelledCount,
+                        activeColor: const Color(0xFFDC2626),
+                        context: context,
+                      ),
+                    ],
+                  ),
+                ),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(minWidth: 200, maxWidth: 350),
                   child: Container(
                     height: 36,
                     decoration: BoxDecoration(
@@ -355,7 +504,7 @@ class _TicketsTableViewState extends ConsumerState<TicketsTableView> {
                         hintStyle: TextStyle(fontSize: 13, color: context.adaptiveSlate400),
                         prefixIcon: Icon(LucideIcons.search, size: 16, color: context.adaptiveSlate400),
                         border: InputBorder.none,
-                        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                         isDense: true,
                       ),
                       style: TextStyle(fontSize: 13, color: context.adaptiveSlate700),
@@ -367,7 +516,6 @@ class _TicketsTableViewState extends ConsumerState<TicketsTableView> {
                     ),
                   ),
                 ),
-                const SizedBox(width: 16),
                 Container(
                   height: 36,
                   width: 200,
@@ -616,7 +764,7 @@ class _TicketsTableViewState extends ConsumerState<TicketsTableView> {
                                                         border: OutlineInputBorder(),
                                                         contentPadding: EdgeInsets.symmetric(horizontal: 4, vertical: 4),
                                                       ),
-                                                      items: ['Open', 'In Progress', 'Resolved', 'Closed'].map((s) {
+                                                      items: ['Open', 'InProgress', 'Paused', 'CallBack', 'WontPay', 'Resolved', 'Cancelled', 'Closed'].map((s) {
                                                         return DropdownMenuItem(value: s, child: Text(s, style: TextStyle(fontSize: 11)));
                                                       }).toList(),
                                                       onChanged: (v) => setState(() => _newStatus = v ?? 'Open'),
@@ -1198,7 +1346,7 @@ class _TicketsTableViewState extends ConsumerState<TicketsTableView> {
                   isExpanded: true,
                   initialValue: _newStatus,
                   decoration: const InputDecoration(labelText: 'Status', border: OutlineInputBorder(), contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8)),
-                  items: ['Open', 'In Progress', 'Resolved', 'Closed'].map((s) {
+                  items: ['Open', 'InProgress', 'Paused', 'CallBack', 'WontPay', 'Resolved', 'Cancelled', 'Closed'].map((s) {
                     return DropdownMenuItem(value: s, child: Text(s, style: TextStyle(fontSize: 12)));
                   }).toList(),
                   onChanged: (v) => setState(() => _newStatus = v ?? 'Open'),
@@ -1354,12 +1502,6 @@ class _TicketsTableViewState extends ConsumerState<TicketsTableView> {
       case 'billprocessed':
       case 'bill_processed':
         return isDark ? Colors.green.shade400 : const Color(0xFF059669);
-      case 'paused':
-        return isDark ? Colors.amber.shade300 : const Color(0xFFD97706);
-      case 'callback':
-        return isDark ? Colors.orange.shade300 : const Color(0xFFEA580C);
-      case 'wontpay':
-        return isDark ? Colors.orange.shade300 : const Color(0xFFEA580C);
       default:
         return isDark ? AppColors.slate300 : AppColors.slate600;
     }
@@ -1390,12 +1532,6 @@ class _TicketsTableViewState extends ConsumerState<TicketsTableView> {
       case 'billprocessed':
       case 'bill_processed':
         return 'Billed';
-      case 'paused':
-        return 'Paused';
-      case 'callback':
-        return 'Call Back';
-      case 'wontpay':
-        return "Won't Pay";
       default:
         return status;
     }
@@ -1800,16 +1936,24 @@ class _TicketTableRowState extends ConsumerState<TicketTableRow> {
                       final isAccountant = currentUser?.role?.toString().toLowerCase() == 'accountant';
                       final allowedStatuses = isAccountant 
                           ? ['BillProcessed', 'Closed'] 
-                          : ['New', 'Resolved', 'Closed', 'BillRaised', 'BillProcessed'];
+                          : ['New', 'Open', 'InProgress', 'Paused', 'CallBack', 'WontPay', 'Resolved', 'Cancelled', 'Closed', 'BillRaised', 'BillProcessed'];
                           
                       final currentStatus = allowedStatuses.contains(ticket.status) ? ticket.status : ticket.status;
                       
                       return DropdownButton<String>(
                         value: currentStatus,
                         items: [
-                          if (!isAccountant) DropdownMenuItem(value: 'New', child: Text('New')),
-                          if (!isAccountant) DropdownMenuItem(value: 'Resolved', child: Text('Resolved')),
-                          if (!isAccountant) DropdownMenuItem(value: 'BillRaised', child: Text('Bill Raised')),
+                          if (!isAccountant) ...[
+                            DropdownMenuItem(value: 'New', child: Text('New')),
+                            DropdownMenuItem(value: 'Open', child: Text('Open')),
+                            DropdownMenuItem(value: 'InProgress', child: Text('In Progress')),
+                            DropdownMenuItem(value: 'Paused', child: Text('Paused')),
+                            DropdownMenuItem(value: 'CallBack', child: Text('Call Back')),
+                            DropdownMenuItem(value: 'WontPay', child: Text("Won't Pay")),
+                            DropdownMenuItem(value: 'Resolved', child: Text('Resolved')),
+                            DropdownMenuItem(value: 'Cancelled', child: Text('Cancelled')),
+                            DropdownMenuItem(value: 'BillRaised', child: Text('Bill Raised')),
+                          ],
                           DropdownMenuItem(value: 'BillProcessed', child: Text('Billed')),
                           DropdownMenuItem(value: 'Closed', child: Text('Closed')),
                           if (!allowedStatuses.contains(ticket.status))
@@ -2564,6 +2708,27 @@ class _TicketTableRowState extends ConsumerState<TicketTableRow> {
       case 'resolved':
         textColor = isDark ? Colors.green.shade300 : const Color(0xFF16A34A);
         displayText = 'Resolved';
+        break;
+      case 'cancelled':
+      case 'canceled':
+        textColor = isDark ? Colors.red.shade300 : const Color(0xFFDC2626);
+        displayText = 'Cancelled';
+        break;
+      case 'paused':
+        textColor = isDark ? Colors.orange.shade300 : const Color(0xFFEA580C);
+        displayText = 'Paused';
+        break;
+      case 'callback':
+      case 'call_back':
+      case 'call back':
+        textColor = isDark ? Colors.orange.shade300 : const Color(0xFFEA580C);
+        displayText = 'Call Back';
+        break;
+      case 'wontpay':
+      case 'wont_pay':
+      case "won't pay":
+        textColor = isDark ? Colors.orange.shade300 : const Color(0xFFEA580C);
+        displayText = "Won't Pay";
         break;
       case 'closed':
         textColor = isDark ? AppColors.slate300 : AppColors.slate600;

@@ -831,6 +831,36 @@ class _TicketCardWithAmcBody extends ConsumerWidget {
       );
     }
 
+    if (normalized == 'paused') {
+      return _buildInfoPill(
+        icon: LucideIcons.pauseCircle,
+        label: 'Paused',
+        iconColor: context.isDarkMode ? Colors.orange.shade300 : const Color(0xFFEA580C),
+        textColor: context.isDarkMode ? Colors.orange.shade300 : const Color(0xFFEA580C),
+        backgroundColor: context.isDarkMode ? Colors.orange.shade300.withValues(alpha: 0.12) : const Color(0xFFEA580C).withValues(alpha: 0.12),
+      );
+    }
+
+    if (normalized == 'callback' || normalized == 'call_back' || normalized == 'call back') {
+      return _buildInfoPill(
+        icon: LucideIcons.phoneCall,
+        label: 'Call Back',
+        iconColor: context.isDarkMode ? Colors.orange.shade300 : const Color(0xFFEA580C),
+        textColor: context.isDarkMode ? Colors.orange.shade300 : const Color(0xFFEA580C),
+        backgroundColor: context.isDarkMode ? Colors.orange.shade300.withValues(alpha: 0.12) : const Color(0xFFEA580C).withValues(alpha: 0.12),
+      );
+    }
+
+    if (normalized == 'wontpay' || normalized == 'wont_pay' || normalized == "won't pay") {
+      return _buildInfoPill(
+        icon: LucideIcons.alertCircle,
+        label: "Won't Pay",
+        iconColor: context.isDarkMode ? Colors.orange.shade300 : const Color(0xFFEA580C),
+        textColor: context.isDarkMode ? Colors.orange.shade300 : const Color(0xFFEA580C),
+        backgroundColor: context.isDarkMode ? Colors.orange.shade300.withValues(alpha: 0.12) : const Color(0xFFEA580C).withValues(alpha: 0.12),
+      );
+    }
+
     if (!isUnassigned) {
       String label = 'Claimed';
       if (isMyTicket) {
