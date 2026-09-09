@@ -644,21 +644,29 @@ class _ProposalGeneratorPageState extends ConsumerState<ProposalGeneratorPage> {
     double mPrice = double.tryParse(mobileAppPriceCtrl.text) ?? 0;
     double sPrice = double.tryParse(supportPriceCtrl.text) ?? 0;
 
+    double customProductsPrice = _companyProducts.fold<double>(
+      0.0,
+      (sum, item) => sum + item.price,
+    );
+
+    double basePrice = lPrice + customProductsPrice;
     double discount = lPrice * (dPercent / 100);
-    double packagePrice = lPrice - discount;
+    double packagePrice = basePrice - discount;
     double gst = packagePrice * 0.18;
     double total = packagePrice + gst;
-    double serviceValue = lPrice + iPrice + mPrice + sPrice;
+    double serviceValue = lPrice + iPrice + mPrice + sPrice + customProductsPrice;
     double savings = serviceValue - packagePrice;
 
     return {
       'discount': discount,
+      'basePrice': basePrice,
       'packagePrice': packagePrice,
       'gst': gst,
       'total': total,
       'serviceValue': serviceValue,
       'savings': savings,
       'lPrice': lPrice,
+      'customProductsPrice': customProductsPrice,
       'iPrice': iPrice,
       'mPrice': mPrice,
       'sPrice': sPrice,
@@ -2482,7 +2490,7 @@ Sidharth IT Solutions''';
           const SizedBox(height: 16),
           _buildRow(
             'Package Base Price',
-            "₹${pricing['lPrice']!.toStringAsFixed(0)}",
+            "₹${(pricing['basePrice'] ?? pricing['lPrice']!).toStringAsFixed(0)}",
           ),
           if (pricing['discount']! > 0)
             _buildRow(

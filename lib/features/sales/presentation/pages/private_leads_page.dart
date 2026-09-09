@@ -272,7 +272,7 @@ class _PrivateLeadsPageState extends ConsumerState<PrivateLeadsPage> {
     }
 
     return MainLayout(
-      currentPath: '/leads',
+      currentPath: '/private-leads',
       child: Scaffold(
         backgroundColor: context.isDarkMode ? context.adaptiveBackground : AppColors.slate50,
         body: content,

@@ -2773,6 +2773,10 @@ class _ChannelsListState extends ConsumerState<_ChannelsList> {
         !isRestrictedAgent;
     final canAccessDealsTracker =
         currentUser?.id == '0a5aeeb8-9544-4dc8-920f-e26c192b0dd3';
+    final canAccessPrivateLeads =
+        currentUser?.id == 'd8aa6435-9e02-4bab-9acc-ae1f5f3d6a1c' ||
+        currentUser?.fullName.toLowerCase().contains('sidharth') == true ||
+        currentUser?.isAdmin == true;
     final restrictedFromAroundAi = {
       'd7a9e726-9520-4cc8-95a6-b38a4afd1d7b',
       'dedce60a-56bd-49fd-bbe2-f88534b8e36f',
@@ -3018,6 +3022,51 @@ class _ChannelsListState extends ConsumerState<_ChannelsList> {
                             : textColor70,
                         fontSize: 13,
                         fontWeight: currentPath.startsWith('/sales-channel')
+                            ? FontWeight.w600
+                            : FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        // Private Pipeline
+        if (canAccessPrivateLeads)
+          Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: () => context.go('/private-leads'),
+              child: Container(
+                margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: currentPath.startsWith('/private-leads')
+                      ? activeBgColor
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      LucideIcons.briefcase,
+                      size: 16,
+                      color: currentPath.startsWith('/private-leads')
+                          ? textColorPrimary
+                          : textColor54,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Private Pipeline',
+                      style: TextStyle(
+                        color: currentPath.startsWith('/private-leads')
+                            ? textColorPrimary
+                            : textColor70,
+                        fontSize: 13,
+                        fontWeight: currentPath.startsWith('/private-leads')
                             ? FontWeight.w600
                             : FontWeight.w500,
                       ),

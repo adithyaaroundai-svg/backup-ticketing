@@ -35,7 +35,6 @@ import 'features/customers/presentation/widgets/customer_history_sheet.dart';
 import 'features/dashboard/presentation/pages/support_dashboard_page.dart';
 import 'features/tickets/presentation/pages/past_tickets_page.dart';
 import 'features/sales/presentation/pages/sales_opportunity_page.dart';
-import 'features/sales/presentation/pages/private_leads_page.dart';
 import 'features/sales/presentation/pages/sales_dashboard_page.dart';
 import 'features/dashboard/presentation/pages/reports_page.dart';
 import 'features/dashboard/presentation/pages/revenue_page.dart';
@@ -45,9 +44,8 @@ import 'features/calls/presentation/pages/call_history_page.dart';
 import 'features/productivity/presentation/pages/deals_page.dart';
 import 'features/dashboard/presentation/providers/app_settings_provider.dart';
 import 'features/sales/presentation/pages/proposal_generator_page.dart';
+import 'features/sales/presentation/pages/private_leads_page.dart';
 import 'features/tickets/presentation/pages/ticket_alerts_page.dart';
-import 'features/developer_crm/presentation/dev_crm_app.dart';
-import 'features/chat/presentation/pages/aroundai_project_status_screen.dart';
 
 import 'core/services/local_notification_service.dart';
 import 'package:hive_flutter/hive_flutter.dart';
@@ -254,13 +252,16 @@ final routerProvider = Provider<GoRouter>((ref) {
         }
       }
 
-      // Private Leads access: only Sidharth is allowed
+      // Private Leads access: only Sidharth & Admins are allowed
       if (state.matchedLocation.startsWith('/private-leads')) {
         const allowedPrivateLeadsIds = {
           'd8aa6435-9e02-4bab-9acc-ae1f5f3d6a1c', // Sidharth
         };
         final userId = authState?.id ?? '';
-        if (!allowedPrivateLeadsIds.contains(userId)) {
+        final isSidharth = allowedPrivateLeadsIds.contains(userId) ||
+            (authState?.fullName.toLowerCase().contains('sidharth') ?? false) ||
+            isAdmin;
+        if (!isSidharth) {
           if (!isLoggedIn) return '/login';
           if (isAdmin) return '/admin';
           if (isAccountant) return '/accountant';
@@ -273,12 +274,6 @@ final routerProvider = Provider<GoRouter>((ref) {
       return null;
     },
     routes: [
-      GoRoute(
-        path: '/developer-crm',
-        builder: (context, state) => DeveloperCrmEntryApp(
-          onExit: () => context.go('/dashboard'),
-        ),
-      ),
       GoRoute(
         path: '/',
         builder: (context, state) => const RootRedirectionWidget(),
@@ -429,10 +424,6 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/notifications',
         builder: (context, state) => const NotificationsPage(),
-      ),
-      GoRoute(
-        path: '/aroundai-project-status',
-        builder: (context, state) => const AroundaiProjectStatusScreen(),
       ),
       GoRoute(
         path: '/sales-opportunity',
