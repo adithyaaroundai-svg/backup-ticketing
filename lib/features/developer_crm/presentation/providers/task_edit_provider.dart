@@ -102,7 +102,7 @@ class TaskEditProvider extends ChangeNotifier {
 
       final historyResp = await supabase.schema('aroundtally').from('task_status_history').select('''
         *, users ( name )
-      ''').eq('task_id', taskId).order('created_at', ascending: true);
+      ''').eq('task_id', taskId).order('id', ascending: true);
 
       statusHistory = (historyResp as List).map((row) {
         final u = row['users'];

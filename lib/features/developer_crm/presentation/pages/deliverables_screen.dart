@@ -1,5 +1,3 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -57,42 +55,33 @@ class _DeliverablesBodyState extends State<_DeliverablesBody> {
     if (prov.error != null && prov.today == null) {
       return ErrorBanner(message: prov.error!, onRetry: prov.load);
     }
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        return Scrollbar(
-          controller: _horizontalScrollController,
-          thumbVisibility: true,
-          trackVisibility: true,
-          child: SingleChildScrollView(
-            controller: _horizontalScrollController,
-            scrollDirection: Axis.horizontal,
-            child: ConstrainedBox(
-              constraints: BoxConstraints(
-                minWidth: math.max(constraints.maxWidth, 1000), // Enforce minimum width
-              ),
-              child: RefreshIndicator(
-                onRefresh: prov.load,
-                child: SingleChildScrollView(
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text('Deliverables', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 16),
-          _Section(title: 'Due today', child: TaskTable(tasks: prov.todayDue, showClient: true, emptyMessage: 'Nothing due today.')),
-          const SizedBox(height: 20),
-          _Section(title: 'Due tomorrow', child: TaskTable(tasks: prov.tomorrowDue, showClient: true, emptyMessage: 'Nothing due tomorrow.')),
-          const SizedBox(height: 20),
-          _Section(title: 'Delayed', child: TaskTable(tasks: prov.delayed, showClient: true, emptyMessage: 'Nothing delayed. \ud83c\udf89')),
-                    ],
-                  ),
-                ),
-              ),
+    return RefreshIndicator(
+      onRefresh: prov.load,
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Deliverables', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 16),
+            _Section(
+              title: 'Due today',
+              child: TaskTable(tasks: prov.todayDue, showClient: true, emptyMessage: 'Nothing due today.'),
             ),
-          ),
-        );
-      },
+            const SizedBox(height: 20),
+            _Section(
+              title: 'Due tomorrow',
+              child: TaskTable(tasks: prov.tomorrowDue, showClient: true, emptyMessage: 'Nothing due tomorrow.'),
+            ),
+            const SizedBox(height: 20),
+            _Section(
+              title: 'Delayed',
+              child: TaskTable(tasks: prov.delayed, showClient: true, emptyMessage: 'Nothing delayed. 🎉'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

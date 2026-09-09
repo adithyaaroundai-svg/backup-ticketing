@@ -1,6 +1,5 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/upload_part.dart';
-import 'dart:math' as math;
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -143,31 +142,18 @@ class _TasksTabState extends State<_TasksTab> {
   Widget build(BuildContext context) {
     final prov = context.watch<ClientDetailProvider>();
     final tasks = widget.pending ? prov.pendingTasks : prov.tasks;
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        return Scrollbar(
-          controller: _horizontalScrollController,
-          thumbVisibility: true,
-          trackVisibility: true,
-          child: SingleChildScrollView(
-            controller: _horizontalScrollController,
-            scrollDirection: Axis.horizontal,
-            child: ConstrainedBox(
-              constraints: BoxConstraints(
-                minWidth: math.max(constraints.maxWidth, 1000), // Enforce minimum width
-              ),
-              child: RefreshIndicator(
-                onRefresh: () => prov.load(tab: prov.tab, assignee: prov.filterAssignee),
-                child: SingleChildScrollView(
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Align(
-            alignment: Alignment.centerRight,
-            child: OutlinedButton.icon(
-              icon: const Icon(Icons.add),
+    return RefreshIndicator(
+      onRefresh: () => prov.load(tab: prov.tab, assignee: prov.filterAssignee),
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Align(
+              alignment: Alignment.centerRight,
+              child: OutlinedButton.icon(
+                icon: const Icon(Icons.add),
                 label: Text(widget.pending ? 'Add pending task' : 'Add task'),
                 onPressed: () async {
                   final result =
@@ -196,19 +182,16 @@ class _TasksTabState extends State<_TasksTab> {
             ),
             const SizedBox(height: 8),
             Card(
+              clipBehavior: Clip.antiAlias,
               child: TaskTable(
                 tasks: tasks,
+                showClient: false,
                 emptyMessage: widget.pending ? 'No pending tasks.' : 'No tasks for today.',
               ),
             ),
           ],
         ),
       ),
-    ),
-  ),
-),
-        );
-      },
     );
   }
 }

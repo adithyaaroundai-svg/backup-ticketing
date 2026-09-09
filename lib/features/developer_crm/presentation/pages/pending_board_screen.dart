@@ -1,5 +1,3 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -105,117 +103,99 @@ class _PendingBoardBodyState extends State<_PendingBoardBody> {
       return ErrorBanner(message: prov.error!, onRetry: () => prov.load());
     }
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        return Scrollbar(
-          controller: _horizontalScrollController,
-          thumbVisibility: true,
-          trackVisibility: true,
-          child: SingleChildScrollView(
-            controller: _horizontalScrollController,
-            scrollDirection: Axis.horizontal,
-            child: ConstrainedBox(
-              constraints: BoxConstraints(
-                minWidth: math.max(constraints.maxWidth, 1000), // Enforce minimum width
-              ),
-              child: RefreshIndicator(
-                onRefresh: () => prov.load(),
-                child: SingleChildScrollView(
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Wrap(
-            crossAxisAlignment: WrapCrossAlignment.center,
-            spacing: 12,
-            runSpacing: 8,
-            children: [
-              const Text('Pending Tasks', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-              SegmentedButton<String>(
-                style: const ButtonStyle(visualDensity: VisualDensity.compact),
-                segments: [
-                  ButtonSegment<String>(
-                    value: 'active',
-                    icon: const Icon(Icons.flash_on_rounded, size: 16),
-                    label: Text('Active (${prov.activeTasksCount})'),
-                  ),
-                  ButtonSegment<String>(
-                    value: 'completed',
-                    icon: const Icon(Icons.check_circle_rounded, size: 16),
-                    label: Text('Completed (${prov.completedTasksCount})'),
-                  ),
-                  ButtonSegment<String>(
-                    value: 'cancelled',
-                    icon: const Icon(Icons.cancel_rounded, size: 16),
-                    label: Text('Cancelled (${prov.cancelledTasksCount})'),
-                  ),
-                ],
-                selected: {prov.statusFilter},
-                onSelectionChanged: (set) => prov.setStatusFilter(set.first),
-              ),
-              DropdownButton<int?>(
-                hint: const Text('All assignees'),
-                value: prov.assigneeFilter,
-                items: [
-                  const DropdownMenuItem<int?>(value: null, child: Text('All assignees')),
-                  for (final u in _assigneeOptions) DropdownMenuItem<int?>(value: u.id, child: Text(u.name)),
-                ],
-                onChanged: (v) => prov.load(assignee: v),
-              ),
-              if (prov.statusFilter != 'active' || prov.assigneeFilter != null)
-                TextButton(
-                  onPressed: () {
-                    prov.clearFilters();
-                    prov.load();
-                  },
-                  child: const Text('Clear filters'),
+    return RefreshIndicator(
+      onRefresh: () => prov.load(),
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Wrap(
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 12,
+              runSpacing: 8,
+              children: [
+                const Text('Pending Tasks', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                SegmentedButton<String>(
+                  style: const ButtonStyle(visualDensity: VisualDensity.compact),
+                  segments: [
+                    ButtonSegment<String>(
+                      value: 'active',
+                      icon: const Icon(Icons.flash_on_rounded, size: 16),
+                      label: Text('Active (${prov.activeTasksCount})'),
+                    ),
+                    ButtonSegment<String>(
+                      value: 'completed',
+                      icon: const Icon(Icons.check_circle_rounded, size: 16),
+                      label: Text('Completed (${prov.completedTasksCount})'),
+                    ),
+                    ButtonSegment<String>(
+                      value: 'cancelled',
+                      icon: const Icon(Icons.cancel_rounded, size: 16),
+                      label: Text('Cancelled (${prov.cancelledTasksCount})'),
+                    ),
+                  ],
+                  selected: {prov.statusFilter},
+                  onSelectionChanged: (set) => prov.setStatusFilter(set.first),
                 ),
-              // Spacer removed because it crashes inside Wrap
-              FilledButton.icon(
-                icon: const Icon(Icons.add),
-                label: const Text('Add pending task'),
-                onPressed: () => _addTask(context, prov, clientsProv.clients),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Card(
-            child: EditableTaskTable(
-              tasks: prov.filteredTasks,
-              emptyMessage: prov.statusFilter == 'completed'
-                  ? 'No completed pending tasks.'
-                  : prov.statusFilter == 'cancelled'
-                      ? 'No cancelled pending tasks.'
-                      : 'No active pending tasks.',
-              onQuickUpdate: (id, {priority, status}) {
-                final task = prov.filteredTasks.firstWhere((t) => t.id == id);
-                return _quickUpdate(prov, task, authProv, priority: priority, status: status);
-              },
-              rowActionsBuilder: (task) => [
-                IconButton(
-                  tooltip: 'Move to today',
-                  icon: const Icon(Icons.arrow_forward, size: 18),
-                  onPressed: () async {
-                    try {
-                      await prov.activate(task.id, taskDescription: task.description, currentUserId: authProv.user?.id, currentUserName: authProv.user?.name);
-                      if (mounted) showSavedSnack(context, message: 'Moved to today \u2713');
-                    } catch (e) {
-                      if (mounted) showSavedSnack(context, ok: false, message: e.toString());
-                    }
-                  },
+                DropdownButton<int?>(
+                  hint: const Text('All assignees'),
+                  value: prov.assigneeFilter,
+                  items: [
+                    const DropdownMenuItem<int?>(value: null, child: Text('All assignees')),
+                    for (final u in _assigneeOptions) DropdownMenuItem<int?>(value: u.id, child: Text(u.name)),
+                  ],
+                  onChanged: (v) => prov.load(assignee: v),
+                ),
+                if (prov.statusFilter != 'active' || prov.assigneeFilter != null)
+                  TextButton(
+                    onPressed: () {
+                      prov.clearFilters();
+                      prov.load();
+                    },
+                    child: const Text('Clear filters'),
+                  ),
+                FilledButton.icon(
+                  icon: const Icon(Icons.add),
+                  label: const Text('Add pending task'),
+                  onPressed: () => _addTask(context, prov, clientsProv.clients),
                 ),
               ],
             ),
-          ),
-        ],
+            const SizedBox(height: 16),
+            Card(
+              clipBehavior: Clip.antiAlias,
+              child: EditableTaskTable(
+                tasks: prov.filteredTasks,
+                emptyMessage: prov.statusFilter == 'completed'
+                    ? 'No completed pending tasks.'
+                    : prov.statusFilter == 'cancelled'
+                        ? 'No cancelled pending tasks.'
+                        : 'No active pending tasks.',
+                onQuickUpdate: (id, {priority, status}) {
+                  final task = prov.filteredTasks.firstWhere((t) => t.id == id);
+                  return _quickUpdate(prov, task, authProv, priority: priority, status: status);
+                },
+                rowActionsBuilder: (task) => [
+                  IconButton(
+                    tooltip: 'Move to today',
+                    icon: const Icon(Icons.arrow_forward, size: 18),
+                    onPressed: () async {
+                      try {
+                        await prov.activate(task.id, taskDescription: task.description, currentUserId: authProv.user?.id, currentUserName: authProv.user?.name);
+                        if (mounted) showSavedSnack(context, message: 'Moved to today \u2713');
+                      } catch (e) {
+                        if (mounted) showSavedSnack(context, ok: false, message: e.toString());
+                      }
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
-    ),
-  ),
-),
-          ),
-        );
-      },
     );
   }
 

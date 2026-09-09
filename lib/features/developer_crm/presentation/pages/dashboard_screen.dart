@@ -54,9 +54,11 @@ class _DashboardBodyState extends State<_DashboardBody> {
   @override
   Widget build(BuildContext context) {
     final prov = context.watch<DashboardProvider>();
-    if (prov.loading && prov.data == null) return const CenterLoading();
-    if (prov.error != null && prov.data == null) {
-      return ErrorBanner(message: prov.error!, onRetry: () => prov.load());
+    if (prov.data == null) {
+      if (prov.error != null) {
+        return ErrorBanner(message: prov.error!, onRetry: () => prov.load());
+      }
+      return const CenterLoading();
     }
     final data = prov.data!;
     return LayoutBuilder(

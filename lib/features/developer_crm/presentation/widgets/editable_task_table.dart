@@ -48,28 +48,119 @@ class _EditableTaskTableState extends State<EditableTaskTable> {
         child: Text(widget.emptyMessage, style: const TextStyle(color: Colors.grey)),
       );
     }
+
+    final theme = Theme.of(context);
+    final borderColor = theme.dividerColor.withValues(alpha: 0.6);
+
+    const double headingHeight = 56.0;
+    const double rowHeight = 52.0;
+    const double clientColumnWidth = 190.0;
+
+    if (!widget.showClient) {
+      return Scrollbar(
+        controller: _scrollController,
+        thumbVisibility: true,
+        trackVisibility: true,
+        child: SingleChildScrollView(
+          controller: _scrollController,
+          scrollDirection: Axis.horizontal,
+          child: _buildRightTable(context, headingHeight, rowHeight),
+        ),
+      );
+    }
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Locked / Sticky Left Column: Client
+        Container(
+          width: clientColumnWidth,
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surface,
+            border: Border(
+              right: BorderSide(color: borderColor, width: 1.5),
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Client Header
+              Container(
+                height: headingHeight,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                alignment: Alignment.centerLeft,
+                decoration: BoxDecoration(
+                  border: Border(bottom: BorderSide(color: borderColor, width: 1.0)),
+                ),
+                child: const Text(
+                  'Client',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                ),
+              ),
+              // Client Rows
+              for (final t in widget.tasks)
+                InkWell(
+                  onTap: () => context.push('/tasks/${t.id}'),
+                  child: Container(
+                    height: rowHeight,
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    alignment: Alignment.centerLeft,
+                    decoration: BoxDecoration(
+                      border: Border(bottom: BorderSide(color: borderColor.withValues(alpha: 0.5))),
+                    ),
+                    child: Tooltip(
+                      message: t.client ?? '-',
+                      child: Text(
+                        t.client ?? '-',
+                        style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+        // Horizontally Scrollable Remaining Columns
+        Expanded(
+          child: Scrollbar(
+            controller: _scrollController,
+            thumbVisibility: true,
+            trackVisibility: true,
+            child: SingleChildScrollView(
+              controller: _scrollController,
+              scrollDirection: Axis.horizontal,
+              child: _buildRightTable(context, headingHeight, rowHeight),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildRightTable(BuildContext context, double headingHeight, double rowHeight) {
     return DataTable(
-      columns: [
-        if (widget.showClient) const DataColumn(label: Text('Client')),
-        const DataColumn(label: Text('Description')),
-        const DataColumn(label: Text('Priority')),
-        const DataColumn(label: Text('Status')),
-        const DataColumn(label: Text('Due')),
-        const DataColumn(label: Text('Assignees')),
-        const DataColumn(label: Text('Time')),
-        const DataColumn(label: Text('Actions')),
+      horizontalMargin: 16,
+      columnSpacing: 24,
+      headingRowHeight: headingHeight,
+      dataRowMinHeight: rowHeight,
+      dataRowMaxHeight: rowHeight,
+      columns: const [
+        DataColumn(label: Text('Description')),
+        DataColumn(label: Text('Priority')),
+        DataColumn(label: Text('Status')),
+        DataColumn(label: Text('Due')),
+        DataColumn(label: Text('Assignees')),
+        DataColumn(label: Text('Time')),
+        DataColumn(label: Text('Actions')),
       ],
       rows: [
         for (final t in widget.tasks)
           DataRow(cells: [
-            if (widget.showClient)
-              DataCell(
-                Text(t.client ?? '-'),
-                onTap: () => context.push('/tasks/${t.id}'),
-              ),
             DataCell(
               ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 240),
+                constraints: const BoxConstraints(maxWidth: 240, minWidth: 160),
                 child: Text(t.description, overflow: TextOverflow.ellipsis, maxLines: 2),
               ),
               onTap: () => context.push('/tasks/${t.id}'),
