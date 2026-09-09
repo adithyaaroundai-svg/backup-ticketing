@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -63,9 +64,11 @@ class AuthProvider extends ChangeNotifier {
           
       if (response != null) {
         _user = AppUser.fromJson(Map<String, dynamic>.from(response));
+        _error = null;
         
-        await logActivity('Logged into Developer CRM');
-        await refreshSidebarTasks();
+        // Non-blocking background log and sidebar fetch for instant boot
+        unawaited(logActivity('Logged into Developer CRM'));
+        unawaited(refreshSidebarTasks());
       } else {
         _error = 'No Developer CRM user found for mapped ID: $mappedId';
         debugPrint(_error);

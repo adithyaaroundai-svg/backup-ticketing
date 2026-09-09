@@ -9,15 +9,30 @@ import '../../core/time_utils.dart';
 import '../providers/team_provider.dart';
 import '../widgets/common.dart';
 
-class TeamScreen extends StatelessWidget {
+class TeamScreen extends StatefulWidget {
   const TeamScreen({super.key});
 
   @override
+  State<TeamScreen> createState() => _TeamScreenState();
+}
+
+class _TeamScreenState extends State<TeamScreen> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        final prov = context.read<TeamProvider>();
+        if (prov.team.isEmpty && !prov.loading) {
+          prov.load();
+        }
+      }
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider(
-      create: (ctx) => TeamProvider()..load(),
-      child: const _TeamBody(),
-    );
+    return const _TeamBody();
   }
 }
 

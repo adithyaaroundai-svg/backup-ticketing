@@ -8,15 +8,30 @@ import '../../core/time_utils.dart';
 import '../providers/dashboard_provider.dart';
 import '../widgets/common.dart';
 
-class DashboardScreen extends StatelessWidget {
+class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
 
   @override
+  State<DashboardScreen> createState() => _DashboardScreenState();
+}
+
+class _DashboardScreenState extends State<DashboardScreen> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        final prov = context.read<DashboardProvider>();
+        if (prov.data == null && !prov.loading) {
+          prov.load();
+        }
+      }
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider(
-      create: (ctx) => DashboardProvider()..load(),
-      child: const _DashboardBody(),
-    );
+    return const _DashboardBody();
   }
 }
 

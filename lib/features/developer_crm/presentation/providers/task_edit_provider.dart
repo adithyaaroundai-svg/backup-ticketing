@@ -1,3 +1,4 @@
+import '../../core/dev_task_chat_helper.dart';
 import '../../core/upload_part.dart';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -193,34 +194,17 @@ class TaskEditProvider extends ChangeNotifier {
         String logMessage = '';
         if (updates.isNotEmpty) {
           if (status != null && task != null && status != task!.status) {
-            // Task status has changed! Broadcast to chat.
-            final oldStatus = task!.status;
-            final chatContent = '__TASK_STATUS_CHANGE__: $taskId|$oldStatus|$status|$currentUserName|${statusMessage ?? ""}';
-            
-            // Map the currentUserId (integer) back to the chat agent UUID
-            String senderId = 'system';
-            try {
-              // Note: this assumes AuthProvider is in scope or we import it, but we can also just use the global Supabase auth user
-              final chatUserId = Supabase.instance.client.auth.currentSession?.user.id;
-              if (chatUserId != null) {
-                senderId = chatUserId;
-              }
-            } catch (e) {
-              debugPrint('Error finding chat user id: $e');
-            }
-
-            try {
-              await supabase.from('chat_messages').insert({
-                'sender_id': senderId,
-                'sender_name': currentUserName,
-                'sender_role': 'agent',
-                'content': chatContent,
-                'channel': 'software development',
-                'is_forwarded': false,
-              });
-            } catch (e) {
-              debugPrint('Error broadcasting task status change to chat: $e');
-            }
+            postDevTaskStatusChangeToSoftwareDevChannel(
+              taskId: taskId,
+              oldStatus: task!.status,
+              newStatus: status,
+              taskDescription: description ?? task!.description,
+              clientName: task?.client,
+              clientId: task!.clientId,
+              currentUserId: currentUserId,
+              currentUserName: currentUserName,
+              statusMessage: statusMessage,
+            );
           }
 
           if (status != null && status == 'completed') {

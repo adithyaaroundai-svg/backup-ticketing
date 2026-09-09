@@ -9,15 +9,30 @@ import '../providers/auth_provider.dart';
 import '../providers/clients_provider.dart';
 import '../widgets/common.dart';
 
-class ClientsScreen extends StatelessWidget {
+class ClientsScreen extends StatefulWidget {
   const ClientsScreen({super.key});
 
   @override
+  State<ClientsScreen> createState() => _ClientsScreenState();
+}
+
+class _ClientsScreenState extends State<ClientsScreen> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        final prov = context.read<ClientsProvider>();
+        if (prov.clients.isEmpty && !prov.loading) {
+          prov.load();
+        }
+      }
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider(
-      create: (ctx) => ClientsProvider()..load(),
-      child: const _ClientsBody(),
-    );
+    return const _ClientsBody();
   }
 }
 

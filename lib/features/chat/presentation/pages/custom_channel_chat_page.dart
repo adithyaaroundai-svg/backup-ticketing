@@ -1,3 +1,4 @@
+import 'aroundai_project_status_screen.dart';
 import '../widgets/edit_message_dialog.dart';
 import 'dart:async';
 import 'dart:io';
@@ -1256,6 +1257,81 @@ class _CustomChannelChatPageState extends ConsumerState<CustomChannelChatPage> {
           elevation: 0,
           actions: [
             if (channel != null) ...[
+              if (channel!.name.toLowerCase().contains('software') || 
+                  channel!.name.toLowerCase().contains('development') ||
+                  channel!.name.toLowerCase().contains('dev')) ...[
+                Tooltip(
+                  message: 'Project Tracker',
+                  child: InkWell(
+                    onTap: () => context.push('/developer-crm'),
+                    borderRadius: BorderRadius.circular(8),
+                    child: Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: context.isDarkMode ? Colors.indigo.withAlpha(40) : AppColors.primary.withAlpha(25),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: context.isDarkMode ? Colors.indigo.withAlpha(80) : AppColors.primary.withAlpha(75)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(LucideIcons.kanbanSquare, size: 16, color: context.isDarkMode ? Colors.indigo.shade200 : AppColors.primary),
+                          const SizedBox(width: 6),
+                          Text(
+                            'Project Tracker', 
+                            style: TextStyle(
+                              color: context.isDarkMode ? Colors.indigo.shade200 : AppColors.primary, 
+                              fontWeight: FontWeight.w600, 
+                              fontSize: 13,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 4),
+              ],
+              if (channel!.name.toLowerCase().contains('aroundai')) ...[
+                Tooltip(
+                  message: 'Project Status',
+                  child: InkWell(
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const AroundaiProjectStatusScreen()),
+                      );
+                    },
+                    borderRadius: BorderRadius.circular(8),
+                    child: Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: context.isDarkMode ? Colors.purple.withAlpha(40) : Colors.purple.shade50,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: context.isDarkMode ? Colors.purple.withAlpha(80) : Colors.purple.shade200),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(LucideIcons.layoutList, size: 16, color: context.isDarkMode ? Colors.purple.shade200 : Colors.purple.shade700),
+                          const SizedBox(width: 6),
+                          Text(
+                            'Project Status', 
+                            style: TextStyle(
+                              color: context.isDarkMode ? Colors.purple.shade200 : Colors.purple.shade700, 
+                              fontWeight: FontWeight.w600, 
+                              fontSize: 13,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 4),
+              ],
               Tooltip(
                 message: 'Group Audio Call',
                 child: InkWell(

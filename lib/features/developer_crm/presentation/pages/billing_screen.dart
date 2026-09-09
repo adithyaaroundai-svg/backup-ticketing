@@ -7,18 +7,32 @@ import 'package:provider/provider.dart';
 import '../../core/money_utils.dart';
 import '../../core/time_utils.dart';
 import '../providers/billing_provider.dart';
-import '../providers/auth_provider.dart';
 import '../widgets/common.dart';
 
-class BillingScreen extends StatelessWidget {
+class BillingScreen extends StatefulWidget {
   const BillingScreen({super.key});
 
   @override
+  State<BillingScreen> createState() => _BillingScreenState();
+}
+
+class _BillingScreenState extends State<BillingScreen> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        final prov = context.read<BillingProvider>();
+        if (prov.data == null && !prov.loading) {
+          prov.load();
+        }
+      }
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider(
-      create: (ctx) => BillingProvider(ctx.read<AuthProvider>())..load(),
-      child: const _BillingBody(),
-    );
+    return const _BillingBody();
   }
 }
 

@@ -7,15 +7,30 @@ import '../providers/deliverables_provider.dart';
 import '../widgets/common.dart';
 import '../widgets/task_table.dart';
 
-class DeliverablesScreen extends StatelessWidget {
+class DeliverablesScreen extends StatefulWidget {
   const DeliverablesScreen({super.key});
 
   @override
+  State<DeliverablesScreen> createState() => _DeliverablesScreenState();
+}
+
+class _DeliverablesScreenState extends State<DeliverablesScreen> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        final prov = context.read<DeliverablesProvider>();
+        if (prov.todayDue.isEmpty && prov.tomorrowDue.isEmpty && prov.delayed.isEmpty && !prov.loading) {
+          prov.load();
+        }
+      }
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider(
-      create: (ctx) => DeliverablesProvider()..load(),
-      child: const _DeliverablesBody(),
-    );
+    return const _DeliverablesBody();
   }
 }
 

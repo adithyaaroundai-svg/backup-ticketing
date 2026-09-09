@@ -5,15 +5,30 @@ import '../../core/time_utils.dart';
 import '../providers/activity_provider.dart';
 import '../widgets/common.dart';
 
-class ActivityScreen extends StatelessWidget {
+class ActivityScreen extends StatefulWidget {
   const ActivityScreen({super.key});
 
   @override
+  State<ActivityScreen> createState() => _ActivityScreenState();
+}
+
+class _ActivityScreenState extends State<ActivityScreen> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        final prov = context.read<ActivityProvider>();
+        if (prov.entries.isEmpty && !prov.loading) {
+          prov.load();
+        }
+      }
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider(
-      create: (ctx) => ActivityProvider()..load(),
-      child: const _ActivityBody(),
-    );
+    return const _ActivityBody();
   }
 }
 

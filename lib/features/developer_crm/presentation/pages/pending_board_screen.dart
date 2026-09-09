@@ -14,20 +14,34 @@ import '../widgets/editable_task_table.dart';
 import '../widgets/task_form_dialog.dart';
 
 /// Pending Tasks board (`pending_board.ejs`).
-class PendingBoardScreen extends StatelessWidget {
+class PendingBoardScreen extends StatefulWidget {
   const PendingBoardScreen({super.key});
 
   @override
+  State<PendingBoardScreen> createState() => _PendingBoardScreenState();
+}
+
+class _PendingBoardScreenState extends State<PendingBoardScreen> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        final prov = context.read<PendingBoardProvider>();
+        if (prov.tasks.isEmpty && !prov.loading) {
+          prov.load();
+        }
+        final clientsProv = context.read<ClientsProvider>();
+        if (clientsProv.clients.isEmpty && !clientsProv.loading) {
+          clientsProv.load();
+        }
+      }
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return MultiProvider(
-      providers: [
-        ChangeNotifierProvider(
-          create: (ctx) => TaskBoardProvider(pendingBoard: true)..load(),
-        ),
-        ChangeNotifierProvider(create: (ctx) => ClientsProvider()..load()),
-      ],
-      child: const _PendingBoardBody(),
-    );
+    return const _PendingBoardBody();
   }
 }
 
@@ -81,7 +95,7 @@ class _PendingBoardBodyState extends State<_PendingBoardBody> {
 
   @override
   Widget build(BuildContext context) {
-    final prov = context.watch<TaskBoardProvider>();
+    final prov = context.watch<PendingBoardProvider>();
     final clientsProv = context.watch<ClientsProvider>();
     final authProv = context.watch<AuthProvider>();
     _maybeCaptureAssigneeOptions(prov.tasks);
@@ -118,6 +132,28 @@ class _PendingBoardBodyState extends State<_PendingBoardBody> {
             runSpacing: 8,
             children: [
               const Text('Pending Tasks', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+              SegmentedButton<String>(
+                style: const ButtonStyle(visualDensity: VisualDensity.compact),
+                segments: [
+                  ButtonSegment<String>(
+                    value: 'active',
+                    icon: const Icon(Icons.flash_on_rounded, size: 16),
+                    label: Text('Active (${prov.activeTasksCount})'),
+                  ),
+                  ButtonSegment<String>(
+                    value: 'completed',
+                    icon: const Icon(Icons.check_circle_rounded, size: 16),
+                    label: Text('Completed (${prov.completedTasksCount})'),
+                  ),
+                  ButtonSegment<String>(
+                    value: 'cancelled',
+                    icon: const Icon(Icons.cancel_rounded, size: 16),
+                    label: Text('Cancelled (${prov.cancelledTasksCount})'),
+                  ),
+                ],
+                selected: {prov.statusFilter},
+                onSelectionChanged: (set) => prov.setStatusFilter(set.first),
+              ),
               DropdownButton<int?>(
                 hint: const Text('All assignees'),
                 value: prov.assigneeFilter,
@@ -127,13 +163,13 @@ class _PendingBoardBodyState extends State<_PendingBoardBody> {
                 ],
                 onChanged: (v) => prov.load(assignee: v),
               ),
-              if (prov.assigneeFilter != null)
+              if (prov.statusFilter != 'active' || prov.assigneeFilter != null)
                 TextButton(
                   onPressed: () {
                     prov.clearFilters();
                     prov.load();
                   },
-                  child: const Text('Clear filter'),
+                  child: const Text('Clear filters'),
                 ),
               // Spacer removed because it crashes inside Wrap
               FilledButton.icon(
@@ -146,10 +182,14 @@ class _PendingBoardBodyState extends State<_PendingBoardBody> {
           const SizedBox(height: 16),
           Card(
             child: EditableTaskTable(
-              tasks: prov.tasks,
-              emptyMessage: 'No pending tasks.',
+              tasks: prov.filteredTasks,
+              emptyMessage: prov.statusFilter == 'completed'
+                  ? 'No completed pending tasks.'
+                  : prov.statusFilter == 'cancelled'
+                      ? 'No cancelled pending tasks.'
+                      : 'No active pending tasks.',
               onQuickUpdate: (id, {priority, status}) {
-                final task = prov.tasks.firstWhere((t) => t.id == id);
+                final task = prov.filteredTasks.firstWhere((t) => t.id == id);
                 return _quickUpdate(prov, task, authProv, priority: priority, status: status);
               },
               rowActionsBuilder: (task) => [

@@ -1,9 +1,15 @@
+import 'dart:async';
+import '../../core/dev_task_chat_helper.dart';
 import '../../core/upload_part.dart';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
 
 import '../../domain/entities/task.dart';
+
+class PendingBoardProvider extends TaskBoardProvider {
+  PendingBoardProvider() : super(pendingBoard: true);
+}
 
 class TaskBoardProvider extends ChangeNotifier {
   final bool pendingBoard;
@@ -15,6 +21,41 @@ class TaskBoardProvider extends ChangeNotifier {
   String? today;
   int? assigneeFilter;
   int? clientFilter;
+  String statusFilter = 'active'; // 'active', 'completed', 'cancelled'
+
+  List<Task> get filteredTasks {
+    return tasks.where((t) {
+      final s = t.status.trim().toLowerCase();
+      if (statusFilter == 'completed') {
+        return s == 'completed';
+      } else if (statusFilter == 'cancelled') {
+        return s == 'cancelled';
+      } else if (statusFilter == 'active') {
+        return s != 'completed' && s != 'cancelled';
+      }
+      return true;
+    }).toList();
+  }
+
+  int get activeTasksCount => tasks.where((t) {
+    final s = t.status.trim().toLowerCase();
+    return s != 'completed' && s != 'cancelled';
+  }).length;
+
+  int get completedTasksCount => tasks.where((t) {
+    final s = t.status.trim().toLowerCase();
+    return s == 'completed';
+  }).length;
+
+  int get cancelledTasksCount => tasks.where((t) {
+    final s = t.status.trim().toLowerCase();
+    return s == 'cancelled';
+  }).length;
+
+  void setStatusFilter(String filter) {
+    statusFilter = filter;
+    notifyListeners();
+  }
 
   // Map Supabase row to legacy JSON shape
   Map<String, dynamic> _mapSupabaseToLegacy(Map<String, dynamic> row) {
@@ -40,13 +81,6 @@ class TaskBoardProvider extends ChangeNotifier {
         advancesTotal += (adv['amount'] ?? 0);
       }
     }
-
-    final history = row['task_status_history'];
-    String? lastStatusMessage;
-    if (history is List && history.isNotEmpty) {
-      // Assuming they come back ordered or we take the first/last
-      lastStatusMessage = history.last['message'];
-    }
     
     final createdUser = row['creator'];
     final updatedUser = row['updater'];
@@ -59,28 +93,42 @@ class TaskBoardProvider extends ChangeNotifier {
       'advances_total': advancesTotal,
       'created_by_name': (createdUser is Map) ? createdUser['name'] : null,
       'status_updated_by_name': (updatedUser is Map) ? updatedUser['name'] : null,
-      'last_status_message': lastStatusMessage,
+      'last_status_message': null,
     };
   }
 
-  Future<void> load({int? assignee, int? client}) async {
+  Future<void> load({int? assignee, int? client, bool silent = false}) async {
     assigneeFilter = assignee ?? assigneeFilter;
     clientFilter = client ?? clientFilter;
-    loading = true;
-    error = null;
-    notifyListeners();
+    if (!silent || tasks.isEmpty) {
+      loading = true;
+      error = null;
+      notifyListeners();
+    }
     
     try {
       final supabase = Supabase.instance.client;
       today = DateFormat('yyyy-MM-dd').format(DateTime.now());
 
       var query = supabase.schema('aroundtally').from('tasks').select('''
-        *,
+        id,
+        description,
+        priority,
+        status,
+        expected_finish,
+        start_date,
+        task_date,
+        pending,
+        approved,
+        client_id,
+        created_by,
+        status_updated_by,
+        cancel_reason,
+        time_spent_seconds,
+        timer_started_at,
         clients ( name ),
         task_assignees ( user_id, users ( name ) ),
         advances ( amount ),
-        task_status_history ( message ),
-        task_files ( * ),
         creator:users!tasks_created_by_fkey ( name ),
         updater:users!tasks_status_updated_by_fkey ( name )
       ''');
@@ -103,8 +151,6 @@ class TaskBoardProvider extends ChangeNotifier {
       
       final mapped = (response as List).map((row) => _mapSupabaseToLegacy(row)).toList();
       
-      // If we filtered by assignee, Supabase inner join filter behavior on arrays can be weird,
-      // so let's double filter in dart just in case.
       if (assigneeFilter != null) {
         mapped.retainWhere((t) {
           final aList = t['assignees'] as List;
@@ -125,6 +171,8 @@ class TaskBoardProvider extends ChangeNotifier {
   void clearFilters() {
     assigneeFilter = null;
     clientFilter = null;
+    statusFilter = 'active';
+    notifyListeners();
   }
 
   Future<void> quickUpdate(
@@ -138,6 +186,36 @@ class TaskBoardProvider extends ChangeNotifier {
     int? currentUserId,
     String? currentUserName,
   }) async {
+    // 1. Instant optimistic update in local state for 0ms lag
+    final idx = tasks.indexWhere((t) => t.id == taskId);
+    if (idx != -1) {
+      final old = tasks[idx];
+      tasks[idx] = Task(
+        id: old.id,
+        clientId: old.clientId,
+        client: old.client,
+        description: taskDescription ?? old.description,
+        priority: priority ?? old.priority,
+        status: status ?? old.status,
+        expectedFinish: old.expectedFinish,
+        startDate: old.startDate,
+        taskDate: old.taskDate,
+        pending: old.pending,
+        approved: approved ?? old.approved,
+        billed: old.billed,
+        timeSpentSeconds: old.timeSpentSeconds,
+        timerStartedAt: old.timerStartedAt,
+        assignees: old.assignees,
+        files: old.files,
+        advancesTotal: old.advancesTotal,
+        cancelReason: cancelReason ?? old.cancelReason,
+        lastStatusMessage: statusMessage ?? old.lastStatusMessage,
+        createdByName: old.createdByName,
+        statusUpdatedByName: currentUserName ?? old.statusUpdatedByName,
+      );
+      notifyListeners();
+    }
+
     final supabase = Supabase.instance.client;
     final updates = <String, dynamic>{};
     if (priority != null) updates['priority'] = priority;
@@ -147,56 +225,73 @@ class TaskBoardProvider extends ChangeNotifier {
     
     if (status != null && currentUserId != null) {
       updates['status_updated_by'] = currentUserId;
+      updates['status_updated_at'] = DateTime.now().toIso8601String();
+    }
+
+    if (status == 'completed') {
+      updates['completed_at'] = DateTime.now().toIso8601String();
     }
     
     if (updates.isNotEmpty) {
       await supabase.schema('aroundtally').from('tasks').update(updates).eq('id', taskId);
+      if (status != null) {
+        unawaited(postDevTaskStatusChangeToSoftwareDevChannel(
+          taskId: taskId,
+          newStatus: status,
+          taskDescription: taskDescription,
+          currentUserId: currentUserId,
+          currentUserName: currentUserName,
+          statusMessage: statusMessage,
+        ));
+      }
     }
     
-    // Status message technically needs an insert into task_status_history
+    // Status message insert into task_status_history in background
     if (statusMessage != null && statusMessage.isNotEmpty && currentUserId != null) {
-      try {
-        await supabase.schema('aroundtally').from('task_status_history').insert({
-          'task_id': taskId,
-          'message': statusMessage,
-          'user_id': currentUserId,
-        });
-      } catch (e) {
-        debugPrint('Error inserting task status history: $e');
-      }
+      unawaited(() async {
+        try {
+          await supabase.schema('aroundtally').from('task_status_history').insert({
+            'task_id': taskId,
+            'message': statusMessage,
+            'user_id': currentUserId,
+          });
+        } catch (e) {
+          debugPrint('Error inserting task status history: $e');
+        }
+      }());
     }
 
     if (currentUserId != null && currentUserName != null) {
-      try {
-        String logMessage = '';
-        final tDesc = taskDescription ?? '#$taskId';
-        if (status != null) {
-          logMessage = 'updated task "$tDesc" (status changed to $status)';
-        } else if (priority != null) {
-          logMessage = 'updated task "$tDesc" (priority $priority)';
-        } else if (approved != null) {
-          logMessage = 'updated task "$tDesc" (${approved ? "approved" : "un-approved"})';
-        }
-        
-        if (logMessage.isNotEmpty) {
-          await supabase.schema('aroundtally').from('activity_log').insert({
-            'user_id': currentUserId,
-            'user_name': currentUserName,
-            'message': logMessage,
-          });
-        }
-        
-        if (status == 'completed') {
-          await supabase.schema('aroundtally').from('activity_log').insert({
-            'user_id': currentUserId,
-            'user_name': currentUserName,
-            'message': 'completed task "$tDesc" → added to Work History',
-          });
-        }
-      } catch (e) {
-        debugPrint('Error logging quick update activity: $e');
-      }
-    }
+      unawaited(() async {
+        try {
+          String logMessage = '';
+          final tDesc = taskDescription ?? '#$taskId';
+          if (status != null) {
+            logMessage = 'updated task "$tDesc" (status changed to $status)';
+          } else if (priority != null) {
+            logMessage = 'updated task "$tDesc" (priority $priority)';
+          } else if (approved != null) {
+            logMessage = 'updated task "$tDesc" (${approved ? "approved" : "un-approved"})';
+          }
+          
+          if (logMessage.isNotEmpty) {
+            await supabase.schema('aroundtally').from('activity_log').insert({
+              'user_id': currentUserId,
+              'user_name': currentUserName,
+              'message': logMessage,
+            });
+          }
+          
+          if (status == 'completed') {
+            await supabase.schema('aroundtally').from('activity_log').insert({
+              'user_id': currentUserId,
+              'user_name': currentUserName,
+              'message': 'completed task "$tDesc" → added to Work History',
+            });
+          }
+        } catch (_) {}
+      }());
+    } 
 
     await load();
   }

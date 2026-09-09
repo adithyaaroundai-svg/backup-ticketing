@@ -18,18 +18,34 @@ import '../widgets/task_form_dialog.dart';
 /// Today's Tasks board (`task_board.ejs`): grouped by date, with
 /// assignee/client filters, add-task form, inline editable rows, and a
 /// "carry forward unfinished work" bulk action.
-class TaskBoardScreen extends StatelessWidget {
+class TaskBoardScreen extends StatefulWidget {
   const TaskBoardScreen({super.key});
 
   @override
+  State<TaskBoardScreen> createState() => _TaskBoardScreenState();
+}
+
+class _TaskBoardScreenState extends State<TaskBoardScreen> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        final prov = context.read<TaskBoardProvider>();
+        if (prov.tasks.isEmpty && !prov.loading) {
+          prov.load();
+        }
+        final clientsProv = context.read<ClientsProvider>();
+        if (clientsProv.clients.isEmpty && !clientsProv.loading) {
+          clientsProv.load();
+        }
+      }
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return MultiProvider(
-      providers: [
-        ChangeNotifierProvider(create: (ctx) => TaskBoardProvider()..load()),
-        ChangeNotifierProvider(create: (ctx) => ClientsProvider()..load()),
-      ],
-      child: const _TaskBoardBody(),
-    );
+    return const _TaskBoardBody();
   }
 }
 
@@ -95,7 +111,7 @@ class _TaskBoardBodyState extends State<_TaskBoardBody> {
     }
 
     final grouped = LinkedHashMap<String, List<Task>>();
-    for (final t in prov.tasks) {
+    for (final t in prov.filteredTasks) {
       final key = t.taskDate ?? 'No date';
       (grouped[key] ??= []).add(t);
     }
@@ -127,6 +143,28 @@ class _TaskBoardBodyState extends State<_TaskBoardBody> {
             runSpacing: 8,
             children: [
               const Text("Today's Tasks", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+              SegmentedButton<String>(
+                style: const ButtonStyle(visualDensity: VisualDensity.compact),
+                segments: [
+                  ButtonSegment<String>(
+                    value: 'active',
+                    icon: const Icon(Icons.flash_on_rounded, size: 16),
+                    label: Text('Active (${prov.activeTasksCount})'),
+                  ),
+                  ButtonSegment<String>(
+                    value: 'completed',
+                    icon: const Icon(Icons.check_circle_rounded, size: 16),
+                    label: Text('Completed (${prov.completedTasksCount})'),
+                  ),
+                  ButtonSegment<String>(
+                    value: 'cancelled',
+                    icon: const Icon(Icons.cancel_rounded, size: 16),
+                    label: Text('Cancelled (${prov.cancelledTasksCount})'),
+                  ),
+                ],
+                selected: {prov.statusFilter},
+                onSelectionChanged: (set) => prov.setStatusFilter(set.first),
+              ),
               DropdownButton<int?>(
                 hint: const Text('All assignees'),
                 value: prov.assigneeFilter,
@@ -146,7 +184,7 @@ class _TaskBoardBodyState extends State<_TaskBoardBody> {
                 ],
                 onChanged: (v) => prov.load(client: v),
               ),
-              if (prov.assigneeFilter != null || prov.clientFilter != null)
+              if (prov.statusFilter != 'active' || prov.assigneeFilter != null || prov.clientFilter != null)
                 TextButton(
                   onPressed: () {
                     prov.clearFilters();
@@ -226,9 +264,16 @@ class _TaskBoardBodyState extends State<_TaskBoardBody> {
             const SizedBox(height: 20),
           ],
                       if (grouped.isEmpty)
-                        const Padding(
-                          padding: EdgeInsets.all(24),
-                          child: Text('No tasks for today.', style: TextStyle(color: Colors.grey)),
+                        Padding(
+                          padding: const EdgeInsets.all(24),
+                          child: Text(
+                            prov.statusFilter == 'completed'
+                                ? 'No completed tasks found.'
+                                : prov.statusFilter == 'cancelled'
+                                    ? 'No cancelled tasks found.'
+                                    : 'No active tasks for today.',
+                            style: const TextStyle(color: Colors.grey),
+                          ),
                         ),
                     ],
                   ),
