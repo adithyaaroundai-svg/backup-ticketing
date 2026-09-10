@@ -675,7 +675,11 @@ class TicketStatusUpdater extends _$TicketStatusUpdater {
         } catch (_) {}
 
         // Post ticket card into Software Development channel
-        _postStatusChangeToDevChannel(ref, ticketId, previousStatus, status, currentUser);
+        // NOTE: removed — support CRM ticket status changes must NOT
+        // be posted to the Software Development group. Only developer
+        // CRM task status changes belong there (handled by
+        // dev_task_chat_helper.dart → postDevTaskStatusChangeToSoftwareDevChannel).
+
       }
 
       if (result.isRight() && ref.mounted) {
@@ -993,79 +997,5 @@ final billsTicketsProvider = fr.StreamProvider<List<Ticket>>((ref) async* {
   }
 });
 
-/// Posts a ticket card message into the Software Development channel when a task status changes
-Future<void> _postStatusChangeToDevChannel(
-  dynamic ref,
-  String ticketId,
-  String? previousStatus,
-  String newStatus,
-  dynamic currentUser,
-) async {
-  try {
-    final supabase = Supabase.instance.client;
-    // 1. Look for Software Development channel in custom_channels
-    final channels = await supabase
-        .from('custom_channels')
-        .select('id, name')
-        .order('created_at', ascending: true);
 
-    String? devChannelId;
-    for (final ch in channels) {
-      final name = (ch['name'] ?? '').toString().toLowerCase().replaceAll('-', ' ').replaceAll('_', ' ').trim();
-      if (name.contains('software dev') || name.contains('software development') || name.contains('development')) {
-        devChannelId = ch['id']?.toString();
-        break;
-      }
-    }
 
-    if (devChannelId == null && channels.isNotEmpty) {
-      for (final ch in channels) {
-        final name = (ch['name'] ?? '').toString().toLowerCase();
-        if (name.contains('dev') || name.contains('software')) {
-          devChannelId = ch['id']?.toString();
-          break;
-        }
-      }
-    }
-
-    if (devChannelId == null) return;
-
-    // 2. Fetch ticket and customer details
-    final ticketData = await supabase
-        .from('tickets')
-        .select('title, description, customer_id, customers(company_name)')
-        .eq('id', ticketId)
-        .maybeSingle();
-
-    if (ticketData == null) return;
-
-    final title = (ticketData['title'] as String?)?.trim() ??
-        (ticketData['description'] as String?)?.trim() ??
-        'Task #$ticketId';
-    final customerObj = ticketData['customers'] as Map<String, dynamic>?;
-    final companyName = (customerObj?['company_name'] as String?)?.trim() ?? 'Company';
-
-    final chatContent = [
-      'Company: $companyName',
-      'Issue: $title',
-      'TicketID: $ticketId',
-    ].join('\n');
-
-    final senderId = currentUser?.id ?? 'system';
-    final senderName = (currentUser?.fullName?.isNotEmpty == true
-            ? currentUser.fullName
-            : (currentUser?.username ?? 'System'))
-        .toString();
-    final senderRole = (currentUser?.role ?? 'System').toString();
-
-    await ref.read(chatControllerProvider.notifier).sendMessage(
-      senderId: senderId,
-      senderName: senderName,
-      senderRole: senderRole,
-      content: chatContent,
-      channel: devChannelId,
-    );
-  } catch (e) {
-    debugPrint('Error posting status change to dev channel: $e');
-  }
-}
