@@ -50,14 +50,22 @@ class ChatToastOverlay extends ConsumerWidget {
         onDismiss: () => ref.read(dmNewMessageEventProvider.notifier).clear(),
       );
     } else if (customChannelNewMessage != null &&
-        !currentPath.startsWith('/channel/${customChannelNewMessage.channel}')) {
+        !currentPath.startsWith('/channel/${customChannelNewMessage.channel}') &&
+        !((customChannelNewMessage.channel == 'sales-channel' ||
+                customChannelNewMessage.channel == 'sales-team') &&
+            currentPath.startsWith('/sales-channel'))) {
       activeToast = _ChatToast(
         key: ValueKey(customChannelNewMessage.id),
         message: customChannelNewMessage,
         channel: 'custom-channel',
         onTap: () {
           ref.read(customChannelNewMessageEventProvider.notifier).clear();
-          context.push('/channel/${customChannelNewMessage.channel}');
+          if (customChannelNewMessage.channel == 'sales-channel' ||
+              customChannelNewMessage.channel == 'sales-team') {
+            context.push('/sales-channel');
+          } else {
+            context.push('/channel/${customChannelNewMessage.channel}');
+          }
         },
         onDismiss: () =>
             ref.read(customChannelNewMessageEventProvider.notifier).clear(),
@@ -258,10 +266,14 @@ class _ChatToastCard extends ConsumerWidget {
       // Look up the human-readable channel name
       final channelsList = ref.watch(customChannelsProvider).asData?.value ?? [];
       String? foundName;
-      for (final ch in channelsList) {
-        if (ch.id == message.channel) {
-          foundName = ch.name;
-          break;
+      if (message.channel == 'sales-channel' || message.channel == 'sales-team') {
+        foundName = 'Product-sales';
+      } else {
+        for (final ch in channelsList) {
+          if (ch.id == message.channel) {
+            foundName = ch.name;
+            break;
+          }
         }
       }
       channelLabel = foundName ?? message.channel;

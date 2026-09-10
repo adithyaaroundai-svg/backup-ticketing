@@ -216,15 +216,49 @@ class ChatStream extends _$ChatStream {
         if (!isFromCurrentUser && 
             channel != 'support-chat' && 
             channel != 'all-aroundtally') {
-          // This is a custom channel message from someone else
-          // Only notify if current user is actually a member of this channel
-          final channels = ref.read(customChannelsProvider).value ?? [];
-          final currentChannel = channels.where((c) => c.id == channel).firstOrNull;
-          final isMember = currentChannel != null && 
-              (currentChannel.memberIds.contains(currentUserId) || currentChannel.createdBy == currentUserId);
-          if (isMember) {
-            ref.read(customChannelNewMessageEventProvider.notifier).notify(newMsg);
-            ChatSoundService.playPing();
+          const allowedSalesChannelIds = {
+            '14db36db-0cb9-44ef-8032-d9610b3bc797',
+            'b77b3738-4dfc-4515-a1fd-d6fb170423f4',
+            'd8aa6435-9e02-4bab-9acc-ae1f5f3d6a1c',
+            '5a06a8df-97f1-4dbf-bc13-9724a3c779c1',
+            'd9572a84-762b-4c8b-8ef5-7da0345e3ea8',
+            '0a5aeeb8-9544-4dc8-920f-e26c192b0dd3',
+            'f3b54de6-0372-4648-ad87-3e98089efc2d',
+          };
+          const allowedAroundTallyChannelIds = {
+            'd7a9e726-9520-4cc8-95a6-b38a4afd1d7b',
+            'dedce60a-56bd-49fd-bbe2-f88534b8e36f',
+          };
+          final isRestricted = allowedAroundTallyChannelIds.contains(currentUserId);
+
+          if (channel == 'sales-channel' || channel == 'sales-team') {
+            final isSalesMember = currentUserId != null &&
+                allowedSalesChannelIds.contains(currentUserId) &&
+                !isRestricted;
+            if (isSalesMember) {
+              ref.read(customChannelNewMessageEventProvider.notifier).notify(newMsg);
+              ChatSoundService.playPing();
+            }
+          } else {
+            // This is a custom channel message from someone else
+            // Only notify if current user is actually a member of this channel
+            final channels = ref.read(customChannelsProvider).value ?? [];
+            final currentChannel = channels.where((c) => c.id == channel).firstOrNull;
+
+            bool isSalesRestricted = false;
+            if (currentChannel != null && currentChannel.name.toLowerCase().contains('sales')) {
+              if (currentUserId == null || !allowedSalesChannelIds.contains(currentUserId) || isRestricted) {
+                isSalesRestricted = true;
+              }
+            }
+
+            final isMember = !isSalesRestricted &&
+                currentChannel != null && 
+                (currentChannel.memberIds.contains(currentUserId) || currentChannel.createdBy == currentUserId);
+            if (isMember) {
+              ref.read(customChannelNewMessageEventProvider.notifier).notify(newMsg);
+              ChatSoundService.playPing();
+            }
           }
         }
       }

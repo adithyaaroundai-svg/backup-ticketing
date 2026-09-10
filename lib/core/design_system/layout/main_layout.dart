@@ -333,37 +333,75 @@ class _MainLayoutState extends ConsumerState<MainLayout> with WidgetsBindingObse
             if (senderId.trim().toLowerCase() == myId.trim().toLowerCase()) return;
 
             // Skip if currently viewing this channel
-            if (widget.currentPath.startsWith('/channel/$channelId')) return;
+            if (widget.currentPath.startsWith('/channel/$channelId') ||
+                ((channelId == 'sales-channel' || channelId == 'sales-team') &&
+                    widget.currentPath.startsWith('/sales-channel'))) {
+              return;
+            }
 
-            // Check if user is a member of this channel (for private channels)
+            // Check if user is a member of this channel
             try {
-              // Fetch channel info to check membership
-              final channelResponse = await client
-                  .from('custom_channels')
-                  .select('*, channel_members(user_id)')
-                  .eq('id', channelId)
-                  .maybeSingle();
-              
-              if (channelResponse == null) return; // Channel not found
-              
-              // Check if current user is a member
-              final members = channelResponse['channel_members'] as List<dynamic>? ?? [];
-              final isMember = members.any((m) => m['user_id'] == myId);
-              final isCreator = channelResponse['created_by'] == myId;
-              
-              if (!isMember && !isCreator) {
-                return; // User is not a member, don't show notification
+              const allowedSalesChannelIds = {
+                '14db36db-0cb9-44ef-8032-d9610b3bc797',
+                'b77b3738-4dfc-4515-a1fd-d6fb170423f4',
+                'd8aa6435-9e02-4bab-9acc-ae1f5f3d6a1c',
+                '5a06a8df-97f1-4dbf-bc13-9724a3c779c1',
+                'd9572a84-762b-4c8b-8ef5-7da0345e3ea8',
+                '0a5aeeb8-9544-4dc8-920f-e26c192b0dd3',
+                'f3b54de6-0372-4648-ad87-3e98089efc2d',
+              };
+              const allowedAroundTallyChannelIds = {
+                'd7a9e726-9520-4cc8-95a6-b38a4afd1d7b',
+                'dedce60a-56bd-49fd-bbe2-f88534b8e36f',
+              };
+              final isRestricted = allowedAroundTallyChannelIds.contains(myId);
+
+              // 1. Built-in Sales channel
+              if (channelId == 'sales-channel' || channelId == 'sales-team') {
+                final isAllowedSales = allowedSalesChannelIds.contains(myId) && !isRestricted;
+                if (!isAllowedSales) {
+                  return; // Non-members must NOT receive sales channel notifications
+                }
+              } else {
+                // Fetch channel info from custom_channels table
+                final channelResponse = await client
+                    .from('custom_channels')
+                    .select('*, channel_members(user_id)')
+                    .eq('id', channelId)
+                    .maybeSingle();
+
+                if (channelResponse == null) return; // Channel not found
+
+                final channelName = (channelResponse['name'] ?? '').toString().toLowerCase();
+                final isSalesChannelByName = channelName.contains('sales');
+
+                // If it is a sales channel by name, check sales permissions
+                if (isSalesChannelByName) {
+                  final isAllowedSales = allowedSalesChannelIds.contains(myId) && !isRestricted;
+                  if (!isAllowedSales) {
+                    return; // Non-sales users must not get notification for sales channels
+                  }
+                }
+
+                // Check if current user is a member
+                final members = channelResponse['channel_members'] as List<dynamic>? ?? [];
+                final isMember = members.any((m) => m['user_id'] == myId);
+                final isCreator = channelResponse['created_by'] == myId;
+
+                if (!isMember && !isCreator) {
+                  return; // User is not a member, don't show notification
+                }
               }
 
               // Build ChatMessage and fire the notification
               final msg = ChatMessage.fromJson(record);
               c.read(customChannelNewMessageEventProvider.notifier).notify(msg);
-              
+
               // Check for @mentions for special sound
               final myFullName = c.read(authProvider)?.fullName ?? '';
-              final hasMention = myFullName.isNotEmpty && 
+              final hasMention = myFullName.isNotEmpty &&
                   msg.content.contains('@$myFullName');
-              
+
               if (hasMention) {
                 ChatSoundService.playMentionPing();
               } else {
