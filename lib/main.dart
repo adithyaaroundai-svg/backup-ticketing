@@ -46,6 +46,7 @@ import 'features/dashboard/presentation/providers/app_settings_provider.dart';
 import 'features/sales/presentation/pages/proposal_generator_page.dart';
 import 'features/sales/presentation/pages/private_leads_page.dart';
 import 'features/tickets/presentation/pages/ticket_alerts_page.dart';
+import 'features/developer_crm/presentation/dev_crm_app.dart';
 
 import 'core/services/local_notification_service.dart';
 import 'package:hive_flutter/hive_flutter.dart';
@@ -301,6 +302,18 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/private-leads',
         builder: (context, state) => const PrivateLeadsPage(),
+      ),
+      GoRoute(
+        path: '/developer-crm',
+        builder: (context, state) => DeveloperCrmEntryApp(
+          onExit: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go('/chat');
+            }
+          },
+        ),
       ),
       GoRoute(
         path: '/tickets',
