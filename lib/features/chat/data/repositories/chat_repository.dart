@@ -434,6 +434,7 @@ class ChatRepository {
   }
 
   Future<Map<String, Map<String, dynamic>>> fetchDmConversationsBootstrap(String currentUserId) async {
+    final normUserId = currentUserId.trim().toLowerCase();
     final response = await _client
         .from('chat_messages')
         .select('id, sender_id, receiver_id, sender_name, sender_role, sender_avatar_url, content, created_at, is_deleted, reactions, reply_to_message_id, reply_to_sender_name, reply_to_content, file_url, file_name, file_type, channel, is_forwarded, is_edited, edited_at')
@@ -445,7 +446,7 @@ class ChatRepository {
     final data = response.reversed.toList();
 
     final incomingMessageIds = data
-        .where((m) => m['sender_id']?.toString() != currentUserId)
+        .where((m) => (m['sender_id']?.toString() ?? '').trim().toLowerCase() != normUserId)
         .map((m) => m['id'].toString())
         .toList();
 
@@ -472,8 +473,12 @@ class ChatRepository {
 
     for (final json in data) {
       final msg = ChatMessage.fromJson(json);
-      final partnerId = msg.senderId == currentUserId ? msg.receiverId : msg.senderId;
-      if (partnerId == null || partnerId == currentUserId) continue;
+      final senderNorm = msg.senderId.trim().toLowerCase();
+      final receiverNorm = msg.receiverId?.trim().toLowerCase();
+      if (senderNorm != normUserId && receiverNorm != normUserId) continue;
+
+      final partnerId = senderNorm == normUserId ? receiverNorm : senderNorm;
+      if (partnerId == null || partnerId.isEmpty || partnerId == normUserId) continue;
 
       if (!conversations.containsKey(partnerId)) {
         conversations[partnerId] = {
@@ -491,7 +496,8 @@ class ChatRepository {
         conv['last_message'] = msg;
       }
 
-      if (msg.senderId != currentUserId) {
+      final isIncoming = senderNorm != normUserId;
+      if (isIncoming) {
         if (!readMessageIds.contains(msg.id)) {
           (conv['unread_message_ids'] as Set<String>).add(msg.id);
         }
@@ -513,11 +519,6 @@ class ChatRepository {
           event: PostgresChangeEvent.all,
           schema: 'public',
           table: 'chat_messages',
-          filter: PostgresChangeFilter(
-            type: PostgresChangeFilterType.eq,
-            column: 'channel',
-            value: 'dm',
-          ),
           callback: onEvent,
         )
         .subscribe((status, [error]) {
@@ -538,11 +539,6 @@ class ChatRepository {
           event: PostgresChangeEvent.all,
           schema: 'public',
           table: 'chat_read_receipts',
-          filter: PostgresChangeFilter(
-            type: PostgresChangeFilterType.eq,
-            column: 'user_id',
-            value: currentUserId,
-          ),
           callback: onEvent,
         )
         .subscribe((status, [error]) {

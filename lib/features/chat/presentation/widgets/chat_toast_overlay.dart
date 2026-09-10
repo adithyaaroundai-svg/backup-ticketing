@@ -34,7 +34,11 @@ class ChatToastOverlay extends ConsumerWidget {
     // Priority: DM > custom channel > support-chat > all-aroundtally
     Widget? activeToast;
 
-    if (dmNewMessage != null && !currentPath.startsWith('/chat/dm/')) {
+    final dmSenderNorm = (dmNewMessage?.senderId ?? '').trim().toLowerCase();
+    final isCurrentDmPage = currentPath == '/chat/dm/$dmSenderNorm' ||
+        (dmNewMessage != null && currentPath == '/chat/dm/${dmNewMessage.senderId}');
+
+    if (dmNewMessage != null && !isCurrentDmPage) {
       activeToast = _ChatToast(
         key: ValueKey(dmNewMessage.id),
         message: dmNewMessage,

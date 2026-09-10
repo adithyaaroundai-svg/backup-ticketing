@@ -395,7 +395,9 @@ class _DirectMessagePageState extends ConsumerState<DirectMessagePage> {
   void dispose() {
     _dragDropPasteSub?.cancel();
     try {
-      if (ref.read(currentOpenConversationProvider) == widget.partnerId) {
+      final currentOpen = (ref.read(currentOpenConversationProvider) ?? '').trim().toLowerCase();
+      final currentPartner = widget.partnerId.trim().toLowerCase();
+      if (currentOpen == currentPartner) {
         ref.read(currentOpenConversationProvider.notifier).state = null;
       }
     } catch (_) {}
@@ -1225,7 +1227,7 @@ class _DirectMessagePageState extends ConsumerState<DirectMessagePage> {
         final normalizedUserId = currentUser.id.trim().toLowerCase();
 
         for (final message in validMessages) {
-          if (message.senderId != currentUser.id) {
+          if (message.senderId.trim().toLowerCase() != normalizedUserId) {
             final readBy = ReadReceiptsTracker.getReadBy(message.id);
             if (!readBy.contains(normalizedUserId)) {
               unreadIds.add(message.id);

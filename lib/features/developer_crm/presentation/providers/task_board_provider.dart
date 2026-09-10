@@ -188,30 +188,30 @@ class TaskBoardProvider extends ChangeNotifier {
   }) async {
     // 1. Instant optimistic update in local state for 0ms lag
     final idx = tasks.indexWhere((t) => t.id == taskId);
-    if (idx != -1) {
-      final old = tasks[idx];
+    final oldTask = (idx != -1) ? tasks[idx] : null;
+    if (idx != -1 && oldTask != null) {
       tasks[idx] = Task(
-        id: old.id,
-        clientId: old.clientId,
-        client: old.client,
-        description: taskDescription ?? old.description,
-        priority: priority ?? old.priority,
-        status: status ?? old.status,
-        expectedFinish: old.expectedFinish,
-        startDate: old.startDate,
-        taskDate: old.taskDate,
-        pending: old.pending,
-        approved: approved ?? old.approved,
-        billed: old.billed,
-        timeSpentSeconds: old.timeSpentSeconds,
-        timerStartedAt: old.timerStartedAt,
-        assignees: old.assignees,
-        files: old.files,
-        advancesTotal: old.advancesTotal,
-        cancelReason: cancelReason ?? old.cancelReason,
-        lastStatusMessage: statusMessage ?? old.lastStatusMessage,
-        createdByName: old.createdByName,
-        statusUpdatedByName: currentUserName ?? old.statusUpdatedByName,
+        id: oldTask.id,
+        clientId: oldTask.clientId,
+        client: oldTask.client,
+        description: taskDescription ?? oldTask.description,
+        priority: priority ?? oldTask.priority,
+        status: status ?? oldTask.status,
+        expectedFinish: oldTask.expectedFinish,
+        startDate: oldTask.startDate,
+        taskDate: oldTask.taskDate,
+        pending: oldTask.pending,
+        approved: approved ?? oldTask.approved,
+        billed: oldTask.billed,
+        timeSpentSeconds: oldTask.timeSpentSeconds,
+        timerStartedAt: oldTask.timerStartedAt,
+        assignees: oldTask.assignees,
+        files: oldTask.files,
+        advancesTotal: oldTask.advancesTotal,
+        cancelReason: cancelReason ?? oldTask.cancelReason,
+        lastStatusMessage: statusMessage ?? oldTask.lastStatusMessage,
+        createdByName: oldTask.createdByName,
+        statusUpdatedByName: currentUserName ?? oldTask.statusUpdatedByName,
       );
       notifyListeners();
     }
@@ -234,11 +234,14 @@ class TaskBoardProvider extends ChangeNotifier {
     
     if (updates.isNotEmpty) {
       await supabase.schema('aroundtally').from('tasks').update(updates).eq('id', taskId);
-      if (status != null) {
+      if (status != null && (oldTask == null || oldTask.status != status)) {
         unawaited(postDevTaskStatusChangeToSoftwareDevChannel(
           taskId: taskId,
+          oldStatus: oldTask?.status,
           newStatus: status,
-          taskDescription: taskDescription,
+          taskDescription: oldTask?.description ?? taskDescription,
+          clientName: oldTask?.client,
+          clientId: oldTask?.clientId,
           currentUserId: currentUserId,
           currentUserName: currentUserName,
           statusMessage: statusMessage,

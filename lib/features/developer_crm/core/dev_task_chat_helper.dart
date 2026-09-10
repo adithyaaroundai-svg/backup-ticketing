@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'enums.dart';
 
 /// Broadcasts a developer task status change into the Software Development channel
 Future<void> postDevTaskStatusChangeToSoftwareDevChannel({
@@ -87,10 +88,19 @@ Future<void> postDevTaskStatusChangeToSoftwareDevChannel({
     if (cName.isEmpty) cName = 'Client';
     if (desc.isEmpty) desc = 'Task #$taskId';
 
+    final formattedOld = (oldStatus != null && oldStatus.isNotEmpty) ? taskStatusLabel(oldStatus) : '';
+    final formattedNew = taskStatusLabel(newStatus);
+    final statusDisplay = (formattedOld.isNotEmpty && formattedOld != formattedNew)
+        ? '$formattedOld ➔ $formattedNew'
+        : formattedNew;
+
     final chatContent = [
       'Company: $cName',
       'Issue: $desc',
-      'TicketID: $taskId',
+      'Status: $statusDisplay',
+      'TaskID: #$taskId',
+      'DevTaskID: $taskId',
+      'TicketID: dev-$taskId',
       if (statusMessage != null && statusMessage.isNotEmpty) 'Note: $statusMessage',
     ].join('\n');
 

@@ -20,6 +20,57 @@ class PrivateLeadsPage extends ConsumerStatefulWidget {
 class _PrivateLeadsPageState extends ConsumerState<PrivateLeadsPage> {
   final currencyFormat = NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
   String? _selectedFilter;
+  bool _isFollowUpSidebarOpen = true;
+  String _followUpFilter = 'All'; // 'All', 'Overdue', 'Today', 'Upcoming', 'No Date'
+  String _followUpSearch = '';
+
+  void _showMobileFollowUpSheet(BuildContext context, List<Lead> leads) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => DraggableScrollableSheet(
+        initialChildSize: 0.85,
+        minChildSize: 0.5,
+        maxChildSize: 0.95,
+        builder: (_, scrollController) => Container(
+          decoration: BoxDecoration(
+            color: context.isDarkMode ? context.adaptiveCard : Colors.white,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: _FollowUpSidebar(
+            leads: leads,
+            filter: _followUpFilter,
+            searchQuery: _followUpSearch,
+            onFilterChanged: (newFilter) {
+              setState(() => _followUpFilter = newFilter);
+            },
+            onSearchChanged: (query) {
+              setState(() => _followUpSearch = query);
+            },
+            onClose: () => Navigator.pop(ctx),
+            onStageChange: (lead, newStatus) {
+              ref.read(leadControllerProvider.notifier).updateLeadStatus(lead.id, newStatus);
+            },
+            onDelete: (lead) {
+              ref.read(leadControllerProvider.notifier).deleteLead(lead.id);
+            },
+            onAddRemark: (lead, remark) {
+              final dateStr = DateFormat('MMM d h:mm a').format(DateTime.now());
+              final newDesc = (lead.description == null || lead.description!.isEmpty)
+                  ? '[$dateStr]: $remark'
+                  : '${lead.description}\n[$dateStr]: $remark';
+              ref.read(leadControllerProvider.notifier).updateLeadDetails(lead.id, {'description': newDesc});
+            },
+            onUpdateFollowUpDate: (lead, newDate) {
+              final formattedDate = newDate != null ? DateFormat('yyyy-MM-dd').format(newDate) : null;
+              ref.read(leadControllerProvider.notifier).updateLeadDetails(lead.id, {'follow_up_date': formattedDate});
+            },
+          ),
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -39,35 +90,78 @@ class _PrivateLeadsPageState extends ConsumerState<PrivateLeadsPage> {
 
     final Widget content = LayoutBuilder(
       builder: (context, constraints) {
-        final isMobile = constraints.maxWidth < 800;
-            return Column(
-              children: [
-                // Header Section
-                if (!widget.isEmbedded)
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: context.isDarkMode ? context.adaptiveCard : Colors.white,
-                      boxShadow: const [
-                        BoxShadow(
-                          color: Colors.black12,
-                          blurRadius: 1,
-                          offset: Offset(0, 1),
-                        ),
-                      ],
+        final isMobile = constraints.maxWidth < 900;
+        return Column(
+          children: [
+            // Header Section
+            if (!widget.isEmbedded)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+                decoration: BoxDecoration(
+                  color: context.isDarkMode ? context.adaptiveCard : Colors.white,
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Colors.black12,
+                      blurRadius: 1,
+                      offset: Offset(0, 1),
                     ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  ],
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'My Private Pipeline',
+                      style: TextStyle(
+                        fontSize: isMobile ? 18 : 22,
+                        fontWeight: FontWeight.w900,
+                        color: context.adaptiveSlate900,
+                        letterSpacing: -0.5,
+                      ),
+                    ),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text(
-                          'My Private Pipeline',
-                          style: TextStyle(
-                            fontSize: isMobile ? 20 : 22,
-                            fontWeight: FontWeight.w900,
-                            color: context.adaptiveSlate900,
-                            letterSpacing: -0.5,
+                        // Follow-up toggle button
+                        ElevatedButton.icon(
+                          onPressed: () {
+                            if (isMobile) {
+                              leadsAsync.whenData((leads) {
+                                _showMobileFollowUpSheet(context, leads);
+                              });
+                            } else {
+                              setState(() {
+                                _isFollowUpSidebarOpen = !_isFollowUpSidebarOpen;
+                              });
+                            }
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: _isFollowUpSidebarOpen && !isMobile
+                                ? (context.isDarkMode ? Colors.white12 : const Color(0xFFE2E8F0))
+                                : AppColors.primaryLight,
+                            foregroundColor: _isFollowUpSidebarOpen && !isMobile
+                                ? context.adaptiveSlate900
+                                : Colors.white,
+                            elevation: 0,
+                            padding: EdgeInsets.symmetric(
+                              horizontal: isMobile ? 10 : 14,
+                              vertical: 8,
+                            ),
+                          ),
+                          icon: Icon(
+                            _isFollowUpSidebarOpen && !isMobile
+                                ? LucideIcons.panelRightClose
+                                : LucideIcons.calendarClock,
+                            size: 16,
+                          ),
+                          label: Text(
+                            isMobile
+                                ? 'Follow-ups'
+                                : (_isFollowUpSidebarOpen ? 'Hide Follow-ups' : 'Follow-up Dates'),
+                            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
                           ),
                         ),
+                        const SizedBox(width: 8),
                         ElevatedButton.icon(
                           onPressed: () {
                             showDialog(
@@ -78,101 +172,108 @@ class _PrivateLeadsPageState extends ConsumerState<PrivateLeadsPage> {
                           style: ElevatedButton.styleFrom(
                             backgroundColor: AppColors.primary,
                             foregroundColor: Colors.white,
+                            padding: EdgeInsets.symmetric(
+                              horizontal: isMobile ? 10 : 14,
+                              vertical: 8,
+                            ),
                           ),
                           icon: const Icon(LucideIcons.plus, size: 16),
-                          label: const Text('Add Lead'),
+                          label: const Text('Add Lead', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
                         ),
                       ],
                     ),
-                  )
-                else
-                  const SizedBox(height: 56), // Provide space for floating top buttons
-
-                // Pipeline Stats
-                leadsAsync.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
-                  data: (leads) {
-                    final totalCount = leads.length;
-                    final wonCount = leads.where((d) => d.status.toLowerCase() == 'win' || d.status.toLowerCase() == 'won').length;
-                    final lostCount = leads.where((d) => d.status.toLowerCase() == 'loss' || d.status.toLowerCase() == 'lost').length;
-                    final pendingCount = leads.where((d) => d.status.toLowerCase() == 'pending' || d.status.toLowerCase() == 'new').length;
-
-                    final statsRow = Row(
-                      children: [
-                        _EnhancedStatCard(
-                          label: 'Total Pipeline',
-                          value: totalCount.toString(),
-                          color: _selectedFilter == null ? AppColors.primary : AppColors.primary.withValues(alpha: 0.5),
-                          icon: LucideIcons.trendingUp,
-                          isExpanded: !isMobile,
-                          width: isMobile ? 220 : null,
-                          onTap: () {
-                            setState(() { _selectedFilter = null; });
-                          },
-                        ),
-                        const SizedBox(width: 16),
-                        _EnhancedStatCard(
-                          label: 'Our Customers',
-                          value: wonCount.toString(),
-                          color: _selectedFilter == 'Won' ? AppColors.success : AppColors.success.withValues(alpha: 0.5),
-                          icon: LucideIcons.users,
-                          isExpanded: !isMobile,
-                          width: isMobile ? 220 : null,
-                          onTap: () {
-                            setState(() { _selectedFilter = 'Won'; });
-                          },
-                        ),
-                        const SizedBox(width: 16),
-                        _EnhancedStatCard(
-                          label: 'Not Our Customers',
-                          value: lostCount.toString(),
-                          color: _selectedFilter == 'Lost' ? AppColors.error : AppColors.error.withValues(alpha: 0.5),
-                          icon: LucideIcons.userX,
-                          isExpanded: !isMobile,
-                          width: isMobile ? 220 : null,
-                          onTap: () {
-                            setState(() { _selectedFilter = 'Lost'; });
-                          },
-                        ),
-                        const SizedBox(width: 16),
-                        _EnhancedStatCard(
-                          label: 'Active (Pending)',
-                          value: pendingCount.toString(),
-                          color: _selectedFilter == 'Pending' ? AppColors.info : AppColors.info.withValues(alpha: 0.5),
-                          icon: LucideIcons.target,
-                          isExpanded: !isMobile,
-                          width: isMobile ? 220 : null,
-                          onTap: () {
-                            setState(() { _selectedFilter = 'Pending'; });
-                          },
-                        ),
-                      ],
-                    );
-
-                    return Padding(
-                      padding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
-                      child: isMobile
-                          ? SingleChildScrollView(
-                              scrollDirection: Axis.horizontal,
-                              clipBehavior: Clip.none,
-                              child: statsRow,
-                            )
-                          : statsRow,
-                    );
-                  },
-                  loading: () => const SizedBox.shrink(),
-                  error: (_, __) => const SizedBox.shrink(),
+                  ],
                 ),
+              )
+            else
+              const SizedBox(height: 56), // Provide space for floating top buttons
+
+            // Pipeline Stats
+            leadsAsync.when(
+              skipLoadingOnReload: true,
+              skipLoadingOnRefresh: true,
+              data: (leads) {
+                final totalCount = leads.length;
+                final wonCount = leads.where((d) => d.status.toLowerCase() == 'win' || d.status.toLowerCase() == 'won').length;
+                final lostCount = leads.where((d) => d.status.toLowerCase() == 'loss' || d.status.toLowerCase() == 'lost').length;
+                final pendingCount = leads.where((d) => d.status.toLowerCase() == 'pending' || d.status.toLowerCase() == 'new').length;
+
+                final statsRow = Row(
+                  children: [
+                    _EnhancedStatCard(
+                      label: 'Total Pipeline',
+                      value: totalCount.toString(),
+                      color: _selectedFilter == null ? AppColors.primary : AppColors.primary.withValues(alpha: 0.5),
+                      icon: LucideIcons.trendingUp,
+                      isExpanded: !isMobile,
+                      width: isMobile ? 220 : null,
+                      onTap: () {
+                        setState(() { _selectedFilter = null; });
+                      },
+                    ),
+                    const SizedBox(width: 16),
+                    _EnhancedStatCard(
+                      label: 'Our Customers',
+                      value: wonCount.toString(),
+                      color: _selectedFilter == 'Won' ? AppColors.success : AppColors.success.withValues(alpha: 0.5),
+                      icon: LucideIcons.users,
+                      isExpanded: !isMobile,
+                      width: isMobile ? 220 : null,
+                      onTap: () {
+                        setState(() { _selectedFilter = 'Won'; });
+                      },
+                    ),
+                    const SizedBox(width: 16),
+                    _EnhancedStatCard(
+                      label: 'Not Our Customers',
+                      value: lostCount.toString(),
+                      color: _selectedFilter == 'Lost' ? AppColors.error : AppColors.error.withValues(alpha: 0.5),
+                      icon: LucideIcons.userX,
+                      isExpanded: !isMobile,
+                      width: isMobile ? 220 : null,
+                      onTap: () {
+                        setState(() { _selectedFilter = 'Lost'; });
+                      },
+                    ),
+                    const SizedBox(width: 16),
+                    _EnhancedStatCard(
+                      label: 'Active (Pending)',
+                      value: pendingCount.toString(),
+                      color: _selectedFilter == 'Pending' ? AppColors.info : AppColors.info.withValues(alpha: 0.5),
+                      icon: LucideIcons.target,
+                      isExpanded: !isMobile,
+                      width: isMobile ? 220 : null,
+                      onTap: () {
+                        setState(() { _selectedFilter = 'Pending'; });
+                      },
+                    ),
+                  ],
+                );
+
+                return Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
+                  child: isMobile
+                      ? SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          clipBehavior: Clip.none,
+                          child: statsRow,
+                        )
+                      : statsRow,
+                );
+              },
+              loading: () => const SizedBox.shrink(),
+              error: (_, __) => const SizedBox.shrink(),
+            ),
 
             const SizedBox(height: 12),
 
-            // Kanban Board
+            // Kanban Board & Follow-up Sidebar
             Expanded(
-              child: leadsAsync.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
+              child: leadsAsync.when(
+                skipLoadingOnReload: true,
+                skipLoadingOnRefresh: true,
                 data: (leads) {
                   var columns = ['New Lead', 'Contacted', 'Qualified', 'Negotiation'];
-                  
-                  final wonLeads = leads.where((d) => d.status == 'Won' || d.status == 'win').toList();
-                  final lostLeads = leads.where((d) => d.status == 'Lost' || d.status == 'loss').toList();
 
                   return Padding(
                     padding: EdgeInsets.symmetric(horizontal: isMobile ? 8.0 : 24.0),
@@ -191,9 +292,9 @@ class _PrivateLeadsPageState extends ConsumerState<PrivateLeadsPage> {
                                         if (status == 'New Lead' && (d.status == 'pending' || d.status == 'New')) return true;
                                         return d.status == status;
                                       }).toList();
-                                      
+
                                       return SizedBox(
-                                        width: 160, // Reduced fixed width for mobile Kanban columns
+                                        width: 160,
                                         child: _KanbanColumn(
                                           status: status,
                                           leads: statusLeads,
@@ -209,8 +310,8 @@ class _PrivateLeadsPageState extends ConsumerState<PrivateLeadsPage> {
                                           },
                                           onAddRemark: (lead, remark) {
                                             final dateStr = DateFormat('MMM d h:mm a').format(DateTime.now());
-                                            final newDesc = (lead.description == null || lead.description!.isEmpty) 
-                                                ? '[$dateStr]: $remark' 
+                                            final newDesc = (lead.description == null || lead.description!.isEmpty)
+                                                ? '[$dateStr]: $remark'
                                                 : '${lead.description}\n[$dateStr]: $remark';
                                             ref.read(leadControllerProvider.notifier).updateLeadDetails(lead.id, {'description': newDesc});
                                           },
@@ -226,7 +327,7 @@ class _PrivateLeadsPageState extends ConsumerState<PrivateLeadsPage> {
                                       if (status == 'New Lead' && (d.status == 'pending' || d.status == 'New')) return true;
                                       return d.status == status;
                                     }).toList();
-                                    
+
                                     return Expanded(
                                       child: _KanbanColumn(
                                         status: status,
@@ -243,8 +344,8 @@ class _PrivateLeadsPageState extends ConsumerState<PrivateLeadsPage> {
                                         },
                                         onAddRemark: (lead, remark) {
                                           final dateStr = DateFormat('MMM d h:mm a').format(DateTime.now());
-                                          final newDesc = (lead.description == null || lead.description!.isEmpty) 
-                                              ? '[$dateStr]: $remark' 
+                                          final newDesc = (lead.description == null || lead.description!.isEmpty)
+                                              ? '[$dateStr]: $remark'
                                               : '${lead.description}\n[$dateStr]: $remark';
                                           ref.read(leadControllerProvider.notifier).updateLeadDetails(lead.id, {'description': newDesc});
                                         },
@@ -253,7 +354,45 @@ class _PrivateLeadsPageState extends ConsumerState<PrivateLeadsPage> {
                                   }).toList(),
                                 ),
                         ),
-                        const SizedBox(width: 16),
+
+                        // Follow-up Date Right Sidebar on Desktop/Tablet
+                        if (_isFollowUpSidebarOpen && !isMobile) ...[
+                          const SizedBox(width: 10),
+                          SizedBox(
+                            width: 260,
+                            child: _FollowUpSidebar(
+                              leads: leads,
+                              filter: _followUpFilter,
+                              searchQuery: _followUpSearch,
+                              onFilterChanged: (newFilter) {
+                                setState(() => _followUpFilter = newFilter);
+                              },
+                              onSearchChanged: (query) {
+                                setState(() => _followUpSearch = query);
+                              },
+                              onClose: () {
+                                setState(() => _isFollowUpSidebarOpen = false);
+                              },
+                              onStageChange: (lead, newStatus) {
+                                ref.read(leadControllerProvider.notifier).updateLeadStatus(lead.id, newStatus);
+                              },
+                              onDelete: (lead) {
+                                ref.read(leadControllerProvider.notifier).deleteLead(lead.id);
+                              },
+                              onAddRemark: (lead, remark) {
+                                final dateStr = DateFormat('MMM d h:mm a').format(DateTime.now());
+                                final newDesc = (lead.description == null || lead.description!.isEmpty)
+                                    ? '[$dateStr]: $remark'
+                                    : '${lead.description}\n[$dateStr]: $remark';
+                                ref.read(leadControllerProvider.notifier).updateLeadDetails(lead.id, {'description': newDesc});
+                              },
+                              onUpdateFollowUpDate: (lead, newDate) {
+                                final formattedDate = newDate != null ? DateFormat('yyyy-MM-dd').format(newDate) : null;
+                                ref.read(leadControllerProvider.notifier).updateLeadDetails(lead.id, {'follow_up_date': formattedDate});
+                              },
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   );
@@ -279,7 +418,6 @@ class _PrivateLeadsPageState extends ConsumerState<PrivateLeadsPage> {
       ),
     );
   }
-
 }
 
 class _EnhancedStatCard extends StatefulWidget {
@@ -1092,3 +1230,905 @@ class _LeadCard extends StatelessWidget {
     );
   }
 }
+
+enum FollowUpCategory { overdue, today, tomorrow, upcoming, noDate }
+
+class _FollowUpSidebar extends StatelessWidget {
+  final List<Lead> leads;
+  final String filter;
+  final String searchQuery;
+  final ValueChanged<String> onFilterChanged;
+  final ValueChanged<String> onSearchChanged;
+  final VoidCallback onClose;
+  final void Function(Lead, String) onStageChange;
+  final void Function(Lead) onDelete;
+  final void Function(Lead, String) onAddRemark;
+  final void Function(Lead, DateTime?) onUpdateFollowUpDate;
+
+  const _FollowUpSidebar({
+    required this.leads,
+    required this.filter,
+    required this.searchQuery,
+    required this.onFilterChanged,
+    required this.onSearchChanged,
+    required this.onClose,
+    required this.onStageChange,
+    required this.onDelete,
+    required this.onAddRemark,
+    required this.onUpdateFollowUpDate,
+  });
+
+  FollowUpCategory _categorize(DateTime? date) {
+    if (date == null) return FollowUpCategory.noDate;
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final target = DateTime(date.year, date.month, date.day);
+    final diff = target.difference(today).inDays;
+    if (diff < 0) return FollowUpCategory.overdue;
+    if (diff == 0) return FollowUpCategory.today;
+    if (diff == 1) return FollowUpCategory.tomorrow;
+    return FollowUpCategory.upcoming;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final overdueLeads = leads.where((l) => _categorize(l.followUpDate) == FollowUpCategory.overdue).toList();
+    final todayLeads = leads.where((l) => _categorize(l.followUpDate) == FollowUpCategory.today).toList();
+    final upcomingLeads = leads.where((l) {
+      final cat = _categorize(l.followUpDate);
+      return cat == FollowUpCategory.tomorrow || cat == FollowUpCategory.upcoming;
+    }).toList();
+    final noDateLeads = leads.where((l) => _categorize(l.followUpDate) == FollowUpCategory.noDate).toList();
+
+    // Sort today leads (soonest first / by followUpDate)
+    todayLeads.sort((a, b) => (a.followUpDate ?? a.createdAt).compareTo(b.followUpDate ?? b.createdAt));
+    // Sort overdue leads (most recent overdue first)
+    overdueLeads.sort((a, b) => (b.followUpDate ?? b.createdAt).compareTo(a.followUpDate ?? a.createdAt));
+    // Sort upcoming leads (soonest upcoming first)
+    upcomingLeads.sort((a, b) => (a.followUpDate ?? a.createdAt).compareTo(b.followUpDate ?? b.createdAt));
+
+    List<Lead> filterByQuery(List<Lead> list) {
+      if (searchQuery.trim().isEmpty) return list;
+      final q = searchQuery.toLowerCase().trim();
+      return list.where((l) {
+        return l.companyName.toLowerCase().contains(q) ||
+            (l.customerName?.toLowerCase().contains(q) ?? false) ||
+            (l.phoneNumber?.toLowerCase().contains(q) ?? false) ||
+            (l.product?.toLowerCase().contains(q) ?? false);
+      }).toList();
+    }
+
+    final filteredTodayLeads = filterByQuery(todayLeads);
+    final filteredOverdueLeads = filterByQuery(overdueLeads);
+    final filteredUpcomingLeads = filterByQuery(upcomingLeads);
+    final filteredNoDateLeads = filterByQuery(noDateLeads);
+
+    final totalDisplayedCount = (filter == 'All' || filter == 'Today' ? filteredTodayLeads.length : 0) +
+        (filter == 'All' || filter == 'Overdue' ? filteredOverdueLeads.length : 0) +
+        (filter == 'All' || filter == 'Upcoming' ? filteredUpcomingLeads.length : 0) +
+        (filter == 'All' || filter == 'No Date' ? filteredNoDateLeads.length : 0);
+
+    return Container(
+      decoration: BoxDecoration(
+        color: context.isDarkMode ? context.adaptiveCard : Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: context.adaptiveBorder),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Sidebar Header
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+            decoration: BoxDecoration(
+              color: context.isDarkMode ? Colors.white.withValues(alpha: 0.04) : const Color(0xFFF8FAFC),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+              border: Border(bottom: BorderSide(color: context.adaptiveBorder)),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(5),
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryLight.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: const Icon(LucideIcons.calendarClock, size: 14, color: AppColors.primaryLight),
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Follow-ups',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w800,
+                          color: context.adaptiveSlate900,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      Text(
+                        '${leads.where((l) => l.followUpDate != null).length} of ${leads.length} set',
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: context.adaptiveSlate500,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (todayLeads.isNotEmpty)
+                  Container(
+                    margin: const EdgeInsets.only(right: 4),
+                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.amber.shade700.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.amber.shade700.withValues(alpha: 0.4)),
+                    ),
+                    child: Text(
+                      '${todayLeads.length} Today',
+                      style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold, color: Colors.amber.shade800),
+                    ),
+                  )
+                else if (overdueLeads.isNotEmpty)
+                  Container(
+                    margin: const EdgeInsets.only(right: 4),
+                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: AppColors.error.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: AppColors.error.withValues(alpha: 0.4)),
+                    ),
+                    child: Text(
+                      '${overdueLeads.length} Missed',
+                      style: const TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold, color: AppColors.error),
+                    ),
+                  ),
+                IconButton(
+                  icon: Icon(LucideIcons.x, size: 14, color: context.adaptiveSlate400),
+                  onPressed: onClose,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 20, minHeight: 20),
+                  splashRadius: 12,
+                  tooltip: 'Close sidebar',
+                ),
+              ],
+            ),
+          ),
+
+          // Search Field
+          Padding(
+            padding: const EdgeInsets.fromLTRB(10, 10, 10, 6),
+            child: SizedBox(
+              height: 34,
+              child: TextField(
+                onChanged: onSearchChanged,
+                style: TextStyle(fontSize: 12, color: context.adaptiveSlate900),
+                decoration: InputDecoration(
+                  hintText: 'Search follow-ups...',
+                  hintStyle: TextStyle(fontSize: 12, color: context.adaptiveSlate400),
+                  prefixIcon: Icon(LucideIcons.search, size: 14, color: context.adaptiveSlate400),
+                  prefixIconConstraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                  filled: true,
+                  fillColor: context.isDarkMode ? Colors.black.withValues(alpha: 0.2) : const Color(0xFFF1F5F9),
+                  contentPadding: EdgeInsets.zero,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+              ),
+            ),
+          ),
+
+          // Filter Segment Tabs
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  _FilterChip(
+                    label: 'All (${leads.length})',
+                    isSelected: filter == 'All',
+                    onTap: () => onFilterChanged('All'),
+                    color: AppColors.primary,
+                  ),
+                  const SizedBox(width: 4),
+                  _FilterChip(
+                    label: 'Today (${todayLeads.length})',
+                    isSelected: filter == 'Today',
+                    onTap: () => onFilterChanged('Today'),
+                    color: Colors.amber.shade700,
+                  ),
+                  const SizedBox(width: 4),
+                  _FilterChip(
+                    label: 'Missed (${overdueLeads.length})',
+                    isSelected: filter == 'Overdue',
+                    onTap: () => onFilterChanged('Overdue'),
+                    color: AppColors.error,
+                    isUrgent: overdueLeads.isNotEmpty,
+                  ),
+                  const SizedBox(width: 4),
+                  _FilterChip(
+                    label: 'Upcoming (${upcomingLeads.length})',
+                    isSelected: filter == 'Upcoming',
+                    onTap: () => onFilterChanged('Upcoming'),
+                    color: AppColors.info,
+                  ),
+                  const SizedBox(width: 4),
+                  _FilterChip(
+                    label: 'No Date (${noDateLeads.length})',
+                    isSelected: filter == 'No Date',
+                    onTap: () => onFilterChanged('No Date'),
+                    color: context.adaptiveSlate500,
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          Divider(height: 1, color: context.adaptiveBorder),
+
+          // Cards List with Priority Section Grouping (Due Today first!)
+          Expanded(
+            child: totalDisplayedCount == 0
+                ? Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(LucideIcons.calendarCheck, size: 36, color: context.adaptiveSlate400),
+                          const SizedBox(height: 8),
+                          Text(
+                            filter == 'All'
+                                ? 'No leads found'
+                                : 'No leads in $filter',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: context.adaptiveSlate600,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Assign follow-up dates to track your calls & demos.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: context.adaptiveSlate400,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                : ListView(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    children: [
+                      // 1. Due Today Section (Prioritized First)
+                      if (filter == 'All' || filter == 'Today') ...[
+                        if (filteredTodayLeads.isNotEmpty) ...[
+                          _FollowUpSectionHeader(
+                            title: 'Due Today',
+                            count: filteredTodayLeads.length,
+                            color: Colors.amber.shade700,
+                          ),
+                          ...filteredTodayLeads.map((lead) => _FollowUpLeadCard(
+                                lead: lead,
+                                onStageChange: (newStage) => onStageChange(lead, newStage),
+                                onDelete: () => onDelete(lead),
+                                onAddRemark: (remark) => onAddRemark(lead, remark),
+                                onUpdateFollowUpDate: (newDate) => onUpdateFollowUpDate(lead, newDate),
+                              )),
+                        ],
+                      ],
+
+                      // 2. Missed / Overdue Section
+                      if (filter == 'All' || filter == 'Overdue') ...[
+                        if (filteredOverdueLeads.isNotEmpty) ...[
+                          _FollowUpSectionHeader(
+                            title: 'Missed',
+                            count: filteredOverdueLeads.length,
+                            color: AppColors.error,
+                          ),
+                          ...filteredOverdueLeads.map((lead) => _FollowUpLeadCard(
+                                lead: lead,
+                                onStageChange: (newStage) => onStageChange(lead, newStage),
+                                onDelete: () => onDelete(lead),
+                                onAddRemark: (remark) => onAddRemark(lead, remark),
+                                onUpdateFollowUpDate: (newDate) => onUpdateFollowUpDate(lead, newDate),
+                              )),
+                        ],
+                      ],
+
+                      // 3. Upcoming Section
+                      if (filter == 'All' || filter == 'Upcoming') ...[
+                        if (filteredUpcomingLeads.isNotEmpty) ...[
+                          _FollowUpSectionHeader(
+                            title: 'Upcoming',
+                            count: filteredUpcomingLeads.length,
+                            color: AppColors.info,
+                          ),
+                          ...filteredUpcomingLeads.map((lead) => _FollowUpLeadCard(
+                                lead: lead,
+                                onStageChange: (newStage) => onStageChange(lead, newStage),
+                                onDelete: () => onDelete(lead),
+                                onAddRemark: (remark) => onAddRemark(lead, remark),
+                                onUpdateFollowUpDate: (newDate) => onUpdateFollowUpDate(lead, newDate),
+                              )),
+                        ],
+                      ],
+
+                      // 4. No Date Section
+                      if (filter == 'All' || filter == 'No Date') ...[
+                        if (filteredNoDateLeads.isNotEmpty) ...[
+                          _FollowUpSectionHeader(
+                            title: 'No Follow-up Date',
+                            count: filteredNoDateLeads.length,
+                            color: context.adaptiveSlate500,
+                          ),
+                          ...filteredNoDateLeads.map((lead) => _FollowUpLeadCard(
+                                lead: lead,
+                                onStageChange: (newStage) => onStageChange(lead, newStage),
+                                onDelete: () => onDelete(lead),
+                                onAddRemark: (remark) => onAddRemark(lead, remark),
+                                onUpdateFollowUpDate: (newDate) => onUpdateFollowUpDate(lead, newDate),
+                              )),
+                        ],
+                      ],
+                    ],
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FollowUpSectionHeader extends StatelessWidget {
+  final String title;
+  final int count;
+  final Color color;
+
+  const _FollowUpSectionHeader({
+    required this.title,
+    required this.count,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(2, 8, 2, 6),
+      child: Row(
+        children: [
+          Container(
+            width: 7.5,
+            height: 7.5,
+            decoration: BoxDecoration(
+              color: color,
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 7),
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: 12.5,
+              fontWeight: FontWeight.w700,
+              color: context.adaptiveSlate800,
+            ),
+          ),
+          const Spacer(),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Text(
+              '$count',
+              style: TextStyle(
+                fontSize: 10.5,
+                fontWeight: FontWeight.w800,
+                color: color,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FilterChip extends StatelessWidget {
+  final String label;
+  final bool isSelected;
+  final VoidCallback onTap;
+  final Color color;
+  final bool isUrgent;
+
+  const _FilterChip({
+    required this.label,
+    required this.isSelected,
+    required this.onTap,
+    required this.color,
+    this.isUrgent = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(6),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? color.withValues(alpha: 0.15)
+                : (context.isDarkMode ? Colors.white.withValues(alpha: 0.04) : const Color(0xFFF1F5F9)),
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(
+              color: isSelected ? color : Colors.transparent,
+              width: 1,
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (isUrgent && !isSelected) ...[
+                Container(
+                  width: 6,
+                  height: 6,
+                  decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+                ),
+                const SizedBox(width: 4),
+              ],
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                  color: isSelected ? color : context.adaptiveSlate600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _FollowUpLeadCard extends StatelessWidget {
+  final Lead lead;
+  final void Function(String) onStageChange;
+  final VoidCallback onDelete;
+  final void Function(String) onAddRemark;
+  final void Function(DateTime?) onUpdateFollowUpDate;
+
+  const _FollowUpLeadCard({
+    required this.lead,
+    required this.onStageChange,
+    required this.onDelete,
+    required this.onAddRemark,
+    required this.onUpdateFollowUpDate,
+  });
+
+  FollowUpCategory get category {
+    if (lead.followUpDate == null) return FollowUpCategory.noDate;
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final target = DateTime(lead.followUpDate!.year, lead.followUpDate!.month, lead.followUpDate!.day);
+    final diff = target.difference(today).inDays;
+    if (diff < 0) return FollowUpCategory.overdue;
+    if (diff == 0) return FollowUpCategory.today;
+    if (diff == 1) return FollowUpCategory.tomorrow;
+    return FollowUpCategory.upcoming;
+  }
+
+  Color get categoryColor {
+    switch (category) {
+      case FollowUpCategory.overdue:
+        return AppColors.error;
+      case FollowUpCategory.today:
+        return Colors.orange.shade700;
+      case FollowUpCategory.tomorrow:
+        return AppColors.info;
+      case FollowUpCategory.upcoming:
+        return AppColors.primaryLight;
+      case FollowUpCategory.noDate:
+        return AppColors.slate400;
+    }
+  }
+
+  String get categoryText {
+    if (lead.followUpDate == null) return 'Set Follow-up Date';
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final target = DateTime(lead.followUpDate!.year, lead.followUpDate!.month, lead.followUpDate!.day);
+    final diff = target.difference(today).inDays;
+    final timeStr = DateFormat('h:mm a').format(lead.followUpDate!);
+    final isDefaultMidnight = lead.followUpDate!.hour == 0 && lead.followUpDate!.minute == 0;
+    final timeSuffix = isDefaultMidnight ? '' : ' at $timeStr';
+    
+    if (diff < 0) {
+      final days = diff.abs();
+      return '${DateFormat('MMM d').format(lead.followUpDate!)}$timeSuffix ($days ${days == 1 ? 'day' : 'days'} overdue)';
+    }
+    if (diff == 0) return 'Due Today$timeSuffix';
+    if (diff == 1) return 'Tomorrow$timeSuffix';
+    return '${DateFormat('MMM d').format(lead.followUpDate!)}$timeSuffix';
+  }
+
+  Future<void> _pickDate(BuildContext context) async {
+    final initial = lead.followUpDate ?? DateTime.now().add(const Duration(days: 1));
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2035),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: ColorScheme.light(
+              primary: AppColors.primary,
+              onPrimary: Colors.white,
+              surface: context.isDarkMode ? const Color(0xFF1E293B) : Colors.white,
+              onSurface: context.adaptiveSlate900,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+    if (picked != null) {
+      onUpdateFollowUpDate(picked);
+    }
+  }
+
+  void _showRemarkDialog(BuildContext context) {
+    final controller = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        backgroundColor: context.isDarkMode ? const Color(0xFF1E293B) : Colors.white,
+        title: Row(
+          children: [
+            const Icon(LucideIcons.messageSquarePlus, size: 18, color: AppColors.primaryLight),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Add Remark - ${lead.companyName}',
+                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+        content: SizedBox(
+          width: 360,
+          child: TextField(
+            controller: controller,
+            maxLines: 3,
+            autofocus: true,
+            decoration: InputDecoration(
+              hintText: 'Enter follow-up outcome or remarks...',
+              hintStyle: TextStyle(fontSize: 13, color: context.adaptiveSlate400),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide(color: context.adaptiveBorder),
+              ),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('Cancel', style: TextStyle(color: context.adaptiveSlate500)),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              if (controller.text.trim().isNotEmpty) {
+                onAddRemark(controller.text.trim());
+                Navigator.pop(ctx);
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Save Note'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final color = categoryColor;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: context.isDarkMode
+            ? Color.alphaBlend(color.withValues(alpha: 0.1), const Color(0xFF1E293B))
+            : Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: category == FollowUpCategory.overdue
+              ? AppColors.error.withValues(alpha: 0.5)
+              : (category == FollowUpCategory.today ? Colors.orange.shade400 : context.adaptiveBorder),
+          width: category == FollowUpCategory.overdue || category == FollowUpCategory.today ? 1.5 : 1.0,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: color.withValues(alpha: 0.08),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Card Header: Company Name & Stage Dropdown
+          Padding(
+            padding: const EdgeInsets.fromLTRB(8, 7, 6, 3),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Text(
+                    lead.companyName,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 12.5,
+                      color: context.adaptiveSlate900,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                // Stage Pill with Quick Menu
+                PopupMenuButton<String>(
+                  onSelected: (nextStage) => onStageChange(nextStage),
+                  itemBuilder: (ctx) => ['New Lead', 'Contacted', 'Qualified', 'Negotiation', 'Won', 'Lost'].map((choice) {
+                    return PopupMenuItem<String>(
+                      value: choice,
+                      child: Text(choice, style: TextStyle(fontSize: 12, color: context.adaptiveSlate700)),
+                    );
+                  }).toList(),
+                  offset: const Offset(0, 24),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                    decoration: BoxDecoration(
+                      color: context.isDarkMode ? Colors.white10 : const Color(0xFFF1F5F9),
+                      borderRadius: BorderRadius.circular(4),
+                      border: Border.all(color: context.adaptiveBorder),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          (lead.status == 'pending' || lead.status == 'New')
+                              ? 'New'
+                              : (lead.status == 'win' ? 'Won' : (lead.status == 'loss' ? 'Lost' : lead.status)),
+                          style: TextStyle(
+                            fontSize: 9.5,
+                            fontWeight: FontWeight.w700,
+                            color: context.adaptiveSlate700,
+                          ),
+                        ),
+                        const SizedBox(width: 2),
+                        Icon(LucideIcons.chevronDown, size: 10, color: context.adaptiveSlate400),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // Contact Details & Product
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: Row(
+              children: [
+                if (lead.phoneNumber != null && lead.phoneNumber!.isNotEmpty) ...[
+                  Icon(LucideIcons.phone, size: 10, color: context.adaptiveSlate400),
+                  const SizedBox(width: 3),
+                  Text(
+                    lead.phoneNumber!,
+                    style: TextStyle(fontSize: 10.5, color: context.adaptiveSlate600, fontWeight: FontWeight.w500),
+                  ),
+                  const SizedBox(width: 6),
+                ],
+                if (lead.product != null && lead.product!.isNotEmpty) ...[
+                  Icon(LucideIcons.box, size: 10, color: context.adaptiveSlate400),
+                  const SizedBox(width: 3),
+                  Expanded(
+                    child: Text(
+                      lead.product!,
+                      style: TextStyle(fontSize: 10.5, color: context.adaptiveSlate500),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 5),
+
+          // Follow-up Date Pill (Clickable to change date)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: () => _pickDate(context),
+                borderRadius: BorderRadius.circular(6),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3.5),
+                  decoration: BoxDecoration(
+                    color: color.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: color.withValues(alpha: 0.35)),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        category == FollowUpCategory.overdue ? LucideIcons.alertTriangle : LucideIcons.calendar,
+                        size: 11.5,
+                        color: color,
+                      ),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          categoryText,
+                          style: TextStyle(
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w700,
+                            color: color,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      Icon(LucideIcons.pencil, size: 10, color: color),
+                      if (lead.followUpDate != null) ...[
+                        const SizedBox(width: 4),
+                        GestureDetector(
+                          onTap: () => onUpdateFollowUpDate(null),
+                          child: Icon(LucideIcons.x, size: 11, color: color),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+
+          // Latest Remarks snippet if available
+          if (lead.description != null && lead.description!.trim().isNotEmpty) ...[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(8, 4, 8, 0),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                decoration: BoxDecoration(
+                  color: context.isDarkMode ? Colors.black.withValues(alpha: 0.15) : const Color(0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(LucideIcons.messageSquare, size: 9, color: context.adaptiveSlate400),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Text(
+                        lead.description!,
+                        style: TextStyle(
+                          fontSize: 9.5,
+                          color: context.adaptiveSlate600,
+                          fontStyle: FontStyle.italic,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+
+          // Footer actions
+          Padding(
+            padding: const EdgeInsets.fromLTRB(8, 4, 6, 5),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                InkWell(
+                  onTap: () => _showRemarkDialog(context),
+                  borderRadius: BorderRadius.circular(4),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(LucideIcons.plus, size: 11, color: AppColors.primaryLight),
+                        const SizedBox(width: 2),
+                        const Text(
+                          'Add Remark',
+                          style: TextStyle(
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.primaryLight,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      icon: Icon(LucideIcons.externalLink, size: 13, color: context.adaptiveSlate500),
+                      onPressed: () {
+                        showDialog(
+                          context: context,
+                          builder: (_) => EditLeadDialog(lead: lead),
+                        );
+                      },
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(minWidth: 20, minHeight: 20),
+                      splashRadius: 10,
+                      tooltip: 'Edit details',
+                    ),
+                    const SizedBox(width: 2),
+                    IconButton(
+                      icon: Icon(LucideIcons.trash2, size: 12, color: context.adaptiveSlate400),
+                      onPressed: onDelete,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(minWidth: 20, minHeight: 20),
+                      splashRadius: 10,
+                      tooltip: 'Delete',
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+

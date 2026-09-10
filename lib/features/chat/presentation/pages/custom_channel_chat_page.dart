@@ -20,6 +20,9 @@ import '../../../../core/design_system/design_system.dart';
 import '../../../tickets/presentation/providers/ticket_provider.dart';
 import '../../../tickets/domain/entities/ticket.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
+import '../../../developer_crm/presentation/dev_crm_provider_scope.dart';
+import '../../../developer_crm/presentation/pages/task_edit_screen.dart';
+import '../../../developer_crm/core/enums.dart';
 import '../providers/chat_provider.dart';
 import '../providers/custom_channel_provider.dart';
 import '../../domain/entities/chat_message.dart';
@@ -41,6 +44,48 @@ import '../../../../core/services/zoho_launcher.dart';
 import '../../../../core/services/zoho_api_service.dart';
 import '../../../../features/calls/domain/models/call_history_item.dart';
 import '../../../../features/calls/presentation/providers/call_history_provider.dart';
+
+final devTasksMapStreamProvider = StreamProvider<Map<int, Map<String, dynamic>>>((ref) {
+  final supabase = Supabase.instance.client;
+  final controller = StreamController<Map<int, Map<String, dynamic>>>.broadcast();
+
+  Future<void> fetch() async {
+    try {
+      final data = await supabase
+          .schema('aroundtally')
+          .from('tasks')
+          .select('id, status, description, client_id, priority');
+      final map = <int, Map<String, dynamic>>{};
+      for (final row in (data as List)) {
+        final id = row['id'];
+        if (id is int) {
+          map[id] = Map<String, dynamic>.from(row);
+        } else if (id != null) {
+          final parsed = int.tryParse(id.toString());
+          if (parsed != null) map[parsed] = Map<String, dynamic>.from(row);
+        }
+      }
+      if (!controller.isClosed) controller.add(map);
+    } catch (e) {
+      if (!controller.isClosed) controller.addError(e);
+    }
+  }
+
+  fetch();
+
+  final channel = supabase
+      .channel('realtime_aroundtally_tasks_chat')
+      .onPostgresChanges(
+        event: PostgresChangeEvent.all,
+        schema: 'aroundtally',
+        table: 'tasks',
+        callback: (_) => fetch(),
+      )
+      .subscribe();
+
+  controller.onCancel = () => supabase.removeChannel(channel);
+  return controller.stream;
+});
 
 IconData _getFileIcon(String? fileType) {
   if (fileType == null) return Icons.insert_drive_file;
@@ -1966,6 +2011,45 @@ class _ChatBubbleState extends ConsumerState<_ChatBubble> {
     return null;
   }
 
+  int? _extractDevTaskId(String content) {
+    for (final line in content.split('\n')) {
+      if (line.startsWith('DevTaskID: ')) {
+        return int.tryParse(line.substring('DevTaskID: '.length).trim());
+      }
+      if (line.startsWith('TaskID: ')) {
+        final val = line.substring('TaskID: '.length).trim().replaceAll('#', '');
+        return int.tryParse(val);
+      }
+      if (line.startsWith('TicketID: dev-')) {
+        return int.tryParse(line.substring('TicketID: dev-'.length).trim());
+      }
+      if (line.startsWith('TicketID: ')) {
+        final raw = line.substring('TicketID: '.length).trim();
+        final asInt = int.tryParse(raw);
+        if (asInt != null) return asInt;
+      }
+    }
+    return null;
+  }
+
+  String? _extractStatusFromContent(String content) {
+    for (final line in content.split('\n')) {
+      if (line.startsWith('Status: ')) {
+        return line.substring('Status: '.length).trim();
+      }
+    }
+    return null;
+  }
+
+  String? _extractNoteFromContent(String content) {
+    for (final line in content.split('\n')) {
+      if (line.startsWith('Note: ')) {
+        return line.substring('Note: '.length).trim();
+      }
+    }
+    return null;
+  }
+
   String _extractIssueFromContent(String content) {
     for (final line in content.split('\n')) {
       if (line.startsWith('Issue: ')) {
@@ -1987,38 +2071,63 @@ class _ChatBubbleState extends ConsumerState<_ChatBubble> {
   String _visibleTicketContent(String content) {
     return content
         .split('\n')
-        .where((line) => !line.startsWith('TicketID: '))
+        .where((line) =>
+            !line.startsWith('TicketID: ') &&
+            !line.startsWith('DevTaskID: ') &&
+            !line.startsWith('TaskID: ') &&
+            !line.startsWith('Status: ') &&
+            !line.startsWith('Note: '))
         .join('\n');
   }
 
   bool _isResolvedStatus(String? status) {
-    return status == 'Resolved' ||
-        status == 'Closed' ||
-        status == 'BillRaised' ||
-        status == 'BillProcessed';
+    if (status == null) return false;
+    final lower = status.toLowerCase();
+    return lower.contains('resolved') ||
+        lower.contains('closed') ||
+        lower.contains('completed') ||
+        lower.contains('billraised') ||
+        lower.contains('billprocessed');
   }
 
   Color _statusBorderColor(String? status, {bool isClaimed = false}) {
-    if (_isResolvedStatus(status)) {
+    if (status == null) return AppColors.error;
+    
+    String target = status;
+    if (status.contains('➔')) {
+      target = status.split('➔').last.trim();
+    } else if (status.contains('->')) {
+      target = status.split('->').last.trim();
+    }
+
+    final lower = target.toLowerCase();
+    if (_isResolvedStatus(lower)) {
       return AppColors.success;
     }
-    if (status == 'Paused' || status == 'CallBack' || status == 'WontPay' || status == 'InProgress') {
-      return const Color(0xFFF59E0B); // Amber/Orange
+    if (lower == 'working' ||
+        lower == 'presently working' ||
+        lower == 'inprogress' ||
+        lower == 'in progress' ||
+        lower == 'paused' ||
+        lower == 'callback' ||
+        lower == 'call back' ||
+        lower == 'onhold' ||
+        lower == 'on hold') {
+      return const Color(0xFFF59E0B);
+    }
+    if (lower.contains('testing')) {
+      return const Color(0xFF8B5CF6);
+    }
+    if (lower.contains('implementation')) {
+      return const Color(0xFF06B6D4);
+    }
+    if (lower.contains('confirmation')) {
+      return const Color(0xFF3B82F6);
     }
     if (isClaimed) {
       return AppColors.warning;
     }
-    switch (status) {
-      case 'New':
-      case 'Open':
-      case 'OnHold':
-      case 'WaitingForCustomer':
-      case 'Reopened':
-      case null:
-        return AppColors.error;
-      default:
-        return AppColors.error;
-    }
+    return _getStatusColor(status);
   }
 
   Color _getAdaptiveStatusBorderColor(
@@ -2035,49 +2144,62 @@ class _ChatBubbleState extends ConsumerState<_ChatBubble> {
 
   Color _getAdaptiveStatusColor(BuildContext context, String? status) {
     if (context.isDarkMode) {
-      switch (status) {
-        case 'New':
-        case 'Open':
-          return Colors.red.shade200;
-        case 'InProgress':
-        case 'OnHold':
-        case 'WaitingForCustomer':
-        case 'Paused':
-        case 'CallBack':
-        case 'WontPay':
-          return Colors.orange.shade300;
-        case 'BillRaised':
-          return Colors.red.shade200;
-        case 'Resolved':
-        case 'Closed':
-        case 'Reopened':
-        case 'BillProcessed':
-          return Colors.green.shade300;
-        default:
-          return Colors.grey.shade400;
-      }
+      final base = _getStatusColor(status);
+      return Color.lerp(base, Colors.white, 0.25) ?? base;
     }
     return _getStatusColor(status);
   }
 
   Color _getStatusColor(String? status) {
-    switch (status) {
-      case 'New':
-      case 'Open':
+    if (status == null || status.trim().isEmpty) return AppColors.slate500;
+    
+    String target = status;
+    if (status.contains('➔')) {
+      target = status.split('➔').last.trim();
+    } else if (status.contains('->')) {
+      target = status.split('->').last.trim();
+    }
+    
+    final lower = target.toLowerCase();
+    switch (lower) {
+      case 'new':
+      case 'open':
+      case 'not_started':
+      case 'yet to start':
         return AppColors.error;
-      case 'InProgress':
-      case 'OnHold':
-      case 'WaitingForCustomer':
-      case 'Paused':
-      case 'CallBack':
-      case 'WontPay':
+      case 'working':
+      case 'presently working':
+      case 'inprogress':
+      case 'in progress':
+      case 'onhold':
+      case 'on hold':
+      case 'waitingforcustomer':
+      case 'waiting':
+      case 'paused':
+      case 'callback':
+      case 'call back':
         return AppColors.warning;
-      case 'Resolved':
-      case 'Closed':
-      case 'Reopened':
-      case 'BillRaised':
-      case 'BillProcessed':
+      case 'ready_for_testing':
+      case 'ready for testing':
+      case 'testing':
+        return const Color(0xFF8B5CF6); // Purple
+      case 'ready_for_implementation':
+      case 'ready for implementation':
+        return const Color(0xFF06B6D4); // Cyan
+      case 'awaiting_confirmation':
+      case 'awaiting confirmation':
+        return const Color(0xFF3B82F6); // Blue
+      case 'resolved':
+      case 'closed':
+      case 'completed':
+      case 'reopened':
+      case 'billraised':
+      case 'billprocessed':
         return AppColors.success;
+      case 'cancelled':
+      case 'wontpay':
+      case "won't pay":
+        return AppColors.error;
       default:
         return AppColors.slate500;
     }
@@ -2098,44 +2220,91 @@ class _ChatBubbleState extends ConsumerState<_ChatBubble> {
   }
 
   String _getFormattedStatus(String? status) {
-    if (status == null) return 'Open';
-    switch (status) {
-      case 'Resolved':
-      case 'Closed':
-      case 'BillRaised':
-      case 'BillProcessed':
+    if (status == null || status.trim().isEmpty) return 'Open';
+    
+    if (status.contains('➔')) {
+      final parts = status.split('➔');
+      final from = _getFormattedStatus(parts[0].trim());
+      final to = _getFormattedStatus(parts[1].trim());
+      return '$from ➔ $to';
+    }
+    if (status.contains('->')) {
+      final parts = status.split('->');
+      final from = _getFormattedStatus(parts[0].trim());
+      final to = _getFormattedStatus(parts[1].trim());
+      return '$from ➔ $to';
+    }
+
+    final lower = status.toLowerCase().trim();
+    switch (lower) {
+      case 'resolved':
+      case 'closed':
+      case 'billraised':
+      case 'billprocessed':
         return 'Resolved';
-      case 'InProgress':
+      case 'inprogress':
+      case 'in progress':
         return 'In Progress';
-      case 'Paused':
+      case 'paused':
         return 'Paused';
-      case 'CallBack':
+      case 'callback':
+      case 'call back':
         return 'Call Back';
-      case 'WontPay':
+      case 'wontpay':
+      case "won't pay":
         return "Won't Pay";
-      case 'WaitingForCustomer':
+      case 'waitingforcustomer':
+      case 'waiting':
         return 'Waiting';
-      case 'OnHold':
+      case 'onhold':
+      case 'on hold':
         return 'On Hold';
+      case 'not_started':
+      case 'yet to start':
+        return 'Yet to start';
+      case 'working':
+      case 'presently working':
+        return 'Presently working';
+      case 'ready_for_testing':
+      case 'ready for testing':
+      case 'testing':
+        return 'Ready for testing';
+      case 'ready_for_implementation':
+      case 'ready for implementation':
+        return 'Ready for implementation';
+      case 'awaiting_confirmation':
+      case 'awaiting confirmation':
+        return 'Awaiting confirmation';
+      case 'completed':
+        return 'Completed';
+      case 'cancelled':
+        return 'Cancelled';
       default:
-        return status;
+        return taskStatusLabel(status);
     }
   }
 
   Widget _buildTicketCard(BuildContext context, WidgetRef ref, ChatMessage message) {
-    final ticketId = _extractTicketId(message.content);
+    final devTaskId = _extractDevTaskId(message.content);
+    final rawTicketId = _extractTicketId(message.content);
+    final isDevTask = devTaskId != null || (rawTicketId != null && int.tryParse(rawTicketId.replaceFirst('dev-', '')) != null);
+    final effectiveDevTaskId = devTaskId ?? (rawTicketId != null ? int.tryParse(rawTicketId.replaceFirst('dev-', '')) : null);
+
     final ticketsAsync = ref.watch(allTicketsStreamProvider);
     final agentsAsync = ref.watch(agentsListProvider);
+    final devTasksAsync = isDevTask ? ref.watch(devTasksMapStreamProvider) : null;
+    final devTasksMap = devTasksAsync?.value;
+    final devTaskData = (isDevTask && effectiveDevTaskId != null && devTasksMap != null) ? devTasksMap[effectiveDevTaskId] : null;
 
     return ticketsAsync.when(
       skipLoadingOnReload: true,
       skipLoadingOnRefresh: true,
       data: (tickets) {
         Ticket? ticket;
-        if (ticketId != null) {
-          ticket = tickets.where((t) => t.ticketId == ticketId).firstOrNull;
+        if (!isDevTask && rawTicketId != null) {
+          ticket = tickets.where((t) => t.ticketId == rawTicketId).firstOrNull;
         }
-        if (ticket == null && ticketId == null) {
+        if (ticket == null && rawTicketId == null && !isDevTask) {
           final issue = _extractIssueFromContent(message.content);
           for (final item in tickets) {
             final tIssue = item.description?.trim() ?? item.title.trim();
@@ -2146,116 +2315,250 @@ class _ChatBubbleState extends ConsumerState<_ChatBubble> {
           }
         }
 
-        final status = ticket?.status ?? 'Open';
-        final isClaimed = ticket?.assignedTo != null && ticket!.assignedTo!.isNotEmpty;
-        final targetTicketId = ticket?.ticketId ?? ticketId;
+        final contentStatus = _extractStatusFromContent(message.content);
+        final note = _extractNoteFromContent(message.content);
 
-        return InkWell(
-          onTap: targetTicketId != null ? () => context.push('/ticket/$targetTicketId') : null,
-          borderRadius: BorderRadius.circular(8),
-          child: Container(
-            constraints: const BoxConstraints(minWidth: 260, maxWidth: 400),
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: context.adaptiveCard,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(
-                color: _getAdaptiveStatusBorderColor(context, status, isClaimed: isClaimed),
-                width: 1.5,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.04),
-                  blurRadius: 4,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Icon(
-                      LucideIcons.ticket,
-                      size: 15,
-                      color: _getAdaptiveStatusBorderColor(context, status, isClaimed: isClaimed),
-                    ),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        _extractIssueFromContent(message.content),
-                        style: TextStyle(
-                          color: context.adaptiveSlate800,
-                          fontSize: 13,
-                          fontWeight: FontWeight.bold,
-                        ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
+        String status;
+        if (isDevTask && devTaskData != null && devTaskData['status'] != null) {
+          final liveRaw = devTaskData['status'].toString();
+          status = (contentStatus != null && contentStatus.contains('➔'))
+              ? contentStatus
+              : taskStatusLabel(liveRaw);
+        } else if (contentStatus != null) {
+          status = contentStatus;
+        } else if (ticket?.status != null) {
+          status = ticket!.status;
+        } else {
+          status = isDevTask ? 'Yet to start' : 'Open';
+        }
+
+        final isClaimed = ticket?.assignedTo != null && ticket!.assignedTo!.isNotEmpty;
+        final targetTicketId = ticket?.ticketId ?? rawTicketId;
+        final borderColor = _getAdaptiveStatusBorderColor(context, status, isClaimed: isClaimed);
+        final statusColor = _getAdaptiveStatusColor(context, status);
+
+        return Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: () {
+              if (isDevTask && effectiveDevTaskId != null) {
+                final supportAgent = ref.read(authProvider);
+                final currentUserId = supportAgent?.id;
+
+                showDialog(
+                  context: context,
+                  builder: (dialogCtx) => Dialog(
+                    insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    clipBehavior: Clip.antiAlias,
+                    child: SizedBox(
+                      width: 850,
+                      height: 750,
+                      child: DevCrmProviderScope(
+                        supportIdentifier: currentUserId,
+                        child: TaskEditScreen(taskId: effectiveDevTaskId),
                       ),
                     ),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        _extractCompanyFromContent(message.content),
-                        style: TextStyle(
-                          color: context.isDarkMode ? Colors.white70 : AppColors.slate600,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: _getAdaptiveStatusColor(context, status).withValues(alpha: 0.18),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(
-                        _getFormattedStatus(status),
-                        style: TextStyle(
-                          color: _getAdaptiveStatusColor(context, status),
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                if (isClaimed) ...[
-                  const SizedBox(height: 4),
-                  Text.rich(
-                    TextSpan(
-                      children: [
-                        TextSpan(
-                          text: 'Assigned to: ',
-                          style: TextStyle(
-                            color: context.isDarkMode ? Colors.white60 : AppColors.slate600,
-                            fontSize: 11,
-                            fontStyle: FontStyle.italic,
+                  ),
+                );
+              } else if (targetTicketId != null) {
+                final isUuid = RegExp(
+                  r'^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$',
+                  caseSensitive: false,
+                ).hasMatch(targetTicketId);
+
+                if (isUuid) {
+                  context.push('/ticket/$targetTicketId');
+                } else {
+                  final asInt = int.tryParse(targetTicketId.replaceFirst('dev-', ''));
+                  if (asInt != null) {
+                    final supportAgent = ref.read(authProvider);
+                    final currentUserId = supportAgent?.id;
+
+                    showDialog(
+                      context: context,
+                      builder: (dialogCtx) => Dialog(
+                        insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        clipBehavior: Clip.antiAlias,
+                        child: SizedBox(
+                          width: 850,
+                          height: 750,
+                          child: DevCrmProviderScope(
+                            supportIdentifier: currentUserId,
+                            child: TaskEditScreen(taskId: asInt),
                           ),
                         ),
-                        TextSpan(
-                          text: _getAssignedAgentName(ticket!.assignedTo, agentsAsync.value ?? []),
+                      ),
+                    );
+                  }
+                }
+              }
+            },
+            borderRadius: BorderRadius.circular(8),
+            child: Container(
+              constraints: const BoxConstraints(minWidth: 280, maxWidth: 420),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: context.adaptiveCard,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: borderColor,
+                  width: 1.5,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.04),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Icon(
+                        isDevTask ? LucideIcons.code : LucideIcons.ticket,
+                        size: 15,
+                        color: borderColor,
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          _extractIssueFromContent(message.content),
                           style: TextStyle(
-                            color: context.isDarkMode ? Colors.white.withValues(alpha: 0.9) : AppColors.slate800,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                            fontStyle: FontStyle.italic,
+                            color: context.adaptiveSlate800,
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      if (isDevTask && effectiveDevTaskId != null) ...[
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                          decoration: BoxDecoration(
+                            color: borderColor.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            '#$effectiveDevTaskId',
+                            style: TextStyle(
+                              color: borderColor,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
                         ),
                       ],
-                    ),
+                    ],
                   ),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          _extractCompanyFromContent(message.content),
+                          style: TextStyle(
+                            color: context.isDarkMode ? Colors.white70 : AppColors.slate600,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2.5),
+                          decoration: BoxDecoration(
+                            color: statusColor.withValues(alpha: 0.18),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            _getFormattedStatus(status),
+                            style: TextStyle(
+                              color: statusColor,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (note != null && note.isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: context.isDarkMode
+                            ? Colors.white.withValues(alpha: 0.05)
+                            : AppColors.slate100.withValues(alpha: 0.6),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(
+                            LucideIcons.messageSquare,
+                            size: 11,
+                            color: context.isDarkMode ? Colors.white54 : AppColors.slate500,
+                          ),
+                          const SizedBox(width: 5),
+                          Expanded(
+                            child: Text(
+                              note,
+                              style: TextStyle(
+                                color: context.isDarkMode ? Colors.white70 : AppColors.slate600,
+                                fontSize: 11,
+                                fontStyle: FontStyle.italic,
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                  if (isClaimed) ...[
+                    const SizedBox(height: 4),
+                    Text.rich(
+                      TextSpan(
+                        children: [
+                          TextSpan(
+                            text: 'Assigned to: ',
+                            style: TextStyle(
+                              color: context.isDarkMode ? Colors.white60 : AppColors.slate600,
+                              fontSize: 11,
+                              fontStyle: FontStyle.italic,
+                            ),
+                          ),
+                          TextSpan(
+                            text: _getAssignedAgentName(ticket!.assignedTo, agentsAsync.value ?? []),
+                            style: TextStyle(
+                              color: context.isDarkMode ? Colors.white.withValues(alpha: 0.9) : AppColors.slate800,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              fontStyle: FontStyle.italic,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
         );

@@ -351,16 +351,16 @@ class _TicketsTableViewState extends ConsumerState<TicketsTableView> {
       ticketOptimisticAssigneeOverridesProvider,
     );
 
-    bool isCompleted(String? s) {
+    final isCompleted = (String? s) {
       if (s == null) return false;
       final norm = s.trim().toLowerCase();
       return norm == 'resolved' || norm == 'closed' || norm == 'billraised' || norm == 'billprocessed' || norm == 'completed';
-    }
-    bool isCancelled(String? s) {
+    };
+    final isCancelled = (String? s) {
       if (s == null) return false;
       final norm = s.trim().toLowerCase();
       return norm == 'cancelled' || norm == 'canceled';
-    }
+    };
 
     final allWithOverrides = widget.tickets.map((t) {
       return t.copyWith(
@@ -369,6 +369,7 @@ class _TicketsTableViewState extends ConsumerState<TicketsTableView> {
       );
     }).toList();
 
+    final totalCount = allWithOverrides.length;
     final activeCount = allWithOverrides.where((t) => !isCompleted(t.status) && !isCancelled(t.status)).length;
     final completedCount = allWithOverrides.where((t) => isCompleted(t.status)).length;
     final cancelledCount = allWithOverrides.where((t) => isCancelled(t.status)).length;
@@ -449,7 +450,7 @@ class _TicketsTableViewState extends ConsumerState<TicketsTableView> {
               runSpacing: 10,
               crossAxisAlignment: WrapCrossAlignment.center,
               children: [
-                // Filter tabs: Active Tasks, Completed, Cancelled
+                // Filter tabs: All, Active Tasks, Completed, Cancelled
                 Container(
                   padding: const EdgeInsets.all(3),
                   decoration: BoxDecoration(
@@ -460,6 +461,15 @@ class _TicketsTableViewState extends ConsumerState<TicketsTableView> {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      _buildStatusFilterButton(
+                        filterKey: 'all',
+                        label: 'All',
+                        icon: LucideIcons.layers,
+                        count: totalCount,
+                        activeColor: const Color(0xFF6366F1),
+                        context: context,
+                      ),
+                      const SizedBox(width: 4),
                       _buildStatusFilterButton(
                         filterKey: 'active',
                         label: 'Active Tasks',

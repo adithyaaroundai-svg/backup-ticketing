@@ -42,8 +42,8 @@ class FollowUpSidebar extends StatelessWidget {
     }
 
     // Sort by follow-up date ascending
-    missed.sort((a, b) => a.followUpDate!.compareTo(b.followUpDate!));
     dueToday.sort((a, b) => a.followUpDate!.compareTo(b.followUpDate!));
+    missed.sort((a, b) => b.followUpDate!.compareTo(a.followUpDate!)); // Most recent missed first
     upcoming.sort((a, b) => a.followUpDate!.compareTo(b.followUpDate!));
 
     return Container(
@@ -77,18 +77,21 @@ class FollowUpSidebar extends StatelessWidget {
             child: ListView(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               children: [
-                if (missed.isNotEmpty) ...[
-                  _SectionHeader(title: 'Missed', color: Colors.red.shade600, count: missed.length),
-                  ...missed.map((l) => _FollowUpCard(lead: l)),
-                  const SizedBox(height: 16),
-                ],
-                
+                // 1. Due Today Section (Prioritized First)
                 if (dueToday.isNotEmpty) ...[
                   _SectionHeader(title: 'Due Today', color: Colors.orange.shade600, count: dueToday.length),
                   ...dueToday.map((l) => _FollowUpCard(lead: l)),
                   const SizedBox(height: 16),
                 ],
                 
+                // 2. Missed Section
+                if (missed.isNotEmpty) ...[
+                  _SectionHeader(title: 'Missed', color: Colors.red.shade600, count: missed.length),
+                  ...missed.map((l) => _FollowUpCard(lead: l)),
+                  const SizedBox(height: 16),
+                ],
+                
+                // 3. Upcoming Section
                 if (upcoming.isNotEmpty) ...[
                   _SectionHeader(title: 'Upcoming', color: AppColors.primary, count: upcoming.length),
                   ...upcoming.map((l) => _FollowUpCard(lead: l)),

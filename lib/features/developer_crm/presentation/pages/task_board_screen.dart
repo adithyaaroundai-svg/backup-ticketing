@@ -13,6 +13,7 @@ import '../providers/auth_provider.dart';
 import '../widgets/common.dart';
 import '../widgets/editable_task_table.dart';
 import '../widgets/task_form_dialog.dart';
+import '../widgets/choose_client_dialog.dart';
 
 /// Today's Tasks board (`task_board.ejs`): grouped by date, with
 /// assignee/client filters, add-task form, inline editable rows, and a
@@ -272,31 +273,10 @@ class _TaskBoardBodyState extends State<_TaskBoardBody> {
       showSavedSnack(context, ok: false, message: 'Create a client first.');
       return;
     }
-    int? selectedClientId = clients.first.id;
-    final result = await showDialog<Map<String, dynamic>>(
-      context: context,
-      builder: (dialogCtx) => StatefulBuilder(
-        builder: (dialogCtx, setState) => AlertDialog(
-          title: const Text('Choose client'),
-          content: DropdownButtonFormField<int>(
-            initialValue: selectedClientId,
-            items: [for (final c in clients) DropdownMenuItem(value: c.id, child: Text(c.name))],
-            onChanged: (v) => setState(() => selectedClientId = v),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(dialogCtx), child: const Text('Cancel')),
-            FilledButton(
-              onPressed: () => Navigator.pop(dialogCtx, {'clientId': selectedClientId}),
-              child: const Text('Next'),
-            ),
-          ],
-        ),
-      ),
-    );
-    if (result == null || !context.mounted) return;
-    final clientId = result['clientId'] as int;
+    final clientId = await showChooseClientDialog(context, clients: clients);
+    if (clientId == null || !mounted) return;
     final formResult = await showTaskFormDialog(context, users: _assigneeOptions);
-    if (formResult == null) return;
+    if (formResult == null || !mounted) return;
     try {
       final authProv = context.read<AuthProvider>();
       final clientName = clients.firstWhere(

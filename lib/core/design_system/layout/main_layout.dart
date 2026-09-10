@@ -24,6 +24,7 @@ import '../../../features/chat/presentation/widgets/chat_toast_overlay.dart';
 import '../../../features/productivity/presentation/widgets/add_reminder_dialog.dart';
 import '../../../features/productivity/presentation/widgets/reminder_toast_overlay.dart';
 import '../../../features/productivity/presentation/providers/reminder_provider.dart';
+import '../../../features/productivity/presentation/providers/productivity_providers.dart' show notificationsProvider;
 import '../../../features/deals/presentation/providers/deals_provider.dart';
 import '../../../features/sales/presentation/providers/lead_provider.dart';
 import '../../services/reminder_sound_service.dart';
@@ -50,7 +51,7 @@ class MainLayout extends ConsumerStatefulWidget {
   ConsumerState<MainLayout> createState() => _MainLayoutState();
 }
 
-class _MainLayoutState extends ConsumerState<MainLayout> {
+class _MainLayoutState extends ConsumerState<MainLayout> with WidgetsBindingObserver {
   double _firstPaneWidth = 240;
   final double _minPaneWidth = 180;
   final double _maxPaneWidth = 400;
@@ -76,6 +77,7 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     // Listen once for the lifetime of the layout widget — never re-registers
     // on navigation rebuilds, so old messages never re-fire.
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -88,6 +90,37 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      final c = _container;
+      if (c != null && !_isDisposed) {
+        c.read(dmConversationsProvider.notifier).refresh();
+        c.invalidate(agentsListProvider);
+        c.invalidate(notificationsProvider);
+        final currentUser = c.read(authProvider);
+        if (currentUser != null) {
+          _updateLastSeen(currentUser.id);
+        }
+      }
+    }
+  }
+
+  @override
+  void didUpdateWidget(MainLayout oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.currentPath != widget.currentPath) {
+      if (!widget.currentPath.startsWith('/chat/dm/')) {
+        final c = _container;
+        if (c != null && !_isDisposed) {
+          if (c.read(currentOpenConversationProvider) != null) {
+            c.read(currentOpenConversationProvider.notifier).state = null;
+          }
+        }
+      }
+    }
+  }
+
+  @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     // Cache the container so async callbacks never look up an ancestor after deactivation
@@ -96,6 +129,7 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _isDisposed = true;
     _hasInitialized = false;
     _chatListenerSubscription?.close();
@@ -2749,6 +2783,7 @@ class _ChannelsListState extends ConsumerState<_ChannelsList> {
     final isChatActive = currentPath == '/chat';
     final agentsAsync = ref.watch(agentsListProvider);
     final conversations = ref.watch(dmConversationsProvider);
+    final int dmSectionUnread = conversations.values.fold<int>(0, (sum, conv) => sum + conv.unreadCount);
     final currentUser = ref.watch(authProvider);
     final customChannelsAsync = ref.watch(customChannelsProvider);
 
@@ -3256,13 +3291,38 @@ class _ChannelsListState extends ConsumerState<_ChannelsList> {
                 ),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: Text(
-                    'Direct messages',
-                    style: TextStyle(
-                      color: textColor70,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                    ),
+                  child: Row(
+                    children: [
+                      Text(
+                        'Direct messages',
+                        style: TextStyle(
+                          color: textColor70,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      if (dmSectionUnread > 0) ...[
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 1.5,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppColors.error,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Text(
+                            dmSectionUnread > 99 ? '99+' : dmSectionUnread.toString(),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 9.5,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                 ),
                 // Add New DM button
@@ -3288,7 +3348,7 @@ class _ChannelsListState extends ConsumerState<_ChannelsList> {
                   '2d58eb0a-916a-4cb6-9245-b5b124caa0a3',
                 };
                 final filteredAgents = agents.where((a) {
-                  final id = a['id']?.toString() ?? '';
+                  final id = (a['id']?.toString() ?? '').trim().toLowerCase();
                   if (hiddenAgentIds.contains(id)) return false;
                   
                   if (isMobile) {
@@ -3296,10 +3356,13 @@ class _ChannelsListState extends ConsumerState<_ChannelsList> {
                     if (name.contains('abhirami') || name.contains('thaness')) return false;
                   }
                   
-                  // Only show agents that have an active conversation or are the current user
-                  if (currentUser != null && id != currentUser.id) {
+                  // Only show agents that have an active conversation, unread messages, or are the current user
+                  final currentUserIdNorm = (currentUser?.id ?? '').trim().toLowerCase();
+                  if (currentUserIdNorm.isNotEmpty && id != currentUserIdNorm) {
                     final conv = conversations[id];
-                    if (conv == null || conv.totalMessageCount == 0) {
+                    final hasUnread = (conv?.unreadCount ?? 0) > 0;
+                    final hasMessages = (conv?.totalMessageCount ?? 0) > 0;
+                    if (!hasUnread && !hasMessages) {
                       return false;
                     }
                   }
@@ -3310,28 +3373,25 @@ class _ChannelsListState extends ConsumerState<_ChannelsList> {
                 // Sort agents: own chat first, then unread, then recent message timestamp, then frequency
                 final sortedAgents = List.from(filteredAgents)
                   ..sort((a, b) {
-                    final agentAId = a['id']?.toString() ?? '';
-                    final agentBId = b['id']?.toString() ?? '';
+                    final agentAId = (a['id']?.toString() ?? '').trim().toLowerCase();
+                    final agentBId = (b['id']?.toString() ?? '').trim().toLowerCase();
 
-                    if (currentUser != null) {
-                      if (agentAId == currentUser.id && agentBId != currentUser.id) return -1;
-                      if (agentBId == currentUser.id && agentAId != currentUser.id) return 1;
+                    final currentUserIdNorm = (currentUser?.id ?? '').trim().toLowerCase();
+                    if (currentUserIdNorm.isNotEmpty) {
+                      if (agentAId == currentUserIdNorm && agentBId != currentUserIdNorm) return -1;
+                      if (agentBId == currentUserIdNorm && agentAId != currentUserIdNorm) return 1;
                     }
 
                     final unreadA = conversations[agentAId]?.unreadCount ?? 0;
                     final unreadB = conversations[agentBId]?.unreadCount ?? 0;
                     if (unreadA > 0 && unreadB == 0) return -1;
                     if (unreadB > 0 && unreadA == 0) return 1;
+                    if (unreadA > 0 && unreadB > 0 && unreadA != unreadB) {
+                      return unreadB.compareTo(unreadA);
+                    }
 
                     final convA = conversations[agentAId];
                     final convB = conversations[agentBId];
-                    
-                    final countA = convA?.totalMessageCount ?? 0;
-                    final countB = convB?.totalMessageCount ?? 0;
-                    
-                    if (countA != countB) {
-                      return countB.compareTo(countA); // Sort by highest message count first
-                    }
 
                     final lastA = convA?.lastMessage?.createdAt;
                     final lastB = convB?.lastMessage?.createdAt;
@@ -3343,6 +3403,12 @@ class _ChannelsListState extends ConsumerState<_ChannelsList> {
                       return -1;
                     } else if (lastB != null) {
                       return 1;
+                    }
+
+                    final countA = convA?.totalMessageCount ?? 0;
+                    final countB = convB?.totalMessageCount ?? 0;
+                    if (countA != countB) {
+                      return countB.compareTo(countA); // Sort by highest message count next
                     }
 
                     final nameA = (a['full_name'] ?? a['username'] ?? '').toString().toLowerCase();
@@ -3551,9 +3617,11 @@ class _SidebarDmTile extends ConsumerWidget {
                       child: Text(
                         name,
                         style: TextStyle(
-                          color: isSelected ? (isLight ? AppColors.slate900 : Colors.white) : textColor70,
+                          color: (isSelected || unreadCount > 0)
+                              ? (isLight ? AppColors.slate900 : Colors.white)
+                              : textColor70,
                           fontSize: 13,
-                          fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                          fontWeight: (isSelected || unreadCount > 0) ? FontWeight.w700 : FontWeight.w500,
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
