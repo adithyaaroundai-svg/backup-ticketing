@@ -3,6 +3,7 @@ class AroundaiProjectStatus {
   final String taskName;
   final String taskStatus;
   final String? notes;
+  final DateTime? followUpDate;
   final String? createdBy; // UUID of creator
   final DateTime? createdAt;
   final DateTime? updatedAt;
@@ -12,6 +13,7 @@ class AroundaiProjectStatus {
     required this.taskName,
     required this.taskStatus,
     this.notes,
+    this.followUpDate,
     this.createdBy,
     this.createdAt,
     this.updatedAt,
@@ -23,6 +25,7 @@ class AroundaiProjectStatus {
       taskName: json['task_name'] as String,
       taskStatus: json['task_status'] as String,
       notes: json['notes'] as String?,
+      followUpDate: json['follow_up_date'] != null ? DateTime.tryParse(json['follow_up_date']) : null,
       createdBy: json['created_by'] as String?,
       createdAt: json['created_at'] != null ? DateTime.tryParse(json['created_at']) : null,
       updatedAt: json['updated_at'] != null ? DateTime.tryParse(json['updated_at']) : null,

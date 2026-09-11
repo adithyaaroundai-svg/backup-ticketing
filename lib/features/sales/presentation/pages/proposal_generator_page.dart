@@ -76,6 +76,7 @@ class ProposalProduct {
     required this.color,
     required this.style,
     this.isStrikethroughPrice = true,
+    this.isSectionHeader = false,
   });
 
   final String title;
@@ -84,6 +85,7 @@ class ProposalProduct {
   final Color color;
   final ProposalCardStyle style;
   final bool isStrikethroughPrice;
+  final bool isSectionHeader;
 
   ProposalProduct copyWith({
     String? title,
@@ -92,6 +94,7 @@ class ProposalProduct {
     Color? color,
     ProposalCardStyle? style,
     bool? isStrikethroughPrice,
+    bool? isSectionHeader,
   }) {
     return ProposalProduct(
       title: title ?? this.title,
@@ -100,6 +103,7 @@ class ProposalProduct {
       color: color ?? this.color,
       style: style ?? this.style,
       isStrikethroughPrice: isStrikethroughPrice ?? this.isStrikethroughPrice,
+      isSectionHeader: isSectionHeader ?? this.isSectionHeader,
     );
   }
 }
@@ -1640,12 +1644,76 @@ Sidharth IT Solutions''';
     String bonusDate,
     Map<String, dynamic> theme,
   ) {
-    final pages = <Widget>[
-      _buildPage1_ExecutiveSummary(pricing, today, bonusDate, theme),
-      _buildPage2_Deliverables(pricing, bonusDate, theme),
-      _buildPage3_Closure(theme),
-    ];
-    pages.addAll(_customPages.map((cp) => _buildCustomContentPage(cp, theme)));
+    final allProducts = [..._defaultProducts(pricing)];
+    if (_companyProducts.isNotEmpty) {
+      allProducts.add(const ProposalProduct(
+        title: 'Custom Products',
+        subtitle: '',
+        price: 0,
+        color: Colors.transparent,
+        style: ProposalCardStyle.outline,
+        isSectionHeader: true,
+      ));
+      allProducts.addAll(_companyProducts);
+    }
+    
+    const int maxProductsWithSummary = 6;
+    const int maxProductsWithoutSummary = 12;
+    
+    List<List<ProposalProduct>> productPages = [];
+    int currentIndex = 0;
+    
+    while (currentIndex < allProducts.length) {
+      int remaining = allProducts.length - currentIndex;
+      if (remaining <= maxProductsWithSummary) {
+        productPages.add(allProducts.sublist(currentIndex, currentIndex + remaining));
+        currentIndex += remaining;
+      } else {
+        int take = remaining > maxProductsWithoutSummary ? maxProductsWithoutSummary : remaining;
+        productPages.add(allProducts.sublist(currentIndex, currentIndex + take));
+        currentIndex += take;
+      }
+    }
+    
+    if (productPages.isEmpty) {
+       productPages.add([]);
+    }
+    
+    bool summaryOnLastProductPage = productPages.last.length <= maxProductsWithSummary;
+    int deliverablesPageCount = productPages.length + (summaryOnLastProductPage ? 0 : 1);
+    
+    int totalPages = 2 + deliverablesPageCount + _customPages.length;
+    int pageNum = 1;
+
+    final pages = <Widget>[];
+    pages.add(_buildPage1_ExecutiveSummary(pricing, today, bonusDate, theme, pageNum++, totalPages));
+    
+    for (int i = 0; i < productPages.length; i++) {
+       bool isLastProductPage = (i == productPages.length - 1);
+       bool includeSummary = isLastProductPage && summaryOnLastProductPage;
+       
+       pages.add(_buildDeliverablesPage(
+          productPages[i], 
+          includeSummary, 
+          pricing, 
+          bonusDate, 
+          theme, 
+          pageNum++, 
+          totalPages,
+          isFirstDeliverablesPage: i == 0,
+       ));
+    }
+    
+    if (!summaryOnLastProductPage) {
+       pages.add(_buildInvestmentSummaryPage(pricing, bonusDate, theme, pageNum++, totalPages));
+    }
+    
+    pages.add(_buildPage3_Closure(theme, pageNum++, totalPages));
+    
+    for (var cp in _customPages) {
+       pages.add(_buildCustomContentPage(cp, theme, pageNum++, totalPages));
+    }
+    
     return pages;
   }
 
@@ -1654,6 +1722,8 @@ Sidharth IT Solutions''';
     String today,
     String bonusDate,
     Map<String, dynamic> theme,
+    int pageNum,
+    int totalPages,
   ) {
     return _buildPageSurface(
       theme: theme,
@@ -1880,7 +1950,7 @@ Sidharth IT Solutions''';
                   ),
                 ],
               ),
-              _buildPageFooter(1, 3),
+              _buildPageFooter(pageNum, totalPages),
             ],
           ),
         ],
@@ -1934,14 +2004,17 @@ Sidharth IT Solutions''';
     );
   }
 
-  // PAGE 2: Deliverables & Investment
-  Widget _buildPage2_Deliverables(
+  // PAGE 2 & Beyond: Deliverables & Investment
+  Widget _buildDeliverablesPage(
+    List<ProposalProduct> pageProducts,
+    bool includeSummary,
     Map<String, double> pricing,
     String bonusDate,
     Map<String, dynamic> theme,
+    int pageNum,
+    int totalPages,
+    {bool isFirstDeliverablesPage = true}
   ) {
-    final allProducts = [..._defaultProducts(pricing), ..._companyProducts];
-
     return _buildPageSurface(
       theme: theme,
       child: Column(
@@ -1955,7 +2028,115 @@ Sidharth IT Solutions''';
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Solution Blueprint',
+                      isFirstDeliverablesPage ? 'Solution Blueprint' : 'Solution Blueprint (Continued)',
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w800,
+                        color: theme['secondary'],
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      isFirstDeliverablesPage 
+                        ? 'Everything included in your implementation package.'
+                        : 'Continued from previous page.',
+                      style: const TextStyle(fontSize: 14, color: cGray600),
+                    ),
+                  ],
+                ),
+              ),
+              if (isFirstDeliverablesPage) 
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: cYellow50,
+                    border: Border.all(color: cYellow300),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    'Valid until: $bonusDate',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: cOrange700,
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          Wrap(
+            spacing: 16,
+            runSpacing: 16,
+            children: pageProducts
+                .map(
+                  (p) {
+                    if (p.isSectionHeader) {
+                      return SizedBox(
+                        width: _pageWidth - 64, // full width minus horizontal padding
+                        child: Padding(
+                          padding: const EdgeInsets.only(top: 8, bottom: 4),
+                          child: Text(
+                            p.title,
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: theme['secondary'],
+                            ),
+                          ),
+                        ),
+                      );
+                    }
+                    return SizedBox(
+                      width: (_pageWidth - 64 - 17) / 2, 
+                      child: _buildPackageItem(p),
+                    );
+                  }
+                )
+                .toList(),
+          ),
+
+          if (includeSummary) ...[
+            const SizedBox(height: 16),
+            _buildFreeMobileCard(pricing, theme),
+            const SizedBox(height: 16),
+            Expanded(child: _buildInvestmentBreakdown(pricing, theme)),
+          ] else ...[
+             const Spacer(),
+          ],
+
+          const SizedBox(height: 16),
+          _buildPageFooter(pageNum, totalPages),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInvestmentSummaryPage(
+    Map<String, double> pricing,
+    String bonusDate,
+    Map<String, dynamic> theme,
+    int pageNum,
+    int totalPages,
+  ) {
+    return _buildPageSurface(
+      theme: theme,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Investment Summary',
                       style: TextStyle(
                         fontSize: 24,
                         fontWeight: FontWeight.w800,
@@ -1964,64 +2145,27 @@ Sidharth IT Solutions''';
                     ),
                     const SizedBox(height: 6),
                     const Text(
-                      'Everything included in your implementation package.',
+                      'Final breakdown of your package.',
                       style: TextStyle(fontSize: 14, color: cGray600),
                     ),
                   ],
                 ),
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 8,
-                ),
-                decoration: BoxDecoration(
-                  color: cYellow50,
-                  border: Border.all(color: cYellow300),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  'Valid until: $bonusDate',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: cOrange700,
-                    fontSize: 13,
-                  ),
-                ),
-              ),
             ],
           ),
-          const SizedBox(height: 16),
-
-          // Products Grid using Wrap to prevent overflow
-          Wrap(
-            spacing: 16,
-            runSpacing: 16,
-            children: allProducts
-                .map(
-                  (p) => SizedBox(
-                    width: (_pageWidth - 56 - 16) / 2, // 2 columns exactly
-                    child: _buildPackageItem(p),
-                  ),
-                )
-                .toList(),
-          ),
-
-          const SizedBox(height: 16),
+          const SizedBox(height: 24),
           _buildFreeMobileCard(pricing, theme),
-
           const SizedBox(height: 16),
           Expanded(child: _buildInvestmentBreakdown(pricing, theme)),
-
           const SizedBox(height: 16),
-          _buildPageFooter(2, 3),
+          _buildPageFooter(pageNum, totalPages),
         ],
       ),
     );
   }
 
   // PAGE 3: Closure & Trust
-  Widget _buildPage3_Closure(Map<String, dynamic> theme) {
+  Widget _buildPage3_Closure(Map<String, dynamic> theme, int pageNum, int totalPages) {
     return _buildPageSurface(
       theme: theme,
       child: Column(
@@ -2042,7 +2186,7 @@ Sidharth IT Solutions''';
           const Spacer(),
           _buildContactFooter(theme),
           const SizedBox(height: 20),
-          _buildPageFooter(3, 3),
+          _buildPageFooter(pageNum, totalPages),
         ],
       ),
     );
@@ -2051,6 +2195,8 @@ Sidharth IT Solutions''';
   Widget _buildCustomContentPage(
     ProposalCustomPage customPage,
     Map<String, dynamic> theme,
+    int pageNum,
+    int totalPages,
   ) {
     return _buildPageSurface(
       theme: theme,
@@ -2087,6 +2233,8 @@ Sidharth IT Solutions''';
               ),
             ),
           ),
+          const SizedBox(height: 16),
+          _buildPageFooter(pageNum, totalPages),
         ],
       ),
     );

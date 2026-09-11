@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -70,6 +71,7 @@ class _AroundaiProjectStatusScreenState extends ConsumerState<AroundaiProjectSta
     final statusCtrl = TextEditingController(text: task?.taskStatus ?? 'not started');
     final latestNote = _getLatestNoteText(task?.notes);
     final notesCtrl = TextEditingController(text: latestNote);
+    DateTime? selectedFollowUpDate = task?.followUpDate;
     bool saving = false;
 
     showDialog(
@@ -82,159 +84,206 @@ class _AroundaiProjectStatusScreenState extends ConsumerState<AroundaiProjectSta
           child: Container(
             width: 450,
             padding: const EdgeInsets.all(28),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          task == null ? 'Create New Task' : 'Edit Task',
-                          style: const TextStyle(
-                            fontSize: 22,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.textPrimary,
-                            letterSpacing: -0.5,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          task == null ? 'Add a new task to the project status.' : 'Update the details of the task.',
-                          style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
-                        ),
-                      ],
-                    ),
-                    IconButton(
-                      onPressed: () => Navigator.pop(dialogCtx),
-                      icon: const Icon(LucideIcons.x, size: 22, color: Colors.black54),
-                      splashRadius: 22,
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 32),
-                const Text('Task Name', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.black87)),
-                const SizedBox(height: 8),
-                TextFormField(
-                  controller: nameCtrl,
-                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-                  decoration: InputDecoration(
-                    hintText: 'e.g., Integrate Supabase API',
-                    hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 14, fontWeight: FontWeight.normal),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                    filled: true,
-                    fillColor: const Color(0xFFF8FAFC),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
-                    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: AppColors.primary, width: 1.5)),
-                  ),
-                ),
-                const SizedBox(height: 20),
-                const Text('Current Status', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.black87)),
-                const SizedBox(height: 8),
-                DropdownButtonFormField<String>(
-                  value: statusCtrl.text,
-                  icon: const Icon(LucideIcons.chevronDown, size: 16, color: Colors.black54),
-                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: AppColors.textPrimary),
-                  decoration: InputDecoration(
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                    filled: true,
-                    fillColor: const Color(0xFFF8FAFC),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
-                    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: AppColors.primary, width: 1.5)),
-                  ),
-                  items: [
-                    _buildDropdownItem('not started', 'Not Started', Colors.grey.shade600, Colors.grey.shade200),
-                    _buildDropdownItem('working', 'Presently Working', Colors.orange.shade800, Colors.orange.shade100),
-                    _buildDropdownItem('completed', 'Completed', Colors.green.shade700, Colors.green.shade100),
-                    _buildDropdownItem('paused', 'Paused', Colors.red.shade700, Colors.red.shade50),
-                    _buildDropdownItem('trial', 'Trial', Colors.blue.shade700, Colors.blue.shade50),
-                  ],
-                  onChanged: (v) {
-                    if (v != null) statusCtrl.text = v;
-                  },
-                ),
-                const SizedBox(height: 20),
-                const Text('Additional Notes', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.black87)),
-                const SizedBox(height: 8),
-                TextFormField(
-                  controller: notesCtrl,
-                  style: const TextStyle(fontSize: 14),
-                  maxLines: 3,
-                  decoration: InputDecoration(
-                    hintText: 'Any extra details...',
-                    hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 14),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                    filled: true,
-                    fillColor: const Color(0xFFF8FAFC),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
-                    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: AppColors.primary, width: 1.5)),
-                  ),
-                ),
-                const SizedBox(height: 32),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(dialogCtx),
-                      style: TextButton.styleFrom(
-                        foregroundColor: Colors.grey.shade700,
-                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-                      ),
-                      child: const Text('Cancel', style: TextStyle(fontWeight: FontWeight.w600)),
-                    ),
-                    const SizedBox(width: 12),
-                    FilledButton(
-                      style: FilledButton.styleFrom(
-                        backgroundColor: AppColors.primary,
-                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                        elevation: 0,
-                      ),
-                      onPressed: saving
-                          ? null
-                          : () async {
-                              if (nameCtrl.text.trim().isEmpty) return;
-                              setState(() => saving = true);
-                              final prov = ref.read(aroundaiProjectStatusProvider.notifier);
-                              final currentUserId = ref.read(authProvider)?.id;
-                              try {
-                                if (task == null) {
-                                  await prov.createTask(
-                                    nameCtrl.text.trim(),
-                                    statusCtrl.text,
-                                    notesCtrl.text.trim().isEmpty ? null : notesCtrl.text.trim(),
-                                    currentUserId,
-                                  );
-                                } else {
-                                  await prov.updateTask(
-                                    task.id,
-                                    nameCtrl.text.trim(),
-                                    statusCtrl.text,
-                                    notesCtrl.text.trim().isEmpty ? null : notesCtrl.text.trim(),
-                                    task.notes,
-                                    currentUserId,
-                                  );
-                                }
-                                if (mounted) Navigator.pop(dialogCtx);
-                              } catch (e) {
-                                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
-                              } finally {
-                                if (mounted) setState(() => saving = false);
-                              }
-                            },
-                      child: saving
-                          ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                          : Text(
-                              task == null ? 'Create Task' : 'Save Changes',
-                              style: const TextStyle(fontWeight: FontWeight.w600),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            task == null ? 'Create New Task' : 'Edit Task',
+                            style: const TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.textPrimary,
+                              letterSpacing: -0.5,
                             ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            task == null ? 'Add a new task to the project status.' : 'Update the details of the task.',
+                            style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+                          ),
+                        ],
+                      ),
+                      IconButton(
+                        onPressed: () => Navigator.pop(dialogCtx),
+                        icon: const Icon(LucideIcons.x, size: 22, color: Colors.black54),
+                        splashRadius: 22,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 32),
+                  const Text('Task Name', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.black87)),
+                  const SizedBox(height: 8),
+                  TextFormField(
+                    controller: nameCtrl,
+                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                    decoration: InputDecoration(
+                      hintText: 'e.g., Integrate Supabase API',
+                      hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 14, fontWeight: FontWeight.normal),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      filled: true,
+                      fillColor: const Color(0xFFF8FAFC),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
+                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: AppColors.primary, width: 1.5)),
                     ),
-                  ],
-                ),
-              ],
+                  ),
+                  const SizedBox(height: 20),
+                  const Text('Current Status', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.black87)),
+                  const SizedBox(height: 8),
+                  DropdownButtonFormField<String>(
+                    value: statusCtrl.text,
+                    icon: const Icon(LucideIcons.chevronDown, size: 16, color: Colors.black54),
+                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: AppColors.textPrimary),
+                    decoration: InputDecoration(
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      filled: true,
+                      fillColor: const Color(0xFFF8FAFC),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
+                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: AppColors.primary, width: 1.5)),
+                    ),
+                    items: [
+                      _buildDropdownItem('not started', 'Not Started', Colors.grey.shade600, Colors.grey.shade200),
+                      _buildDropdownItem('working', 'Presently Working', Colors.orange.shade800, Colors.orange.shade100),
+                      _buildDropdownItem('completed', 'Completed', Colors.green.shade700, Colors.green.shade100),
+                      _buildDropdownItem('paused', 'Paused', Colors.red.shade700, Colors.red.shade50),
+                      _buildDropdownItem('trial', 'Trial', Colors.blue.shade700, Colors.blue.shade50),
+                    ],
+                    onChanged: (v) {
+                      if (v != null) statusCtrl.text = v;
+                    },
+                  ),
+                  const SizedBox(height: 20),
+                  const Text('Follow-up Date (Optional)', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.black87)),
+                  const SizedBox(height: 8),
+                  InkWell(
+                    onTap: () async {
+                      final dt = await showDatePicker(
+                        context: context,
+                        initialDate: selectedFollowUpDate ?? DateTime.now(),
+                        firstDate: DateTime(2000),
+                        lastDate: DateTime(2100),
+                      );
+                      if (dt != null) {
+                        setState(() => selectedFollowUpDate = dt);
+                      }
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF8FAFC),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            selectedFollowUpDate == null ? 'Select Date' : '${selectedFollowUpDate!.toLocal()}'.split(' ')[0],
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: selectedFollowUpDate == null ? Colors.grey.shade400 : AppColors.textPrimary,
+                              fontWeight: selectedFollowUpDate == null ? FontWeight.normal : FontWeight.w500,
+                            ),
+                          ),
+                          if (selectedFollowUpDate != null)
+                            InkWell(
+                              onTap: () => setState(() => selectedFollowUpDate = null),
+                              child: const Icon(LucideIcons.x, size: 16, color: Colors.black54),
+                            )
+                          else
+                            const Icon(LucideIcons.calendar, size: 16, color: Colors.black54),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  const Text('Additional Notes', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.black87)),
+                  const SizedBox(height: 8),
+                  TextFormField(
+                    controller: notesCtrl,
+                    style: const TextStyle(fontSize: 14),
+                    maxLines: 3,
+                    decoration: InputDecoration(
+                      hintText: 'Any extra details...',
+                      hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 14),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      filled: true,
+                      fillColor: const Color(0xFFF8FAFC),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
+                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: AppColors.primary, width: 1.5)),
+                    ),
+                  ),
+                  const SizedBox(height: 32),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(dialogCtx),
+                        style: TextButton.styleFrom(
+                          foregroundColor: Colors.grey.shade700,
+                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                        ),
+                        child: const Text('Cancel', style: TextStyle(fontWeight: FontWeight.w600)),
+                      ),
+                      const SizedBox(width: 12),
+                      FilledButton(
+                        style: FilledButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          elevation: 0,
+                        ),
+                        onPressed: saving
+                            ? null
+                            : () async {
+                                if (nameCtrl.text.trim().isEmpty) return;
+                                setState(() => saving = true);
+                                final prov = ref.read(aroundaiProjectStatusProvider.notifier);
+                                final currentUserId = ref.read(authProvider)?.id;
+                                try {
+                                  if (task == null) {
+                                    await prov.createTask(
+                                      nameCtrl.text.trim(),
+                                      statusCtrl.text,
+                                      notesCtrl.text.trim().isEmpty ? null : notesCtrl.text.trim(),
+                                      selectedFollowUpDate,
+                                      currentUserId,
+                                    );
+                                  } else {
+                                    await prov.updateTask(
+                                      task.id,
+                                      nameCtrl.text.trim(),
+                                      statusCtrl.text,
+                                      notesCtrl.text.trim().isEmpty ? null : notesCtrl.text.trim(),
+                                      task.notes,
+                                      selectedFollowUpDate,
+                                      currentUserId,
+                                    );
+                                  }
+                                  if (mounted) Navigator.pop(dialogCtx);
+                                } catch (e) {
+                                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+                                } finally {
+                                  if (mounted) setState(() => saving = false);
+                                }
+                              },
+                        child: saving
+                            ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                            : Text(
+                                task == null ? 'Create Task' : 'Save Changes',
+                                style: const TextStyle(fontWeight: FontWeight.w600),
+                              ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -412,7 +461,7 @@ class _AroundaiProjectStatusScreenState extends ConsumerState<AroundaiProjectSta
         final currentUserId = ref.read(authProvider)?.id;
         final latestNote = _getLatestNoteText(task.notes);
         try {
-          await prov.updateTask(task.id, task.taskName, newStatus, latestNote, task.notes, currentUserId);
+          await prov.updateTask(task.id, task.taskName, newStatus, latestNote, task.notes, task.followUpDate, currentUserId);
         } catch (e) {
           if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error updating status: $e')));
         }
@@ -558,31 +607,39 @@ class _AroundaiProjectStatusScreenState extends ConsumerState<AroundaiProjectSta
                         child: SingleChildScrollView(
                           padding: const EdgeInsets.all(32),
                           child: ConstrainedBox(
-                            constraints: const BoxConstraints(maxWidth: 1400),
-                            child: Column(
+                            constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width),
+                            child: Row(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                _buildFilterTabs(),
-                                Container(
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: Colors.grey.shade200),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withOpacity(0.02),
-                                    blurRadius: 10,
-                                    offset: const Offset(0, 4),
-                                  ),
-                                ],
-                              ),
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(12),
-                                child: SingleChildScrollView(
-                                  scrollDirection: Axis.horizontal,
-                                  child: ConstrainedBox(
-                                    constraints: BoxConstraints(minWidth: MediaQuery.of(context).size.width > 800 ? 1150 : MediaQuery.of(context).size.width - 64),
-                                    child: DataTable(
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      _buildFilterTabs(),
+                                      LayoutBuilder(
+                                        builder: (context, constraints) {
+                                          return Container(
+                                            decoration: BoxDecoration(
+                                              color: Colors.white,
+                                              borderRadius: BorderRadius.circular(12),
+                                              border: Border.all(color: Colors.grey.shade200),
+                                              boxShadow: [
+                                                BoxShadow(
+                                                  color: Colors.black.withOpacity(0.02),
+                                                  blurRadius: 10,
+                                                  offset: const Offset(0, 4),
+                                                ),
+                                              ],
+                                            ),
+                                            child: ClipRRect(
+                                              borderRadius: BorderRadius.circular(12),
+                                              child: SingleChildScrollView(
+                                                scrollDirection: Axis.horizontal,
+                                                child: ConstrainedBox(
+                                                  constraints: BoxConstraints(
+                                                    minWidth: math.max(1150.0, constraints.maxWidth),
+                                                  ),
+                                                  child: DataTable(
                                       headingRowColor: MaterialStateProperty.all(const Color(0xFFF8FAFC)),
                                       dataRowMaxHeight: 70,
                                       dataRowMinHeight: 60,
@@ -594,6 +651,7 @@ class _AroundaiProjectStatusScreenState extends ConsumerState<AroundaiProjectSta
                                         DataColumn(label: Text('Task Name')),
                                         DataColumn(label: Text('Status')),
                                         DataColumn(label: Text('Notes')),
+                                        DataColumn(label: Text('Follow Up')),
                                         DataColumn(label: Text('Created At')),
                                         DataColumn(label: Text('Updated At')),
                                         DataColumn(label: Text('Actions'), numeric: true),
@@ -665,6 +723,19 @@ class _AroundaiProjectStatusScreenState extends ConsumerState<AroundaiProjectSta
                                             ),
                                             DataCell(
                                               Text(
+                                                task.followUpDate != null ? '${task.followUpDate!.toLocal()}'.split(' ')[0] : '-',
+                                                style: TextStyle(
+                                                  color: task.followUpDate != null && task.followUpDate!.isBefore(DateTime.now()) 
+                                                    ? Colors.red.shade600 
+                                                    : Colors.grey.shade600, 
+                                                  fontSize: 13,
+                                                  fontWeight: task.followUpDate != null && task.followUpDate!.isBefore(DateTime.now()) 
+                                                    ? FontWeight.bold : FontWeight.normal,
+                                                ),
+                                              ),
+                                            ),
+                                            DataCell(
+                                              Text(
                                                 _formatDate(task.createdAt),
                                                 style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
                                               ),
@@ -701,13 +772,23 @@ class _AroundaiProjectStatusScreenState extends ConsumerState<AroundaiProjectSta
                                   ),
                                 ),
                               ),
-                            ),
-                          ],
+                            );
+                          },
                         ),
-                      ),
+                      ],
                     ),
                   ),
-                ),
+                  const SizedBox(width: 24),
+                  SizedBox(
+                    width: 250,
+                    child: _buildSidebar(state.tasks),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -751,6 +832,147 @@ class _AroundaiProjectStatusScreenState extends ConsumerState<AroundaiProjectSta
             showCheckmark: false,
           );
         }).toList(),
+      ),
+    );
+  }
+
+  Widget _buildSidebar(List<AroundaiProjectStatus> allTasks) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    
+    // Filter tasks that have a follow-up date and are not completed
+    final followUpTasks = allTasks.where((t) => t.followUpDate != null && t.taskStatus != 'completed').toList();
+    
+    // Sort by follow-up date ascending
+    followUpTasks.sort((a, b) => a.followUpDate!.compareTo(b.followUpDate!));
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade200),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.02),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              Icon(LucideIcons.bell, size: 18, color: AppColors.primary),
+              const SizedBox(width: 8),
+              const Text(
+                'Follow-up Reminders',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          const Divider(height: 1),
+          const SizedBox(height: 16),
+          if (followUpTasks.isEmpty)
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 32),
+                child: Column(
+                  children: [
+                    Icon(LucideIcons.calendarCheck, size: 32, color: Colors.grey.shade300),
+                    const SizedBox(height: 8),
+                    Text('No upcoming follow-ups', style: TextStyle(color: Colors.grey.shade500, fontSize: 13)),
+                  ],
+                ),
+              ),
+            )
+          else
+            ListView.separated(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: followUpTasks.length,
+              separatorBuilder: (ctx, idx) => const Divider(height: 24),
+              itemBuilder: (context, index) {
+                final task = followUpTasks[index];
+                final date = task.followUpDate!.toLocal();
+                final taskDate = DateTime(date.year, date.month, date.day);
+                
+                final isOverdue = taskDate.isBefore(today);
+                final isToday = taskDate.isAtSameMomentAs(today);
+
+                Color badgeColor;
+                Color badgeBgColor;
+                String badgeText;
+
+                if (isOverdue) {
+                  badgeColor = Colors.red.shade700;
+                  badgeBgColor = Colors.red.shade50;
+                  badgeText = 'Overdue';
+                } else if (isToday) {
+                  badgeColor = Colors.orange.shade800;
+                  badgeBgColor = Colors.orange.shade50;
+                  badgeText = 'Today';
+                } else {
+                  badgeColor = Colors.blue.shade700;
+                  badgeBgColor = Colors.blue.shade50;
+                  badgeText = 'Upcoming';
+                }
+
+                return InkWell(
+                  onTap: () => _showTaskDialog(task: task),
+                  borderRadius: BorderRadius.circular(8),
+                  child: Padding(
+                    padding: const EdgeInsets.all(4.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: Text(
+                                task.taskName,
+                                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: Colors.black87),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: badgeBgColor,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                badgeText,
+                                style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: badgeColor),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        Row(
+                          children: [
+                            Icon(LucideIcons.calendar, size: 12, color: Colors.grey.shade500),
+                            const SizedBox(width: 4),
+                            Text(
+                              '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}',
+                              style: TextStyle(fontSize: 12, color: Colors.grey.shade600, fontWeight: isOverdue || isToday ? FontWeight.bold : FontWeight.normal),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+        ],
       ),
     );
   }
