@@ -6,15 +6,19 @@ class Deal {
   final String id;
   final String name;
   final String date;
+  final String createdAt;
   final String remark;
   final String phoneNumber;
+  final String? followUpDate;
 
   Deal({
     required this.id,
     required this.name,
     required this.date,
+    required this.createdAt,
     required this.remark,
     required this.phoneNumber,
+    this.followUpDate,
   });
 
   factory Deal.fromJson(Map<String, dynamic> json) {
@@ -22,8 +26,10 @@ class Deal {
       id: json['id']?.toString() ?? '',
       name: json['name'] as String? ?? '',
       date: json['date'] as String? ?? '',
+      createdAt: json['created_at'] != null ? json['created_at'].toString().substring(0, 10) : '',
       remark: json['remark'] as String? ?? '',
       phoneNumber: json['phone_number'] as String? ?? '',
+      followUpDate: json['follow_up_date'] as String?,
     );
   }
 }
@@ -49,6 +55,7 @@ class DealController extends AsyncNotifier<void> {
     required String date,
     required String remark,
     required String phoneNumber,
+    String? followUpDate,
   }) async {
     state = const AsyncLoading();
     try {
@@ -57,6 +64,7 @@ class DealController extends AsyncNotifier<void> {
         'date': date,
         'remark': remark,
         'phone_number': phoneNumber,
+        if (followUpDate != null) 'follow_up_date': followUpDate,
         'created_by': Supabase.instance.client.auth.currentUser?.id,
       });
       state = const AsyncData(null);
@@ -72,15 +80,21 @@ class DealController extends AsyncNotifier<void> {
     required String date,
     required String remark,
     required String phoneNumber,
+    String? followUpDate,
   }) async {
     state = const AsyncLoading();
     try {
-      await Supabase.instance.client.from('deals').update({
+      final updates = {
         'name': name,
         'date': date,
         'remark': remark,
         'phone_number': phoneNumber,
-      }).eq('id', id);
+      };
+      if (followUpDate != null) {
+        updates['follow_up_date'] = followUpDate;
+      }
+      
+      await Supabase.instance.client.from('deals').update(updates).eq('id', id);
       state = const AsyncData(null);
       ref.invalidate(dealsProvider);
     } catch (e, st) {

@@ -17,6 +17,7 @@ class DealsTable extends ConsumerStatefulWidget {
 class _DealsTableState extends ConsumerState<DealsTable> {
   String? _addingDateKey;
   String? _selectedDate;
+  String? _selectedFollowUpDate;
 
   final _nameController = TextEditingController();
   final _remarkController = TextEditingController();
@@ -46,13 +47,14 @@ class _DealsTableState extends ConsumerState<DealsTable> {
     setState(() {
       _addingDateKey = dateKey;
       _selectedDate = dateKey;
+      _selectedFollowUpDate = null;
       _nameController.clear();
       _remarkController.clear();
       _phoneController.clear();
     });
   }
 
-  void _cancelAdding() => setState(() { _addingDateKey = null; _selectedDate = null; });
+  void _cancelAdding() => setState(() { _addingDateKey = null; _selectedDate = null; _selectedFollowUpDate = null; });
 
   void _submitDeal(String dateKey) {
     final name = _nameController.text.trim();
@@ -62,6 +64,7 @@ class _DealsTableState extends ConsumerState<DealsTable> {
       date: _selectedDate ?? dateKey,
       remark: _remarkController.text.trim(),
       phoneNumber: _phoneController.text.trim(),
+      followUpDate: _selectedFollowUpDate,
     );
     _cancelAdding();
   }
@@ -88,6 +91,7 @@ class _DealsTableState extends ConsumerState<DealsTable> {
       date: _editSelectedDate ?? deal.date,
       remark: _editRemarkController.text.trim(),
       phoneNumber: _editPhoneController.text.trim(),
+      followUpDate: deal.followUpDate,
     );
     _cancelEditing();
   }
@@ -101,7 +105,7 @@ class _DealsTableState extends ConsumerState<DealsTable> {
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (e, _) => Center(child: Text('Error: $e')),
       data: (deals) {
-        final groupedDeals = groupBy(deals, (Deal d) => d.date);
+        final groupedDeals = groupBy(deals, (Deal d) => d.createdAt);
         final sortedDates = groupedDeals.keys.toList()..sort((a, b) => b.compareTo(a));
 
         if (sortedDates.isEmpty) {
@@ -159,6 +163,7 @@ class _DealsTableState extends ConsumerState<DealsTable> {
                                 children: [
                                   Expanded(flex: 3, child: _headerText('Deals', gc)),
                                   Expanded(flex: 2, child: _headerText('Date', gc)),
+                                  Expanded(flex: 2, child: _headerText('Follow Up', gc)),
                                   Expanded(flex: 3, child: _headerText('Remark', gc)),
                                   Expanded(flex: 2, child: _headerText('Phone Number', gc)),
                                 ],
@@ -178,7 +183,7 @@ class _DealsTableState extends ConsumerState<DealsTable> {
                                 ),
                                 child: Row(
                                   children: [
-                                    Icon(LucideIcons.calendarDays, size: 16, color: gc.onSurfaceMuted),
+                                    Icon(LucideIcons.calendarDays, size: 16, color: gc.onSurface),
                                     const SizedBox(width: 8),
                                     Text(date, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: gc.onSurface)),
                                     const SizedBox(width: 12),
@@ -220,19 +225,26 @@ class _DealsTableState extends ConsumerState<DealsTable> {
                                           flex: 2,
                                           child: Padding(
                                             padding: const EdgeInsets.only(right: 16),
+                                            child: Text(deal.createdAt, style: TextStyle(fontSize: 14, color: gc.onSurface)),
+                                          ),
+                                        ),
+                                        Expanded(
+                                          flex: 2,
+                                          child: Padding(
+                                            padding: const EdgeInsets.only(right: 16),
                                             child: InkWell(
                                               onTap: () async {
                                                 final picked = await showDatePicker(
                                                   context: context,
-                                                  initialDate: DateTime.tryParse(deal.date) ?? DateTime.now(),
+                                                  initialDate: deal.followUpDate != null ? (DateTime.tryParse(deal.followUpDate!) ?? DateTime.now()) : DateTime.now(),
                                                   firstDate: DateTime(2000),
                                                   lastDate: DateTime(2100),
                                                 );
                                                 if (picked != null) {
                                                   final nd = '${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}';
-                                                  if (nd != deal.date) {
+                                                  if (nd != deal.followUpDate) {
                                                     ref.read(dealControllerProvider.notifier).updateDeal(
-                                                      id: deal.id, name: deal.name, date: nd, remark: deal.remark, phoneNumber: deal.phoneNumber,
+                                                      id: deal.id, name: deal.name, date: deal.date, remark: deal.remark, phoneNumber: deal.phoneNumber, followUpDate: nd,
                                                     );
                                                   }
                                                 }
@@ -240,7 +252,7 @@ class _DealsTableState extends ConsumerState<DealsTable> {
                                               child: Row(
                                                 mainAxisSize: MainAxisSize.min,
                                                 children: [
-                                                  Flexible(child: Text(deal.date, style: TextStyle(fontSize: 14, color: gc.onSurfaceMuted))),
+                                                  Flexible(child: Text(deal.followUpDate ?? 'Follow Up', style: TextStyle(fontSize: 14, color: deal.followUpDate != null ? gc.onSurface : gc.onSurfaceMuted))),
                                                   const SizedBox(width: 6),
                                                   Icon(LucideIcons.pencil, size: 12, color: gc.onSurfaceFaint),
                                                 ],
@@ -313,6 +325,31 @@ class _DealsTableState extends ConsumerState<DealsTable> {
                                           child: Row(
                                             children: [
                                               Text(_selectedDate ?? date, style: TextStyle(fontSize: 14, color: gc.onSurface)),
+                                              const SizedBox(width: 4),
+                                              Icon(LucideIcons.calendarDays, size: 14, color: gc.onSurfaceFaint),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                      Expanded(
+                                        flex: 2,
+                                        child: InkWell(
+                                          onTap: () async {
+                                            final picked = await showDatePicker(
+                                              context: context,
+                                              initialDate: _selectedFollowUpDate != null ? (DateTime.tryParse(_selectedFollowUpDate!) ?? DateTime.now()) : DateTime.now(),
+                                              firstDate: DateTime(2000),
+                                              lastDate: DateTime(2100),
+                                            );
+                                            if (picked != null) {
+                                              setState(() {
+                                                _selectedFollowUpDate = '--';
+                                              });
+                                            }
+                                          },
+                                          child: Row(
+                                            children: [
+                                              Text(_selectedFollowUpDate ?? 'Follow Up', style: TextStyle(fontSize: 14, color: _selectedFollowUpDate != null ? gc.onSurface : gc.onSurfaceMuted)),
                                               const SizedBox(width: 4),
                                               Icon(LucideIcons.calendarDays, size: 14, color: gc.onSurfaceFaint),
                                             ],
@@ -408,7 +445,7 @@ class _DealsTableState extends ConsumerState<DealsTable> {
   Widget _headerText(String label, GlassColors gc) {
     return Text(
       label,
-      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: gc.onSurfaceFaint, letterSpacing: 0.5),
+      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: gc.onSurface, letterSpacing: 0.5),
     );
   }
 
@@ -424,7 +461,7 @@ class _DealsTableState extends ConsumerState<DealsTable> {
               style: TextStyle(
                 fontSize: 14,
                 fontWeight: bold ? FontWeight.w500 : FontWeight.normal,
-                color: bold ? gc.onSurface : gc.onSurfaceMuted,
+                color: gc.onSurface,
               ),
               overflow: TextOverflow.ellipsis,
               maxLines: 1,

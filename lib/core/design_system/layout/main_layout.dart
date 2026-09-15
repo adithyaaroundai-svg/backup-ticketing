@@ -837,6 +837,7 @@ class _TopNav extends ConsumerWidget {
             path: '/proposal-generator',
             isActive: currentPath.startsWith('/proposal-generator'),
           ),
+
         if (currentUser?.isAdmin == true)
           _TopNavItem(
             label: 'Settings',
@@ -2623,6 +2624,15 @@ class _CollapsibleTicketPane extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final currentUser = ref.watch(authProvider);
+    final canViewPane = currentUser?.isSupport == true || 
+                        currentUser?.isSupportHead == true || 
+                        currentUser?.isHR == true;
+    
+    if (!canViewPane) {
+      return const SizedBox.shrink();
+    }
+
     final ticketsAsync = ref.watch(ticketsStreamProvider);
 
     final tickets = ticketsAsync.value ?? [];
@@ -3316,6 +3326,48 @@ class _ChannelsListState extends ConsumerState<_ChannelsList> {
             }
           ),
 
+          // Customer Channel Sidebar Item
+          if (currentUser?.id == 'd8aa6435-9e02-4bab-9acc-ae1f5f3d6a1c' ||
+              currentUser?.id == 'b77b3738-4dfc-4515-a1fd-d6fb170423f4' ||
+              currentUser?.id == '14db36db-0cb9-44ef-8032-d9610b3bc797')
+            Builder(
+              builder: (context) {
+                final isCustomerChannelActive = currentPath.startsWith('/customer-channel');
+                return Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: () => context.push('/customer-channel'),
+                    child: Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: isCustomerChannelActive ? activeBgColor : Colors.transparent,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            LucideIcons.building2,
+                            size: 16,
+                            color: isCustomerChannelActive ? textColorPrimary : textColor54,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Customer Channel',
+                            style: TextStyle(
+                              color: isCustomerChannelActive ? textColorPrimary : textColor70,
+                              fontSize: 13,
+                              fontWeight: isCustomerChannelActive ? FontWeight.w700 : FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              }
+            ),
+
           const SizedBox(height: 16),
           // Direct Messages Header
           Padding(
@@ -3779,6 +3831,15 @@ void _showProfilePicture(
 class _RecentTicketsList extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final currentUser = ref.watch(authProvider);
+    final canViewPane = currentUser?.isSupport == true || 
+                        currentUser?.isSupportHead == true || 
+                        currentUser?.isHR == true;
+    
+    if (!canViewPane) {
+      return const SizedBox.shrink();
+    }
+
     final ticketsAsync = ref.watch(ticketsStreamProvider);
 
     return ticketsAsync.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
@@ -4109,41 +4170,43 @@ class _TicketTile extends ConsumerWidget {
                           ),
                           const SizedBox(width: 4),
                           // Right: claimed badge + agent name stacked
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 6,
-                                  vertical: 2,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: badgeColor,
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Text(
-                                  badgeLabel,
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 8,
-                                    fontWeight: FontWeight.w600,
+                          Flexible(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 6,
+                                    vertical: 2,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: badgeColor,
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Text(
+                                    badgeLabel,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 8,
+                                      fontWeight: FontWeight.w600,
+                                    ),
                                   ),
                                 ),
-                              ),
-                              if (isClaimed && assignedAgentName != null) ...[
-                                const SizedBox(height: 3),
-                                Text(
-                                  assignedAgentName,
-                                  style: TextStyle(
-                                    color: Colors.white.withValues(alpha: 0.7),
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w500,
+                                if (isClaimed && assignedAgentName != null) ...[
+                                  const SizedBox(height: 3),
+                                  Text(
+                                    assignedAgentName,
+                                    style: TextStyle(
+                                      color: Colors.white.withValues(alpha: 0.7),
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
                                   ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
+                                ],
                               ],
-                            ],
+                            ),
                           ),
                         ],
                       ),

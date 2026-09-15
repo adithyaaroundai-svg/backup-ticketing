@@ -2,9 +2,11 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../../core/design_system/design_system.dart';
 import '../../../../core/design_system/widgets/glass_card.dart';
 import '../widgets/deals_table.dart';
+import '../providers/deals_provider.dart';
 import '../widgets/animated_create_deal_fab.dart';
 import '../widgets/create_deal_dialog.dart';
 
@@ -96,6 +98,7 @@ class DealsTrackerPage extends ConsumerWidget {
                       ),
                     ),
                     const SizedBox(height: 24),
+                    const FollowUpBanner(),
                     const DealsTable(),
                     const SizedBox(height: 80),
                   ],
@@ -105,6 +108,66 @@ class DealsTrackerPage extends ConsumerWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+
+class FollowUpBanner extends ConsumerWidget {
+  const FollowUpBanner({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final dealsAsync = ref.watch(dealsProvider);
+    final gc = GlassColors.of(context, ref);
+
+    return dealsAsync.maybeWhen(
+      data: (deals) {
+        final now = DateTime.now();
+        final today = DateTime(now.year, now.month, now.day);
+        
+        int followUpCount = 0;
+        for (var deal in deals) {
+          if (deal.followUpDate != null && deal.followUpDate!.isNotEmpty) {
+            final dt = DateTime.tryParse(deal.followUpDate!);
+            if (dt != null) {
+              final followUpDay = DateTime(dt.year, dt.month, dt.day);
+              if (followUpDay.isBefore(today) || followUpDay.isAtSameMomentAs(today)) {
+                followUpCount++;
+              }
+            }
+          }
+        }
+
+        if (followUpCount == 0) return const SizedBox.shrink();
+
+        return Container(
+          margin: const EdgeInsets.only(bottom: 24),
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: gc.isGlass ? Colors.orange.withOpacity(0.1) : Colors.orange.shade50,
+            border: Border.all(color: Colors.orange.shade300),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            children: [
+              Icon(LucideIcons.bell, color: Colors.orange.shade700),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'You have \ deal\ that require your attention for follow-up today.',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.orange.shade800,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+      orElse: () => const SizedBox.shrink(),
     );
   }
 }

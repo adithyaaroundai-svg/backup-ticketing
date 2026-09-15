@@ -72,7 +72,7 @@ class AroundaiProjectStatusNotifier extends Notifier<AroundaiProjectStatusState>
     }
   }
 
-  Future<void> createTask(String taskName, String taskStatus, String? notes, String? currentUserId) async {
+  Future<void> createTask(String taskName, String taskStatus, String? notes, DateTime? followUpDate, String? currentUserId) async {
     try {
       String? encodedNotes;
       if (notes != null && notes.isNotEmpty) {
@@ -90,6 +90,7 @@ class AroundaiProjectStatusNotifier extends Notifier<AroundaiProjectStatusState>
         'task_name': taskName,
         'task_status': taskStatus,
         'notes': encodedNotes,
+        'follow_up_date': followUpDate?.toUtc().toIso8601String(),
         'created_by': currentUserId,
       });
 
@@ -100,7 +101,7 @@ class AroundaiProjectStatusNotifier extends Notifier<AroundaiProjectStatusState>
     }
   }
 
-  Future<void> updateTask(int id, String taskName, String taskStatus, String? notes, String? oldNotes, String? currentUserId) async {
+  Future<void> updateTask(int id, String taskName, String taskStatus, String? notes, String? oldNotes, DateTime? followUpDate, String? currentUserId) async {
     try {
       String? encodedNotes = oldNotes;
 
@@ -143,6 +144,7 @@ class AroundaiProjectStatusNotifier extends Notifier<AroundaiProjectStatusState>
         'task_name': taskName,
         'task_status': taskStatus,
         'notes': encodedNotes,
+        'follow_up_date': followUpDate?.toUtc().toIso8601String(),
         'updated_at': DateTime.now().toUtc().toIso8601String(),
       }).eq('id', id);
 

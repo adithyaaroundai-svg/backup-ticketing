@@ -16,6 +16,7 @@ class _CreateDealDialogState extends ConsumerState<CreateDealDialog> {
   final _remarkController = TextEditingController();
   final _phoneController = TextEditingController();
   DateTime _selectedDate = DateTime.now();
+  DateTime? _selectedFollowUpDate;
 
   @override
   void dispose() {
@@ -36,11 +37,17 @@ class _CreateDealDialogState extends ConsumerState<CreateDealDialog> {
 
     final dateStr = '${_selectedDate.year}-${_selectedDate.month.toString().padLeft(2, '0')}-${_selectedDate.day.toString().padLeft(2, '0')}';
 
+    String? followUpDateStr;
+    if (_selectedFollowUpDate != null) {
+      followUpDateStr = '--';
+    }
+
     ref.read(dealControllerProvider.notifier).addDeal(
       name: name,
       date: dateStr,
       remark: _remarkController.text.trim(),
       phoneNumber: _phoneController.text.trim(),
+      followUpDate: followUpDateStr,
     );
 
     Navigator.of(context).pop();
@@ -133,6 +140,60 @@ class _CreateDealDialogState extends ConsumerState<CreateDealDialog> {
               labelText: 'Phone Number',
               hintText: '+1 234 567 8900',
               controller: _phoneController,
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Follow Up Date (Optional)',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: AppColors.slate700,
+              ),
+            ),
+            const SizedBox(height: 8),
+            InkWell(
+              onTap: () async {
+                final picked = await showDatePicker(
+                  context: context,
+                  initialDate: _selectedFollowUpDate ?? DateTime.now(),
+                  firstDate: DateTime(2000),
+                  lastDate: DateTime(2100),
+                );
+                if (picked != null) {
+                  setState(() {
+                    _selectedFollowUpDate = picked;
+                  });
+                }
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  border: Border.all(color: AppColors.slate200),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(LucideIcons.calendarDays, size: 18, color: AppColors.slate500),
+                    const SizedBox(width: 12),
+                    Text(
+                      _selectedFollowUpDate != null 
+                        ? '--'
+                        : 'Select a follow up date',
+                      style: TextStyle(
+                        fontSize: 14, 
+                        color: _selectedFollowUpDate != null ? AppColors.slate900 : AppColors.slate400,
+                      ),
+                    ),
+                    if (_selectedFollowUpDate != null) ...[
+                      const Spacer(),
+                      InkWell(
+                        onTap: () => setState(() => _selectedFollowUpDate = null),
+                        child: const Icon(LucideIcons.x, size: 16, color: AppColors.slate400),
+                      ),
+                    ]
+                  ],
+                ),
+              ),
             ),
             const SizedBox(height: 32),
             Row(

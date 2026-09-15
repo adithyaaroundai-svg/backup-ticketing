@@ -11,6 +11,7 @@ import 'features/chat/presentation/pages/global_chat_page.dart';
 import 'features/chat/presentation/pages/sales_chat_page.dart';
 import 'features/chat/presentation/pages/all_aroundtally_chat_page.dart';
 import 'features/chat/presentation/pages/custom_channel_chat_page.dart';
+import 'features/customer_channel/presentation/pages/customer_channel_page.dart';
 import 'features/sales/presentation/pages/leads_page.dart';
 import 'features/chat/presentation/pages/direct_message_page.dart';
 import 'features/auth/presentation/pages/login_page.dart';
@@ -84,18 +85,10 @@ void main() async {
   );
 }
 
+final rootNavigatorKey = GlobalKey<NavigatorState>();
+
 final routerProvider = Provider<GoRouter>((ref) {
   final authState = ref.watch(authProvider);
-  final appSettingsAsync = ref.watch(appSettingsProvider);
-  final appSettings = appSettingsAsync.maybeWhen(
-    data: (value) => value,
-    orElse: () => null,
-  );
-  final advancedSettingsAsync = ref.watch(advancedSettingsProvider);
-  final advancedSettings = advancedSettingsAsync.maybeWhen(
-    data: (value) => value,
-    orElse: () => null,
-  );
 
   final isLoggedIn = authState != null;
   final isAdmin = authState?.isAdmin ?? false;
@@ -107,9 +100,21 @@ final routerProvider = Provider<GoRouter>((ref) {
   final isSales = authState?.isSales ?? false;
 
   return GoRouter(
+    navigatorKey: rootNavigatorKey,
     debugLogDiagnostics: false,
     initialLocation: authState == null ? '/login' : '/',
     redirect: (context, state) {
+      // Read settings dynamically to avoid destroying GoRouter instance on load
+      final appSettingsAsync = ref.read(appSettingsProvider);
+      final appSettings = appSettingsAsync.maybeWhen(
+        data: (value) => value,
+        orElse: () => null,
+      );
+      final advancedSettingsAsync = ref.read(advancedSettingsProvider);
+      final advancedSettings = advancedSettingsAsync.maybeWhen(
+        data: (value) => value,
+        orElse: () => null,
+      );
       final isLoggingIn = state.uri.toString() == '/login';
       final isResettingPassword = state.matchedLocation.startsWith(
         '/reset-password',
@@ -334,6 +339,10 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/calls',
         builder: (context, state) => const CallHistoryPage(),
       ),
+      GoRoute(
+        path: '/customer-channel',
+        builder: (context, state) => const CustomerChannelPage(),
+      ),
       GoRoute(path: '/bills', builder: (context, state) => const BillsPage()),
       GoRoute(
         path: '/customers',
@@ -537,13 +546,17 @@ class RootRedirectionWidget extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    print('DEBUG: RootRedirectionWidget build() called');
     final isMobile = MediaQuery.of(context).size.width <= 900;
     
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      print('DEBUG: RootRedirectionWidget post-frame callback executed');
       if (isMobile) {
+        print('DEBUG: RootRedirectionWidget navigating to /mobile-home');
         context.go('/mobile-home');
       } else {
         final authState = ref.read(authProvider);
+        print('DEBUG: RootRedirectionWidget authState: ${authState?.role}');
         if (authState?.isAdmin == true) {
           context.go('/admin');
         } else if (authState?.isAccountant == true) {
@@ -553,6 +566,7 @@ class RootRedirectionWidget extends ConsumerWidget {
         } else if (authState?.isSupport == true || authState?.isHR == true || authState?.isProjectCoordinator == true) {
           context.go('/support');
         } else {
+          print('DEBUG: RootRedirectionWidget navigating to /dashboard');
           context.go('/dashboard');
         }
       }

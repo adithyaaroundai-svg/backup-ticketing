@@ -204,7 +204,7 @@ class _AdminDashboardPageState extends ConsumerState<AdminDashboardPage> {
                   // mainAxisExtent would clip the KPI content and trigger the
                   // yellow/black overflow warning banner. Give compact grids a
                   // touch more height so the text + chip fit comfortably.
-                  final tileHeight = crossAxisCount >= 3 ? 140.0 : 175.0;
+                  final tileHeight = 175.0;
 
                   return GridView(
                     shrinkWrap: true,

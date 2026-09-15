@@ -62,7 +62,13 @@ class _AroundaiProjectStatusScreenState extends ConsumerState<AroundaiProjectSta
   String _formatDate(DateTime? dt) {
     if (dt == null) return '-';
     final local = dt.toLocal();
-    return '${local.year}-${local.month.toString().padLeft(2, '0')}-${local.day.toString().padLeft(2, '0')} ${local.hour.toString().padLeft(2, '0')}:${local.minute.toString().padLeft(2, '0')}';
+    return '${local.day.toString().padLeft(2, '0')}-${local.month.toString().padLeft(2, '0')}-${local.year} ${local.hour.toString().padLeft(2, '0')}:${local.minute.toString().padLeft(2, '0')}';
+  }
+
+  String _formatDateOnly(DateTime? dt) {
+    if (dt == null) return '-';
+    final local = dt.toLocal();
+    return '${local.day.toString().padLeft(2, '0')}-${local.month.toString().padLeft(2, '0')}-${local.year}';
   }
 
   void _showTaskDialog({AroundaiProjectStatus? task}) {
@@ -70,6 +76,7 @@ class _AroundaiProjectStatusScreenState extends ConsumerState<AroundaiProjectSta
     final statusCtrl = TextEditingController(text: task?.taskStatus ?? 'not started');
     final latestNote = _getLatestNoteText(task?.notes);
     final notesCtrl = TextEditingController(text: latestNote);
+    DateTime? selectedFollowUp = task?.followUpDate;
     bool saving = false;
 
     showDialog(
@@ -173,6 +180,42 @@ class _AroundaiProjectStatusScreenState extends ConsumerState<AroundaiProjectSta
                     focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: AppColors.primary, width: 1.5)),
                   ),
                 ),
+                const SizedBox(height: 20),
+                const Text('Follow-up Date', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.black87)),
+                const SizedBox(height: 8),
+                InkWell(
+                  onTap: () async {
+                    final date = await showDatePicker(
+                      context: context,
+                      initialDate: selectedFollowUp ?? DateTime.now(),
+                      firstDate: DateTime(2020),
+                      lastDate: DateTime(2030),
+                    );
+                    if (date != null) {
+                      setState(() => selectedFollowUp = date);
+                    }
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF8FAFC),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          selectedFollowUp == null ? 'Select Date' : _formatDateOnly(selectedFollowUp),
+                          style: TextStyle(
+                            fontSize: 14, 
+                            color: selectedFollowUp == null ? Colors.grey.shade400 : AppColors.textPrimary
+                          ),
+                        ),
+                        const Icon(LucideIcons.calendar, size: 16, color: Colors.black54),
+                      ],
+                    ),
+                  ),
+                ),
                 const SizedBox(height: 32),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.end,
@@ -206,6 +249,7 @@ class _AroundaiProjectStatusScreenState extends ConsumerState<AroundaiProjectSta
                                     nameCtrl.text.trim(),
                                     statusCtrl.text,
                                     notesCtrl.text.trim().isEmpty ? null : notesCtrl.text.trim(),
+                                    selectedFollowUp,
                                     currentUserId,
                                   );
                                 } else {
@@ -215,6 +259,7 @@ class _AroundaiProjectStatusScreenState extends ConsumerState<AroundaiProjectSta
                                     statusCtrl.text,
                                     notesCtrl.text.trim().isEmpty ? null : notesCtrl.text.trim(),
                                     task.notes,
+                                    selectedFollowUp,
                                     currentUserId,
                                   );
                                 }
@@ -412,7 +457,7 @@ class _AroundaiProjectStatusScreenState extends ConsumerState<AroundaiProjectSta
         final currentUserId = ref.read(authProvider)?.id;
         final latestNote = _getLatestNoteText(task.notes);
         try {
-          await prov.updateTask(task.id, task.taskName, newStatus, latestNote, task.notes, currentUserId);
+          await prov.updateTask(task.id, task.taskName, newStatus, latestNote, task.notes, task.followUpDate, currentUserId);
         } catch (e) {
           if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error updating status: $e')));
         }
@@ -558,31 +603,38 @@ class _AroundaiProjectStatusScreenState extends ConsumerState<AroundaiProjectSta
                         child: SingleChildScrollView(
                           padding: const EdgeInsets.all(32),
                           child: ConstrainedBox(
-                            constraints: const BoxConstraints(maxWidth: 1400),
+                            constraints: const BoxConstraints(maxWidth: double.infinity),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 _buildFilterTabs(),
-                                Container(
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: Colors.grey.shade200),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withOpacity(0.02),
-                                    blurRadius: 10,
-                                    offset: const Offset(0, 4),
-                                  ),
-                                ],
-                              ),
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(12),
-                                child: SingleChildScrollView(
-                                  scrollDirection: Axis.horizontal,
-                                  child: ConstrainedBox(
-                                    constraints: BoxConstraints(minWidth: MediaQuery.of(context).size.width > 800 ? 1150 : MediaQuery.of(context).size.width - 64),
-                                    child: DataTable(
+                                Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Expanded(
+                                      flex: 3,
+                                      child: Container(
+                                        decoration: BoxDecoration(
+                                          color: Colors.white,
+                                          borderRadius: BorderRadius.circular(12),
+                                          border: Border.all(color: Colors.grey.shade200),
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: Colors.black.withOpacity(0.02),
+                                              blurRadius: 10,
+                                              offset: const Offset(0, 4),
+                                            ),
+                                          ],
+                                        ),
+                                        child: ClipRRect(
+                                          borderRadius: BorderRadius.circular(12),
+                                          child: LayoutBuilder(
+                                            builder: (context, constraints) {
+                                              return SingleChildScrollView(
+                                                scrollDirection: Axis.horizontal,
+                                                child: ConstrainedBox(
+                                                  constraints: BoxConstraints(minWidth: constraints.maxWidth),
+                                                  child: DataTable(
                                       headingRowColor: MaterialStateProperty.all(const Color(0xFFF8FAFC)),
                                       dataRowMaxHeight: 70,
                                       dataRowMinHeight: 60,
@@ -594,6 +646,7 @@ class _AroundaiProjectStatusScreenState extends ConsumerState<AroundaiProjectSta
                                         DataColumn(label: Text('Task Name')),
                                         DataColumn(label: Text('Status')),
                                         DataColumn(label: Text('Notes')),
+                                        DataColumn(label: Text('Follow Up')),
                                         DataColumn(label: Text('Created At')),
                                         DataColumn(label: Text('Updated At')),
                                         DataColumn(label: Text('Actions'), numeric: true),
@@ -641,7 +694,7 @@ class _AroundaiProjectStatusScreenState extends ConsumerState<AroundaiProjectSta
                                                 mainAxisSize: MainAxisSize.min,
                                                 children: [
                                                   ConstrainedBox(
-                                                    constraints: const BoxConstraints(maxWidth: 300),
+                                                    constraints: const BoxConstraints(maxWidth: 350),
                                                     child: Tooltip(
                                                       message: _getLatestNoteText(task.notes).isNotEmpty ? _getLatestNoteText(task.notes) : '-',
                                                       waitDuration: const Duration(milliseconds: 500),
@@ -661,6 +714,20 @@ class _AroundaiProjectStatusScreenState extends ConsumerState<AroundaiProjectSta
                                                     onPressed: () => _showNotesHistory(task),
                                                   ),
                                                 ],
+                                              ),
+                                            ),
+                                            DataCell(
+                                              Text(
+                                                task.followUpDate != null ? _formatDateOnly(task.followUpDate) : '-',
+                                                style: TextStyle(
+                                                  color: task.followUpDate != null && task.followUpDate!.isBefore(DateTime.now()) && task.taskStatus != 'completed' 
+                                                      ? Colors.red 
+                                                      : Colors.grey.shade600, 
+                                                  fontSize: 13,
+                                                  fontWeight: task.followUpDate != null && task.followUpDate!.isBefore(DateTime.now()) && task.taskStatus != 'completed'
+                                                      ? FontWeight.bold
+                                                      : FontWeight.normal
+                                                ),
                                               ),
                                             ),
                                             DataCell(
@@ -699,15 +766,25 @@ class _AroundaiProjectStatusScreenState extends ConsumerState<AroundaiProjectSta
                                       }).toList(),
                                     ),
                                   ),
-                                ),
-                              ),
+                                );
+                              },
                             ),
-                          ],
-                        ),
-                      ),
+                          ),
+                            ),
+                                    ),
+                            const SizedBox(width: 24),
+                            SizedBox(
+                              width: 250,
+                              child: _buildSidebar(state.tasks),
+                            ),
+                      ],
                     ),
-                  ),
+                  ],
                 ),
+              ),
+            ),
+          ),
+        ),
     );
   }
 
@@ -751,6 +828,95 @@ class _AroundaiProjectStatusScreenState extends ConsumerState<AroundaiProjectSta
             showCheckmark: false,
           );
         }).toList(),
+      ),
+    );
+  }
+
+  Widget _buildSidebar(List<AroundaiProjectStatus> allTasks) {
+    final upcoming = allTasks.where((t) => t.followUpDate != null && t.taskStatus != 'completed').toList();
+    upcoming.sort((a, b) => a.followUpDate!.compareTo(b.followUpDate!));
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade200),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.02),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(LucideIcons.bell, size: 18, color: Colors.indigo.shade600),
+              const SizedBox(width: 8),
+              const Text(
+                'Follow-up Reminders',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+          if (upcoming.isEmpty)
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 32),
+                child: Column(
+                  children: [
+                    Icon(LucideIcons.calendar, size: 40, color: Colors.grey.shade300),
+                    const SizedBox(height: 12),
+                    Text('No upcoming follow-ups', style: TextStyle(color: Colors.grey.shade500, fontSize: 13)),
+                  ],
+                ),
+              ),
+            )
+          else
+            ListView.separated(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: upcoming.length > 10 ? 10 : upcoming.length, // max 10
+              separatorBuilder: (_, __) => const Padding(
+                padding: EdgeInsets.symmetric(vertical: 12),
+                child: Divider(height: 1),
+              ),
+              itemBuilder: (context, index) {
+                final task = upcoming[index];
+                final isPast = task.followUpDate!.isBefore(DateTime.now());
+                
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      task.taskName,
+                      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Icon(LucideIcons.calendar, size: 12, color: isPast ? Colors.red : Colors.grey.shade600),
+                        const SizedBox(width: 4),
+                        Text(
+                          _formatDateOnly(task.followUpDate),
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: isPast ? Colors.red : Colors.grey.shade600,
+                            fontWeight: isPast ? FontWeight.bold : FontWeight.normal,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                );
+              },
+            ),
+        ],
       ),
     );
   }
