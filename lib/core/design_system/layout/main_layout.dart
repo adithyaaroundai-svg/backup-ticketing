@@ -600,13 +600,7 @@ class _TopNav extends ConsumerWidget {
         (currentUser?.isAdmin == true ||
             currentUser?.isAccountant == true ||
             currentUser?.isSupportHead == true);
-    final canViewDeals =
-        enableDeals &&
-        !simplifyNav &&
-        canSeeScreen('deals') &&
-        (currentUser?.isAdmin == true ||
-            currentUser?.isAccountant == true ||
-            currentUser?.isSupportHead == true);
+    final canViewDeals = false; // Hidden for now per user request
 
     final int _dmUnread = ref.watch(dmConversationsProvider.select<int>((map) => map.values.fold<int>(0, (sum, conv) => sum + conv.unreadCount)));
     final List<String> _customChIds = ref.watch(customChannelsProvider).asData?.value.map((c) => c.id).toList() ?? [];
@@ -2060,12 +2054,6 @@ class _BottomNav extends ConsumerWidget {
                     title: const Text('Leads', style: TextStyle(color: Colors.white)),
                     onTap: () { Navigator.pop(context); context.go('/leads'); },
                   ),
-                if (isAdmin || isAccountant || isSupportHead)
-                  ListTile(
-                    leading: const Icon(LucideIcons.briefcase, color: Colors.white),
-                    title: const Text('Deals', style: TextStyle(color: Colors.white)),
-                    onTap: () { Navigator.pop(context); context.go('/deals'); },
-                  ),
                 if (isAdmin || isAccountant)
                   ListTile(
                     leading: const Icon(LucideIcons.indianRupee, color: Colors.white),
@@ -2077,13 +2065,13 @@ class _BottomNav extends ConsumerWidget {
                   title: const Text('Customers', style: TextStyle(color: Colors.white)),
                   onTap: () { Navigator.pop(context); context.go('/customers'); },
                 ),
-                if (currentUser?.isTeleCaller != true)
+                if (currentUser?.isTeleCaller != true && currentUser?.isSoftwareDeveloper != true)
                   ListTile(
                     leading: const Icon(LucideIcons.barChart3, color: Colors.white),
                     title: const Text('Reports', style: TextStyle(color: Colors.white)),
                     onTap: () { Navigator.pop(context); context.go('/reports'); },
                   ),
-                if (currentUser?.isTeleCaller != true)
+                if (currentUser?.isTeleCaller != true && currentUser?.isSoftwareDeveloper != true)
                   ListTile(
                     leading: const Icon(LucideIcons.fileText, color: Colors.white),
                     title: const Text('Proposals', style: TextStyle(color: Colors.white)),

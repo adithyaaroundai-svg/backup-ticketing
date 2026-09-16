@@ -47,9 +47,9 @@ class FollowUpSidebar extends StatelessWidget {
     upcoming.sort((a, b) => a.followUpDate!.compareTo(b.followUpDate!));
 
     return Container(
-      width: 240,
+      width: 220,
       decoration: BoxDecoration(
-        color: context.isDarkMode ? context.adaptiveCard : Colors.white,
+        color: context.isDarkMode ? const Color(0xFF0F172A) : Colors.white,
         border: Border(left: BorderSide(color: context.adaptiveBorder)),
       ),
       child: Column(

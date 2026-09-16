@@ -22,6 +22,44 @@ class AroundaiProjectStatusScreen extends ConsumerStatefulWidget {
 
 class _AroundaiProjectStatusScreenState extends ConsumerState<AroundaiProjectStatusScreen> {
   String _selectedFilter = 'all';
+  bool _isFollowUpSidebarOpen = true;
+
+  void _showMobileFollowUpSheet(BuildContext context, List<AroundaiProjectStatus> allTasks) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => DraggableScrollableSheet(
+        initialChildSize: 0.75,
+        minChildSize: 0.4,
+        maxChildSize: 0.95,
+        builder: (_, scrollController) => Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 500),
+            child: Container(
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black26,
+                    blurRadius: 16,
+                    offset: Offset(0, -4),
+                  ),
+                ],
+              ),
+              child: _buildSidebar(
+                allTasks,
+                isSheet: true,
+                scrollController: scrollController,
+                onClose: () => Navigator.pop(ctx),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 
   @override
   void initState() {
@@ -87,12 +125,13 @@ class _AroundaiProjectStatusScreenState extends ConsumerState<AroundaiProjectSta
           elevation: 0,
           backgroundColor: Colors.white,
           child: Container(
-            width: 450,
-            padding: const EdgeInsets.all(28),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
+            constraints: const BoxConstraints(maxWidth: 450),
+            padding: const EdgeInsets.all(24),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -263,9 +302,11 @@ class _AroundaiProjectStatusScreenState extends ConsumerState<AroundaiProjectSta
                                     currentUserId,
                                   );
                                 }
-                                if (mounted) Navigator.pop(dialogCtx);
+                                if (dialogCtx.mounted) Navigator.pop(dialogCtx);
                               } catch (e) {
-                                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+                                }
                               } finally {
                                 if (mounted) setState(() => saving = false);
                               }
@@ -284,7 +325,8 @@ class _AroundaiProjectStatusScreenState extends ConsumerState<AroundaiProjectSta
           ),
         ),
       ),
-    );
+    ),
+  );
   }
 
   DropdownMenuItem<String> _buildDropdownItem(String value, String label, Color textColor, Color bgColor) {
@@ -339,8 +381,9 @@ class _AroundaiProjectStatusScreenState extends ConsumerState<AroundaiProjectSta
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text('Notes History - ${task.taskName}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-        content: SizedBox(
-          width: 500,
+        content: Container(
+          constraints: const BoxConstraints(maxWidth: 500),
+          width: double.maxFinite,
           height: 400,
           child: history.isEmpty
               ? Center(
@@ -523,8 +566,23 @@ class _AroundaiProjectStatusScreenState extends ConsumerState<AroundaiProjectSta
       return t.taskStatus == _selectedFilter;
     }).toList();
 
+    final isMobile = MediaQuery.of(context).size.width < 900;
+    final upcomingCount = state.tasks.where((t) => t.followUpDate != null && t.taskStatus != 'completed').length;
+
     return Scaffold(
       backgroundColor: const Color(0xFFF1F5F9), // Slate-100
+      endDrawer: isMobile
+          ? Drawer(
+              backgroundColor: Colors.white,
+              child: SafeArea(
+                child: _buildSidebar(
+                  state.tasks,
+                  isSheet: true,
+                  onClose: () => Navigator.pop(context),
+                ),
+              ),
+            )
+          : null,
       appBar: AppBar(
         title: const Text('Project Status', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: Colors.white)),
         centerTitle: true,
@@ -537,6 +595,45 @@ class _AroundaiProjectStatusScreenState extends ConsumerState<AroundaiProjectSta
           onPressed: () => context.pop(),
         ),
         actions: [
+          // Follow-up reminders action
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8.0),
+            child: isMobile
+                ? IconButton(
+                    tooltip: 'Follow-up Reminders',
+                    icon: Badge(
+                      isLabelVisible: upcomingCount > 0,
+                      label: Text('$upcomingCount', style: const TextStyle(fontSize: 10, color: Colors.white)),
+                      backgroundColor: Colors.red.shade600,
+                      child: const Icon(LucideIcons.calendarClock, size: 20, color: Colors.white),
+                    ),
+                    onPressed: () => _showMobileFollowUpSheet(context, state.tasks),
+                  )
+                : OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.white,
+                      side: const BorderSide(color: Colors.white30),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                    ),
+                    onPressed: () {
+                      setState(() {
+                        _isFollowUpSidebarOpen = !_isFollowUpSidebarOpen;
+                      });
+                    },
+                    icon: Badge(
+                      isLabelVisible: upcomingCount > 0,
+                      label: Text('$upcomingCount', style: const TextStyle(fontSize: 10, color: Colors.white)),
+                      backgroundColor: Colors.red.shade600,
+                      child: Icon(_isFollowUpSidebarOpen ? LucideIcons.panelRightClose : LucideIcons.calendarClock, size: 16),
+                    ),
+                    label: Text(
+                      _isFollowUpSidebarOpen ? 'Hide Follow-ups' : 'Follow-ups ($upcomingCount)',
+                      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                    ),
+                  ),
+          ),
+          const SizedBox(width: 8),
           Padding(
             padding: const EdgeInsets.only(right: 16.0, top: 10, bottom: 10),
             child: FilledButton.icon(
@@ -545,11 +642,11 @@ class _AroundaiProjectStatusScreenState extends ConsumerState<AroundaiProjectSta
                 foregroundColor: Colors.white,
                 elevation: 0,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                padding: const EdgeInsets.symmetric(horizontal: 16),
+                padding: EdgeInsets.symmetric(horizontal: isMobile ? 12 : 16),
               ),
               onPressed: () => _showTaskDialog(),
               icon: const Icon(LucideIcons.plus, size: 16),
-              label: const Text('New Task', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+              label: Text(isMobile ? 'New' : 'New Task', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
             ),
           ),
         ],
@@ -601,241 +698,45 @@ class _AroundaiProjectStatusScreenState extends ConsumerState<AroundaiProjectSta
                       child: Align(
                         alignment: Alignment.topCenter,
                         child: SingleChildScrollView(
-                          padding: const EdgeInsets.all(32),
+                          padding: EdgeInsets.all(isMobile ? 12 : 24),
                           child: ConstrainedBox(
-                            constraints: const BoxConstraints(maxWidth: double.infinity),
+                            constraints: const BoxConstraints(maxWidth: 1400),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                _buildFilterTabs(),
-                                Row(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Expanded(
-                                      flex: 3,
-                                      child: Container(
-                                        decoration: BoxDecoration(
-                                          color: Colors.white,
-                                          borderRadius: BorderRadius.circular(12),
-                                          border: Border.all(color: Colors.grey.shade200),
-                                          boxShadow: [
-                                            BoxShadow(
-                                              color: Colors.black.withOpacity(0.02),
-                                              blurRadius: 10,
-                                              offset: const Offset(0, 4),
-                                            ),
-                                          ],
+                                _buildFilterTabs(isMobile: isMobile),
+                                if (!isMobile)
+                                  Row(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Expanded(
+                                        flex: 3,
+                                        child: _buildTableCard(filteredTasks, prov),
+                                      ),
+                                      if (_isFollowUpSidebarOpen) ...[
+                                        const SizedBox(width: 20),
+                                        SizedBox(
+                                          width: 280,
+                                          child: _buildSidebar(
+                                            state.tasks,
+                                            onClose: () => setState(() => _isFollowUpSidebarOpen = false),
+                                          ),
                                         ),
-                                        child: ClipRRect(
-                                          borderRadius: BorderRadius.circular(12),
-                                          child: LayoutBuilder(
-                                            builder: (context, constraints) {
-                                              return SingleChildScrollView(
-                                                scrollDirection: Axis.horizontal,
-                                                child: ConstrainedBox(
-                                                  constraints: BoxConstraints(minWidth: constraints.maxWidth),
-                                                  child: DataTable(
-                                      headingRowColor: MaterialStateProperty.all(const Color(0xFFF8FAFC)),
-                                      dataRowMaxHeight: 70,
-                                      dataRowMinHeight: 60,
-                                      horizontalMargin: 24,
-                                      columnSpacing: 16,
-                                      headingTextStyle: const TextStyle(fontWeight: FontWeight.w600, color: Colors.black87, fontSize: 13),
-                                      dividerThickness: 1,
-                                      columns: const [
-                                        DataColumn(label: Text('Task Name')),
-                                        DataColumn(label: Text('Status')),
-                                        DataColumn(label: Text('Notes')),
-                                        DataColumn(label: Text('Follow Up')),
-                                        DataColumn(label: Text('Created At')),
-                                        DataColumn(label: Text('Updated At')),
-                                        DataColumn(label: Text('Actions'), numeric: true),
                                       ],
-                                      rows: filteredTasks.map((task) {
-                                        Color baseRowColor;
-                                        if (task.taskStatus == 'completed') {
-                                          baseRowColor = Colors.green.shade50.withOpacity(0.3);
-                                        } else if (task.taskStatus == 'working') {
-                                          baseRowColor = Colors.orange.shade50.withOpacity(0.3);
-                                        } else if (task.taskStatus == 'paused') {
-                                          baseRowColor = Colors.red.shade50.withOpacity(0.3);
-                                        } else if (task.taskStatus == 'trial') {
-                                          baseRowColor = Colors.blue.shade50.withOpacity(0.3);
-                                        } else {
-                                          baseRowColor = Colors.white;
-                                        }
-
-                                        return DataRow(
-                                          color: MaterialStateProperty.resolveWith<Color>((Set<MaterialState> states) {
-                                            if (states.contains(MaterialState.hovered)) {
-                                              return Colors.indigo.shade50.withOpacity(0.5);
-                                            }
-                                            return baseRowColor;
-                                          }),
-                                          cells: [
-                                            DataCell(
-                                              SizedBox(
-                                                width: 250,
-                                                child: Tooltip(
-                                                  message: task.taskName,
-                                                  waitDuration: const Duration(milliseconds: 500),
-                                                  child: Text(
-                                                    task.taskName,
-                                                    style: TextStyle(fontWeight: FontWeight.w700, color: Colors.indigo.shade800, fontSize: 15),
-                                                    maxLines: 2,
-                                                    overflow: TextOverflow.ellipsis,
-                                                  ),
-                                                ),
-                                              ),
-                                            ),
-                                            DataCell(_buildStatusBadge(task, prov)),
-                                            DataCell(
-                                              Row(
-                                                mainAxisSize: MainAxisSize.min,
-                                                children: [
-                                                  ConstrainedBox(
-                                                    constraints: const BoxConstraints(maxWidth: 350),
-                                                    child: Tooltip(
-                                                      message: _getLatestNoteText(task.notes).isNotEmpty ? _getLatestNoteText(task.notes) : '-',
-                                                      waitDuration: const Duration(milliseconds: 500),
-                                                      child: Text(
-                                                        _getLatestNoteText(task.notes).isNotEmpty ? _getLatestNoteText(task.notes) : '-',
-                                                        style: TextStyle(color: _getLatestNoteText(task.notes).isNotEmpty ? Colors.black87 : Colors.grey.shade400, fontSize: 13),
-                                                        maxLines: 2,
-                                                        overflow: TextOverflow.ellipsis,
-                                                      ),
-                                                    ),
-                                                  ),
-                                                  const SizedBox(width: 8),
-                                                  IconButton(
-                                                    icon: Icon(LucideIcons.history, size: 16, color: Colors.indigo.shade400),
-                                                    splashRadius: 20,
-                                                    tooltip: 'Notes History',
-                                                    onPressed: () => _showNotesHistory(task),
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-                                            DataCell(
-                                              Text(
-                                                task.followUpDate != null ? _formatDateOnly(task.followUpDate) : '-',
-                                                style: TextStyle(
-                                                  color: task.followUpDate != null && task.followUpDate!.isBefore(DateTime.now()) && task.taskStatus != 'completed' 
-                                                      ? Colors.red 
-                                                      : Colors.grey.shade600, 
-                                                  fontSize: 13,
-                                                  fontWeight: task.followUpDate != null && task.followUpDate!.isBefore(DateTime.now()) && task.taskStatus != 'completed'
-                                                      ? FontWeight.bold
-                                                      : FontWeight.normal
-                                                ),
-                                              ),
-                                            ),
-                                            DataCell(
-                                              Text(
-                                                _formatDate(task.createdAt),
-                                                style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
-                                              ),
-                                            ),
-                                            DataCell(
-                                              Text(
-                                                _formatDate(task.updatedAt),
-                                                style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
-                                              ),
-                                            ),
-                                            DataCell(
-                                              Row(
-                                                mainAxisAlignment: MainAxisAlignment.end,
-                                                children: [
-                                                  IconButton(
-                                                    icon: const Icon(LucideIcons.edit2, size: 16),
-                                                    color: Colors.blue.shade600,
-                                                    splashRadius: 20,
-                                                    onPressed: () => _showTaskDialog(task: task),
-                                                  ),
-                                                  IconButton(
-                                                    icon: const Icon(LucideIcons.trash2, size: 16),
-                                                    color: Colors.red.shade500,
-                                                    splashRadius: 20,
-                                                    onPressed: () => _confirmDelete(task),
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-                                          ],
-                                        );
-                                      }).toList(),
-                                    ),
-                                  ),
-                                );
-                              },
+                                    ],
+                                  )
+                                else
+                                  _buildTableCard(filteredTasks, prov),
+                              ],
                             ),
                           ),
-                            ),
-                                    ),
-                            const SizedBox(width: 24),
-                            SizedBox(
-                              width: 250,
-                              child: _buildSidebar(state.tasks),
-                            ),
-                      ],
+                        ),
+                      ),
                     ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
     );
   }
 
-  Widget _buildFilterTabs() {
-    final filters = [
-      {'label': 'All Tasks', 'value': 'all'},
-      {'label': 'Yet to Start', 'value': 'not started'},
-      {'label': 'Presently Working', 'value': 'working'},
-      {'label': 'Paused', 'value': 'paused'},
-      {'label': 'Trial', 'value': 'trial'},
-      {'label': 'Completed', 'value': 'completed'},
-    ];
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 24),
-      child: Wrap(
-        spacing: 8,
-        runSpacing: 8,
-        children: filters.map((f) {
-          final isSelected = _selectedFilter == f['value'];
-          return ChoiceChip(
-            label: Text(f['label']!),
-            selected: isSelected,
-            onSelected: (selected) {
-              if (selected) {
-                setState(() {
-                  _selectedFilter = f['value']!;
-                });
-              }
-            },
-            selectedColor: Colors.indigo.shade600,
-            labelStyle: TextStyle(
-              color: isSelected ? Colors.white : Colors.grey.shade700,
-              fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-            ),
-            backgroundColor: Colors.white,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20),
-              side: BorderSide(color: isSelected ? Colors.indigo.shade600 : Colors.grey.shade300),
-            ),
-            showCheckmark: false,
-          );
-        }).toList(),
-      ),
-    );
-  }
-
-  Widget _buildSidebar(List<AroundaiProjectStatus> allTasks) {
-    final upcoming = allTasks.where((t) => t.followUpDate != null && t.taskStatus != 'completed').toList();
-    upcoming.sort((a, b) => a.followUpDate!.compareTo(b.followUpDate!));
-
+  Widget _buildTableCard(List<AroundaiProjectStatus> filteredTasks, AroundaiProjectStatusNotifier prov) {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -849,74 +750,376 @@ class _AroundaiProjectStatusScreenState extends ConsumerState<AroundaiProjectSta
           ),
         ],
       ),
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(LucideIcons.bell, size: 18, color: Colors.indigo.shade600),
-              const SizedBox(width: 8),
-              const Text(
-                'Follow-up Reminders',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
-              ),
-            ],
-          ),
-          const SizedBox(height: 24),
-          if (upcoming.isEmpty)
-            Center(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 32),
-                child: Column(
-                  children: [
-                    Icon(LucideIcons.calendar, size: 40, color: Colors.grey.shade300),
-                    const SizedBox(height: 12),
-                    Text('No upcoming follow-ups', style: TextStyle(color: Colors.grey.shade500, fontSize: 13)),
-                  ],
-                ),
-              ),
-            )
-          else
-            ListView.separated(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: upcoming.length > 10 ? 10 : upcoming.length, // max 10
-              separatorBuilder: (_, __) => const Padding(
-                padding: EdgeInsets.symmetric(vertical: 12),
-                child: Divider(height: 1),
-              ),
-              itemBuilder: (context, index) {
-                final task = upcoming[index];
-                final isPast = task.followUpDate!.isBefore(DateTime.now());
-                
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      task.taskName,
-                      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-                    ),
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        Icon(LucideIcons.calendar, size: 12, color: isPast ? Colors.red : Colors.grey.shade600),
-                        const SizedBox(width: 4),
-                        Text(
-                          _formatDateOnly(task.followUpDate),
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: isPast ? Colors.red : Colors.grey.shade600,
-                            fontWeight: isPast ? FontWeight.bold : FontWeight.normal,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minWidth: 1000),
+            child: DataTable(
+              headingRowColor: MaterialStateProperty.all(const Color(0xFFF8FAFC)),
+              dataRowMaxHeight: 70,
+              dataRowMinHeight: 60,
+              horizontalMargin: 20,
+              columnSpacing: 16,
+              headingTextStyle: const TextStyle(fontWeight: FontWeight.w600, color: Colors.black87, fontSize: 13),
+              dividerThickness: 1,
+              columns: const [
+                DataColumn(label: Text('Task Name')),
+                DataColumn(label: Text('Status')),
+                DataColumn(label: Text('Notes')),
+                DataColumn(label: Text('Follow Up')),
+                DataColumn(label: Text('Created At')),
+                DataColumn(label: Text('Updated At')),
+                DataColumn(label: Text('Actions'), numeric: true),
+              ],
+              rows: filteredTasks.map((task) {
+                Color baseRowColor;
+                if (task.taskStatus == 'completed') {
+                  baseRowColor = Colors.green.shade50.withOpacity(0.3);
+                } else if (task.taskStatus == 'working') {
+                  baseRowColor = Colors.orange.shade50.withOpacity(0.3);
+                } else if (task.taskStatus == 'paused') {
+                  baseRowColor = Colors.red.shade50.withOpacity(0.3);
+                } else if (task.taskStatus == 'trial') {
+                  baseRowColor = Colors.blue.shade50.withOpacity(0.3);
+                } else {
+                  baseRowColor = Colors.white;
+                }
+
+                return DataRow(
+                  color: MaterialStateProperty.resolveWith<Color>((Set<MaterialState> states) {
+                    if (states.contains(MaterialState.hovered)) {
+                      return Colors.indigo.shade50.withOpacity(0.5);
+                    }
+                    return baseRowColor;
+                  }),
+                  cells: [
+                    DataCell(
+                      SizedBox(
+                        width: 220,
+                        child: Tooltip(
+                          message: task.taskName,
+                          waitDuration: const Duration(milliseconds: 500),
+                          child: Text(
+                            task.taskName,
+                            style: TextStyle(fontWeight: FontWeight.w700, color: Colors.indigo.shade800, fontSize: 14),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
-                      ],
+                      ),
+                    ),
+                    DataCell(_buildStatusBadge(task, prov)),
+                    DataCell(
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 280),
+                            child: Tooltip(
+                              message: _getLatestNoteText(task.notes).isNotEmpty ? _getLatestNoteText(task.notes) : '-',
+                              waitDuration: const Duration(milliseconds: 500),
+                              child: Text(
+                                _getLatestNoteText(task.notes).isNotEmpty ? _getLatestNoteText(task.notes) : '-',
+                                style: TextStyle(color: _getLatestNoteText(task.notes).isNotEmpty ? Colors.black87 : Colors.grey.shade400, fontSize: 13),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          IconButton(
+                            icon: Icon(LucideIcons.history, size: 16, color: Colors.indigo.shade400),
+                            splashRadius: 20,
+                            tooltip: 'Notes History',
+                            onPressed: () => _showNotesHistory(task),
+                          ),
+                        ],
+                      ),
+                    ),
+                    DataCell(
+                      Text(
+                        task.followUpDate != null ? _formatDateOnly(task.followUpDate) : '-',
+                        style: TextStyle(
+                          color: task.followUpDate != null && task.followUpDate!.isBefore(DateTime.now()) && task.taskStatus != 'completed' 
+                              ? Colors.red 
+                              : Colors.grey.shade600, 
+                          fontSize: 13,
+                          fontWeight: task.followUpDate != null && task.followUpDate!.isBefore(DateTime.now()) && task.taskStatus != 'completed'
+                              ? FontWeight.bold
+                              : FontWeight.normal,
+                        ),
+                      ),
+                    ),
+                    DataCell(
+                      Text(
+                        _formatDate(task.createdAt),
+                        style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+                      ),
+                    ),
+                    DataCell(
+                      Text(
+                        _formatDate(task.updatedAt),
+                        style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+                      ),
+                    ),
+                    DataCell(
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          IconButton(
+                            icon: const Icon(LucideIcons.edit2, size: 16),
+                            color: Colors.blue.shade600,
+                            splashRadius: 20,
+                            onPressed: () => _showTaskDialog(task: task),
+                          ),
+                          IconButton(
+                            icon: const Icon(LucideIcons.trash2, size: 16),
+                            color: Colors.red.shade500,
+                            splashRadius: 20,
+                            onPressed: () => _confirmDelete(task),
+                          ),
+                        ],
+                      ),
                     ),
                   ],
                 );
-              },
+              }).toList(),
             ),
-        ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFilterTabs({bool isMobile = false}) {
+    final filters = [
+      {'label': 'All Tasks', 'value': 'all'},
+      {'label': 'Yet to Start', 'value': 'not started'},
+      {'label': 'Presently Working', 'value': 'working'},
+      {'label': 'Paused', 'value': 'paused'},
+      {'label': 'Trial', 'value': 'trial'},
+      {'label': 'Completed', 'value': 'completed'},
+    ];
+
+    final chips = filters.map((f) {
+      final isSelected = _selectedFilter == f['value'];
+      return ChoiceChip(
+        label: Text(f['label']!),
+        selected: isSelected,
+        onSelected: (selected) {
+          if (selected) {
+            setState(() {
+              _selectedFilter = f['value']!;
+            });
+          }
+        },
+        selectedColor: Colors.indigo.shade600,
+        labelStyle: TextStyle(
+          color: isSelected ? Colors.white : Colors.grey.shade700,
+          fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+          fontSize: isMobile ? 12 : 13,
+        ),
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: BorderSide(color: isSelected ? Colors.indigo.shade600 : Colors.grey.shade300),
+        ),
+        showCheckmark: false,
+      );
+    }).toList();
+
+    return Padding(
+      padding: EdgeInsets.only(bottom: isMobile ? 14 : 20),
+      child: isMobile
+          ? SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: chips.map((c) => Padding(padding: const EdgeInsets.only(right: 8), child: c)).toList(),
+              ),
+            )
+          : Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: chips,
+            ),
+    );
+  }
+
+  Widget _buildSidebar(
+    List<AroundaiProjectStatus> allTasks, {
+    VoidCallback? onClose,
+    bool isSheet = false,
+    ScrollController? scrollController,
+  }) {
+    final upcoming = allTasks.where((t) => t.followUpDate != null && t.taskStatus != 'completed').toList();
+    upcoming.sort((a, b) => a.followUpDate!.compareTo(b.followUpDate!));
+
+    final content = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: isSheet ? MainAxisSize.max : MainAxisSize.min,
+      children: [
+        if (isSheet)
+          Center(
+            child: Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Row(
+              children: [
+                Icon(LucideIcons.bell, size: 18, color: Colors.indigo.shade600),
+                const SizedBox(width: 8),
+                const Text(
+                  'Follow-up Reminders',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                ),
+                if (upcoming.isNotEmpty) ...[
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.indigo.shade50,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.indigo.shade200),
+                    ),
+                    child: Text(
+                      '${upcoming.length}',
+                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.indigo.shade700),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+            if (onClose != null)
+              IconButton(
+                icon: const Icon(LucideIcons.x, size: 20, color: Colors.black54),
+                onPressed: onClose,
+                splashRadius: 20,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+              ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        if (upcoming.isEmpty)
+          Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 32),
+              child: Column(
+                children: [
+                  Icon(LucideIcons.calendar, size: 40, color: Colors.grey.shade300),
+                  const SizedBox(height: 12),
+                  Text('No upcoming follow-ups', style: TextStyle(color: Colors.grey.shade500, fontSize: 13)),
+                ],
+              ),
+            ),
+          )
+        else if (isSheet)
+          Expanded(
+            child: ListView.separated(
+              controller: scrollController,
+              itemCount: upcoming.length,
+              separatorBuilder: (_, __) => const Padding(
+                padding: EdgeInsets.symmetric(vertical: 8),
+                child: Divider(height: 1),
+              ),
+              itemBuilder: (context, index) => _buildReminderItem(upcoming[index], isSheet: true),
+            ),
+          )
+        else
+          ListView.separated(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: upcoming.length > 10 ? 10 : upcoming.length,
+            separatorBuilder: (_, __) => const Padding(
+              padding: EdgeInsets.symmetric(vertical: 10),
+              child: Divider(height: 1),
+            ),
+            itemBuilder: (context, index) => _buildReminderItem(upcoming[index], isSheet: false),
+          ),
+      ],
+    );
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: isSheet ? null : Border.all(color: Colors.grey.shade200),
+        boxShadow: isSheet
+            ? null
+            : [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.02),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+      ),
+      padding: EdgeInsets.all(isSheet ? 16 : 20),
+      child: content,
+    );
+  }
+
+  Widget _buildReminderItem(AroundaiProjectStatus task, {required bool isSheet}) {
+    final isPast = task.followUpDate!.isBefore(DateTime.now());
+
+    return InkWell(
+      onTap: () {
+        if (isSheet) Navigator.pop(context);
+        _showTaskDialog(task: task);
+      },
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              task.taskName,
+              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+            ),
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                Icon(LucideIcons.calendar, size: 12, color: isPast ? Colors.red : Colors.grey.shade600),
+                const SizedBox(width: 4),
+                Text(
+                  _formatDateOnly(task.followUpDate),
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: isPast ? Colors.red : Colors.grey.shade600,
+                    fontWeight: isPast ? FontWeight.bold : FontWeight.normal,
+                  ),
+                ),
+                if (isPast) ...[
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.red.shade50,
+                      borderRadius: BorderRadius.circular(4),
+                      border: Border.all(color: Colors.red.shade200),
+                    ),
+                    child: Text(
+                      'Overdue',
+                      style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.red.shade700),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

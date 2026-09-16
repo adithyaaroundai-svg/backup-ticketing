@@ -451,52 +451,55 @@ class _TicketsTableViewState extends ConsumerState<TicketsTableView> {
               crossAxisAlignment: WrapCrossAlignment.center,
               children: [
                 // Filter tabs: All, Active Tasks, Completed, Cancelled
-                Container(
-                  padding: const EdgeInsets.all(3),
-                  decoration: BoxDecoration(
-                    color: context.adaptiveSlate100,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: context.adaptiveBorder),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      _buildStatusFilterButton(
-                        filterKey: 'all',
-                        label: 'All',
-                        icon: LucideIcons.layers,
-                        count: totalCount,
-                        activeColor: const Color(0xFF6366F1),
-                        context: context,
-                      ),
-                      const SizedBox(width: 4),
-                      _buildStatusFilterButton(
-                        filterKey: 'active',
-                        label: 'Active Tasks',
-                        icon: LucideIcons.listTodo,
-                        count: activeCount,
-                        activeColor: AppColors.primary,
-                        context: context,
-                      ),
-                      const SizedBox(width: 4),
-                      _buildStatusFilterButton(
-                        filterKey: 'completed',
-                        label: 'Completed',
-                        icon: LucideIcons.checkCircle2,
-                        count: completedCount,
-                        activeColor: const Color(0xFF16A34A),
-                        context: context,
-                      ),
-                      const SizedBox(width: 4),
-                      _buildStatusFilterButton(
-                        filterKey: 'cancelled',
-                        label: 'Cancelled',
-                        icon: LucideIcons.xCircle,
-                        count: cancelledCount,
-                        activeColor: const Color(0xFFDC2626),
-                        context: context,
-                      ),
-                    ],
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Container(
+                    padding: const EdgeInsets.all(3),
+                    decoration: BoxDecoration(
+                      color: context.adaptiveSlate100,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: context.adaptiveBorder),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _buildStatusFilterButton(
+                          filterKey: 'all',
+                          label: 'All',
+                          icon: LucideIcons.layers,
+                          count: totalCount,
+                          activeColor: const Color(0xFF6366F1),
+                          context: context,
+                        ),
+                        const SizedBox(width: 4),
+                        _buildStatusFilterButton(
+                          filterKey: 'active',
+                          label: 'Active Tasks',
+                          icon: LucideIcons.listTodo,
+                          count: activeCount,
+                          activeColor: AppColors.primary,
+                          context: context,
+                        ),
+                        const SizedBox(width: 4),
+                        _buildStatusFilterButton(
+                          filterKey: 'completed',
+                          label: 'Completed',
+                          icon: LucideIcons.checkCircle2,
+                          count: completedCount,
+                          activeColor: const Color(0xFF16A34A),
+                          context: context,
+                        ),
+                        const SizedBox(width: 4),
+                        _buildStatusFilterButton(
+                          filterKey: 'cancelled',
+                          label: 'Cancelled',
+                          icon: LucideIcons.xCircle,
+                          count: cancelledCount,
+                          activeColor: const Color(0xFFDC2626),
+                          context: context,
+                        ),
+                      ],
+                    ),
                   ),
                 ),
                 ConstrainedBox(

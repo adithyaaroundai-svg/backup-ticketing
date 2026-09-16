@@ -14,8 +14,12 @@ class CustomerChannelPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final registrationsAsync = ref.watch(tallyRegistrationsProvider);
 
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final primaryColor = isDark ? AppColors.primaryLight : AppColors.primary;
+
     return Scaffold(
       appBar: AppBar(
+        titleSpacing: 0,
         leading: BackButton(
           onPressed: () {
             if (context.canPop()) {
@@ -26,30 +30,35 @@ class CustomerChannelPage extends ConsumerWidget {
           },
         ),
         title: Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(LucideIcons.building2, color: AppColors.primary, size: 28),
-            const SizedBox(width: 12),
-            Text(
-              'Customer Channel',
-              style: const TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
+            Icon(LucideIcons.building2, color: primaryColor, size: 20),
+            const SizedBox(width: 8),
+            const Flexible(
+              child: Text(
+                'Customer Channel',
+                style: TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.bold,
+                ),
+                overflow: TextOverflow.ellipsis,
               ),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 8),
             if (registrationsAsync.hasValue)
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 decoration: BoxDecoration(
-                  color: AppColors.primary.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
+                  color: primaryColor.withOpacity(isDark ? 0.2 : 0.1),
+                  borderRadius: BorderRadius.circular(10),
+                  border: isDark ? Border.all(color: primaryColor.withOpacity(0.3), width: 1) : null,
                 ),
                 child: Text(
                   '${registrationsAsync.value!.length}',
-                  style: const TextStyle(
-                    fontSize: 16,
+                  style: TextStyle(
+                    fontSize: 13,
                     fontWeight: FontWeight.bold,
-                    color: AppColors.primary,
+                    color: primaryColor,
                   ),
                 ),
               ),
@@ -57,13 +66,15 @@ class CustomerChannelPage extends ConsumerWidget {
         ),
         actions: [
           IconButton(
-            icon: const Icon(LucideIcons.refreshCw),
+            icon: const Icon(LucideIcons.refreshCw, size: 18),
+            padding: const EdgeInsets.all(8),
+            constraints: const BoxConstraints(),
             tooltip: 'Refresh Data',
             onPressed: () {
               ref.invalidate(tallyRegistrationsProvider);
             },
           ),
-          const SizedBox(width: 16),
+          const SizedBox(width: 8),
         ],
       ),
       body: Column(

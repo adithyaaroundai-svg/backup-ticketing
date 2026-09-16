@@ -33,39 +33,51 @@ class _PrivateLeadsPageState extends ConsumerState<PrivateLeadsPage> {
         initialChildSize: 0.85,
         minChildSize: 0.5,
         maxChildSize: 0.95,
-        builder: (_, scrollController) => Container(
-          decoration: BoxDecoration(
-            color: context.isDarkMode ? context.adaptiveCard : Colors.white,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-          ),
-          child: _FollowUpSidebar(
-            leads: leads,
-            filter: _followUpFilter,
-            searchQuery: _followUpSearch,
-            onFilterChanged: (newFilter) {
-              setState(() => _followUpFilter = newFilter);
-            },
-            onSearchChanged: (query) {
-              setState(() => _followUpSearch = query);
-            },
-            onClose: () => Navigator.pop(ctx),
-            onStageChange: (lead, newStatus) {
-              ref.read(leadControllerProvider.notifier).updateLeadStatus(lead.id, newStatus);
-            },
-            onDelete: (lead) {
-              ref.read(leadControllerProvider.notifier).deleteLead(lead.id);
-            },
-            onAddRemark: (lead, remark) {
-              final dateStr = DateFormat('MMM d h:mm a').format(DateTime.now());
-              final newDesc = (lead.description == null || lead.description!.isEmpty)
-                  ? '[$dateStr]: $remark'
-                  : '${lead.description}\n[$dateStr]: $remark';
-              ref.read(leadControllerProvider.notifier).updateLeadDetails(lead.id, {'description': newDesc});
-            },
-            onUpdateFollowUpDate: (lead, newDate) {
-              final formattedDate = newDate != null ? DateFormat('yyyy-MM-dd').format(newDate) : null;
-              ref.read(leadControllerProvider.notifier).updateLeadDetails(lead.id, {'follow_up_date': formattedDate});
-            },
+        builder: (_, scrollController) => Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 440),
+            child: Container(
+              decoration: BoxDecoration(
+                color: context.isDarkMode ? const Color(0xFF0F172A) : Colors.white,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Colors.black45,
+                    blurRadius: 20,
+                    offset: Offset(0, -4),
+                  ),
+                ],
+              ),
+              child: _FollowUpSidebar(
+                leads: leads,
+                filter: _followUpFilter,
+                searchQuery: _followUpSearch,
+                onFilterChanged: (newFilter) {
+                  setState(() => _followUpFilter = newFilter);
+                },
+                onSearchChanged: (query) {
+                  setState(() => _followUpSearch = query);
+                },
+                onClose: () => Navigator.pop(ctx),
+                onStageChange: (lead, newStatus) {
+                  ref.read(leadControllerProvider.notifier).updateLeadStatus(lead.id, newStatus);
+                },
+                onDelete: (lead) {
+                  ref.read(leadControllerProvider.notifier).deleteLead(lead.id);
+                },
+                onAddRemark: (lead, remark) {
+                  final dateStr = DateFormat('MMM d h:mm a').format(DateTime.now());
+                  final newDesc = (lead.description == null || lead.description!.isEmpty)
+                      ? '[$dateStr]: $remark'
+                      : '${lead.description}\n[$dateStr]: $remark';
+                  ref.read(leadControllerProvider.notifier).updateLeadDetails(lead.id, {'description': newDesc});
+                },
+                onUpdateFollowUpDate: (lead, newDate) {
+                  final formattedDate = newDate != null ? DateFormat('yyyy-MM-dd').format(newDate) : null;
+                  ref.read(leadControllerProvider.notifier).updateLeadDetails(lead.id, {'follow_up_date': formattedDate});
+                },
+              ),
+            ),
           ),
         ),
       ),
@@ -96,7 +108,10 @@ class _PrivateLeadsPageState extends ConsumerState<PrivateLeadsPage> {
             // Header Section
             if (!widget.isEmbedded)
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+                padding: EdgeInsets.symmetric(
+                  horizontal: isMobile ? 12 : 24,
+                  vertical: 8,
+                ),
                 decoration: BoxDecoration(
                   color: context.isDarkMode ? context.adaptiveCard : Colors.white,
                   boxShadow: const [
@@ -110,15 +125,19 @@ class _PrivateLeadsPageState extends ConsumerState<PrivateLeadsPage> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
-                      'My Private Pipeline',
-                      style: TextStyle(
-                        fontSize: isMobile ? 18 : 22,
-                        fontWeight: FontWeight.w900,
-                        color: context.adaptiveSlate900,
-                        letterSpacing: -0.5,
+                    Flexible(
+                      child: Text(
+                        'Private',
+                        style: TextStyle(
+                          fontSize: isMobile ? 18 : 22,
+                          fontWeight: FontWeight.w900,
+                          color: context.adaptiveSlate900,
+                          letterSpacing: -0.5,
+                        ),
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
+                    const SizedBox(width: 8),
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -144,7 +163,7 @@ class _PrivateLeadsPageState extends ConsumerState<PrivateLeadsPage> {
                                 : Colors.white,
                             elevation: 0,
                             padding: EdgeInsets.symmetric(
-                              horizontal: isMobile ? 10 : 14,
+                              horizontal: isMobile ? 8 : 14,
                               vertical: 8,
                             ),
                           ),
@@ -152,16 +171,19 @@ class _PrivateLeadsPageState extends ConsumerState<PrivateLeadsPage> {
                             _isFollowUpSidebarOpen && !isMobile
                                 ? LucideIcons.panelRightClose
                                 : LucideIcons.calendarClock,
-                            size: 16,
+                            size: isMobile ? 14 : 16,
                           ),
                           label: Text(
                             isMobile
                                 ? 'Follow-ups'
                                 : (_isFollowUpSidebarOpen ? 'Hide Follow-ups' : 'Follow-up Dates'),
-                            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: isMobile ? 12 : 13,
+                            ),
                           ),
                         ),
-                        const SizedBox(width: 8),
+                        SizedBox(width: isMobile ? 6 : 8),
                         ElevatedButton.icon(
                           onPressed: () {
                             showDialog(
@@ -173,12 +195,18 @@ class _PrivateLeadsPageState extends ConsumerState<PrivateLeadsPage> {
                             backgroundColor: AppColors.primary,
                             foregroundColor: Colors.white,
                             padding: EdgeInsets.symmetric(
-                              horizontal: isMobile ? 10 : 14,
+                              horizontal: isMobile ? 8 : 14,
                               vertical: 8,
                             ),
                           ),
-                          icon: const Icon(LucideIcons.plus, size: 16),
-                          label: const Text('Add Lead', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                          icon: Icon(LucideIcons.plus, size: isMobile ? 14 : 16),
+                          label: Text(
+                            'Add Lead',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: isMobile ? 12 : 13,
+                            ),
+                          ),
                         ),
                       ],
                     ),
@@ -357,9 +385,9 @@ class _PrivateLeadsPageState extends ConsumerState<PrivateLeadsPage> {
 
                         // Follow-up Date Right Sidebar on Desktop/Tablet
                         if (_isFollowUpSidebarOpen && !isMobile) ...[
-                          const SizedBox(width: 10),
+                          const SizedBox(width: 8),
                           SizedBox(
-                            width: 260,
+                            width: 220,
                             child: _FollowUpSidebar(
                               leads: leads,
                               filter: _followUpFilter,
@@ -1310,7 +1338,7 @@ class _FollowUpSidebar extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: context.isDarkMode ? context.adaptiveCard : Colors.white,
+        color: context.isDarkMode ? const Color(0xFF0F172A) : Colors.white,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: context.adaptiveBorder),
         boxShadow: [
@@ -1328,7 +1356,7 @@ class _FollowUpSidebar extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
             decoration: BoxDecoration(
-              color: context.isDarkMode ? Colors.white.withValues(alpha: 0.04) : const Color(0xFFF8FAFC),
+              color: context.isDarkMode ? const Color(0xFF1E293B) : const Color(0xFFF8FAFC),
               borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
               border: Border(bottom: BorderSide(color: context.adaptiveBorder)),
             ),
@@ -1371,8 +1399,8 @@ class _FollowUpSidebar extends StatelessWidget {
                 ),
                 if (todayLeads.isNotEmpty)
                   Container(
-                    margin: const EdgeInsets.only(right: 4),
-                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                    margin: const EdgeInsets.only(right: 6),
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                     decoration: BoxDecoration(
                       color: Colors.amber.shade700.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(8),
@@ -1385,8 +1413,8 @@ class _FollowUpSidebar extends StatelessWidget {
                   )
                 else if (overdueLeads.isNotEmpty)
                   Container(
-                    margin: const EdgeInsets.only(right: 4),
-                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                    margin: const EdgeInsets.only(right: 6),
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                     decoration: BoxDecoration(
                       color: AppColors.error.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(8),
@@ -1397,13 +1425,23 @@ class _FollowUpSidebar extends StatelessWidget {
                       style: const TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold, color: AppColors.error),
                     ),
                   ),
-                IconButton(
-                  icon: Icon(LucideIcons.x, size: 14, color: context.adaptiveSlate400),
-                  onPressed: onClose,
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 20, minHeight: 20),
-                  splashRadius: 12,
-                  tooltip: 'Close sidebar',
+                Container(
+                  decoration: BoxDecoration(
+                    color: context.isDarkMode ? Colors.white.withValues(alpha: 0.14) : Colors.black.withValues(alpha: 0.07),
+                    shape: BoxShape.circle,
+                  ),
+                  child: IconButton(
+                    icon: Icon(
+                      LucideIcons.x,
+                      size: 15,
+                      color: context.isDarkMode ? Colors.white : Colors.black87,
+                    ),
+                    onPressed: onClose,
+                    padding: const EdgeInsets.all(5),
+                    constraints: const BoxConstraints(minWidth: 26, minHeight: 26),
+                    splashRadius: 14,
+                    tooltip: 'Close follow-ups',
+                  ),
                 ),
               ],
             ),

@@ -202,6 +202,7 @@ class _CallHistoryList extends ConsumerWidget {
     final theme = Theme.of(context);
     final isLight = theme.brightness == Brightness.light;
     final myId = ref.watch(authProvider)?.id ?? '';
+    final isMobile = MediaQuery.of(context).size.width < 768;
 
     return Container(
       color: isLight ? Colors.white : AppColors.slate900,
@@ -209,10 +210,13 @@ class _CallHistoryList extends ConsumerWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
-            padding: const EdgeInsets.all(24.0),
+            padding: EdgeInsets.symmetric(
+              horizontal: isMobile ? 16.0 : 24.0,
+              vertical: isMobile ? 12.0 : 24.0,
+            ),
             child: Text(
               'History',
-              style: theme.textTheme.headlineSmall?.copyWith(
+              style: (isMobile ? theme.textTheme.titleMedium : theme.textTheme.headlineSmall)?.copyWith(
                 fontWeight: FontWeight.bold,
               ),
             ),
@@ -220,7 +224,9 @@ class _CallHistoryList extends ConsumerWidget {
           Expanded(
             child: RefreshIndicator(
               onRefresh: () => ref.read(callHistoryControllerProvider.notifier).refresh(),
-              child: historyAsync.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
+              child: historyAsync.when(
+                skipLoadingOnReload: true,
+                skipLoadingOnRefresh: true,
                 data: (_) {
                   if (filteredHistory.isEmpty) {
                     return _EmptyState();
@@ -285,9 +291,9 @@ class _CallHistoryRow extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
+    final isMobile = MediaQuery.of(context).size.width < 768;
     final isIncoming = call.receiverId == myId;
     final partnerName = isIncoming ? call.callerName : call.receiverName;
-    final partnerId = isIncoming ? call.callerId : call.receiverId;
     final avatarUrl = call.avatarUrl;
 
     // Status icon
@@ -325,32 +331,50 @@ class _CallHistoryRow extends ConsumerWidget {
     return InkWell(
       onTap: () {},
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 12.0),
+        padding: EdgeInsets.symmetric(
+          horizontal: isMobile ? 12.0 : 20.0,
+          vertical: isMobile ? 8.0 : 12.0,
+        ),
         child: Row(
           children: [
             CircleAvatar(
+              radius: isMobile ? 18 : 22,
               backgroundImage: avatarUrl != null ? NetworkImage(avatarUrl) : null,
-              child: avatarUrl == null ? Text(partnerName.isNotEmpty ? partnerName[0].toUpperCase() : '?') : null,
+              child: avatarUrl == null
+                  ? Text(
+                      partnerName.isNotEmpty ? partnerName[0].toUpperCase() : '?',
+                      style: TextStyle(fontSize: isMobile ? 14 : 16),
+                    )
+                  : null,
             ),
-            const SizedBox(width: 16),
+            SizedBox(width: isMobile ? 10 : 16),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     partnerName,
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: isMobile ? 14 : 16,
+                    ),
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 2),
                   Row(
                     children: [
-                      Icon(statusIcon, size: 14, color: statusColor),
-                      const SizedBox(width: 6),
-                      Text(
-                        _getCallDescription(call, isIncoming),
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: statusColor,
+                      Icon(statusIcon, size: isMobile ? 12 : 14, color: statusColor),
+                      const SizedBox(width: 4),
+                      Flexible(
+                        child: Text(
+                          _getCallDescription(call, isIncoming),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: isMobile ? 11 : 13,
+                            color: statusColor,
+                          ),
                         ),
                       ),
                     ],
@@ -358,15 +382,17 @@ class _CallHistoryRow extends ConsumerWidget {
                 ],
               ),
             ),
-            
+            const SizedBox(width: 8),
+
             // Right info
             Column(
               crossAxisAlignment: CrossAxisAlignment.end,
+              mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
                   DateFormat('MMM d, h:mm a').format(call.startedAt.toLocal()),
                   style: TextStyle(
-                    fontSize: 12,
+                    fontSize: isMobile ? 10 : 12,
                     fontWeight: FontWeight.w500,
                     color: theme.colorScheme.onSurface,
                   ),
@@ -375,27 +401,29 @@ class _CallHistoryRow extends ConsumerWidget {
                 Text(
                   timeago.format(call.startedAt),
                   style: TextStyle(
-                    fontSize: 11,
+                    fontSize: isMobile ? 9 : 11,
                     color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
                   ),
                 ),
                 if (durationText.isNotEmpty) ...[
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 2),
                   Text(
                     durationText,
                     style: TextStyle(
-                      fontSize: 12,
+                      fontSize: isMobile ? 10 : 12,
                       color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
                     ),
                   ),
                 ],
               ],
             ),
-            const SizedBox(width: 24),
-            
+            SizedBox(width: isMobile ? 2 : 12),
+
             // Call action
             IconButton(
-              icon: Icon(typeIcon, color: theme.primaryColor),
+              icon: Icon(typeIcon, size: isMobile ? 18 : 22, color: theme.primaryColor),
+              padding: EdgeInsets.all(isMobile ? 6 : 8),
+              constraints: const BoxConstraints(),
               onPressed: () => _handleCallAgain(context, ref, call),
               tooltip: 'Call Again',
             ),
@@ -467,7 +495,7 @@ class _CallHistoryRow extends ConsumerWidget {
         direction: CallDirection.outgoing,
         participantIds: finalParticipantIds.toList(),
       );
-    } catch (e, st) {
+    } catch (e) {
       debugPrint('Failed to log call history: $e');
     }
 
