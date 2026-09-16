@@ -1001,7 +1001,7 @@ class _TicketsTableViewState extends ConsumerState<TicketsTableView> {
                         loading: () => Center(child: CircularProgressIndicator()),
                         error: (error, stack) => Center(
                           child: Text(
-                            'Error loading agents: $error',
+                            'Unable to load agents. Please check your internet connection.',
                             style: TextStyle(color: AppColors.error),
                           ),
                         ),
@@ -1010,7 +1010,7 @@ class _TicketsTableViewState extends ConsumerState<TicketsTableView> {
                     loading: () => Center(child: CircularProgressIndicator()),
                     error: (error, stack) => Center(
                       child: Text(
-                        'Error loading customers: $error',
+                        'Unable to load customers. Please check your internet connection.',
                         style: TextStyle(color: AppColors.error),
                       ),
                     ),
@@ -1199,13 +1199,13 @@ class _TicketsTableViewState extends ConsumerState<TicketsTableView> {
             },
             loading: () => Center(child: CircularProgressIndicator()),
             error: (error, stack) => Center(
-              child: Text('Error loading agents: $error', style: TextStyle(color: AppColors.error)),
+              child: Text('Unable to load agents. Please check your internet connection.', style: TextStyle(color: AppColors.error)),
             ),
           );
         },
         loading: () => Center(child: CircularProgressIndicator()),
         error: (error, stack) => Center(
-          child: Text('Error loading customers: $error', style: TextStyle(color: AppColors.error)),
+          child: Text('Unable to load customers. Please check your internet connection.', style: TextStyle(color: AppColors.error)),
         ),
       ),
     );

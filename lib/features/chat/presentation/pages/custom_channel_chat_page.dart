@@ -1252,6 +1252,9 @@ class _CustomChannelChatPageState extends ConsumerState<CustomChannelChatPage> {
       }
     });
 
+    final isMobileLayout = MediaQuery.of(context).size.width < 700 || 
+        (!kIsWeb && (defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.iOS));
+
     return MainLayout(
       currentPath: '/c/${widget.channelId}',
       child: Scaffold(
@@ -1271,16 +1274,19 @@ class _CustomChannelChatPageState extends ConsumerState<CustomChannelChatPage> {
                     children: [
                       Icon(
                         channel?.isPrivate == true ? LucideIcons.lock : LucideIcons.hash,
-                        size: 18,
+                        size: isMobileLayout ? 15 : 18,
                         color: context.adaptiveSlate900,
                       ),
-                      const SizedBox(width: 8),
-                      Text(
-                        channel?.name ?? 'Loading...',
-                        style: TextStyle(
-                          color: context.adaptiveSlate900,
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
+                      const SizedBox(width: 6),
+                      Flexible(
+                        child: Text(
+                          channel?.name ?? 'Loading...',
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: context.adaptiveSlate900,
+                            fontSize: isMobileLayout ? 14 : 18,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
                     ],
@@ -1288,9 +1294,11 @@ class _CustomChannelChatPageState extends ConsumerState<CustomChannelChatPage> {
                   if (channel != null)
                     Text(
                       channel.isPrivate ? 'Private Channel' : 'Public Channel',
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
                       style: TextStyle(
                         color: context.adaptiveSlate500,
-                        fontSize: 11,
+                        fontSize: isMobileLayout ? 10 : 11,
                         fontWeight: FontWeight.normal,
                       ),
                     ),
@@ -1312,7 +1320,10 @@ class _CustomChannelChatPageState extends ConsumerState<CustomChannelChatPage> {
                     borderRadius: BorderRadius.circular(8),
                     child: Container(
                       margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      padding: EdgeInsets.symmetric(
+                        horizontal: isMobileLayout ? 8 : 12, 
+                        vertical: 8
+                      ),
                       decoration: BoxDecoration(
                         color: context.isDarkMode ? Colors.indigo.withAlpha(40) : AppColors.primary.withAlpha(25),
                         borderRadius: BorderRadius.circular(8),
@@ -1322,15 +1333,17 @@ class _CustomChannelChatPageState extends ConsumerState<CustomChannelChatPage> {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Icon(LucideIcons.kanbanSquare, size: 16, color: context.isDarkMode ? Colors.indigo.shade200 : AppColors.primary),
-                          const SizedBox(width: 6),
-                          Text(
-                            'Project Tracker', 
-                            style: TextStyle(
-                              color: context.isDarkMode ? Colors.indigo.shade200 : AppColors.primary, 
-                              fontWeight: FontWeight.w600, 
-                              fontSize: 13,
+                          if (!isMobileLayout) ...[
+                            const SizedBox(width: 6),
+                            Text(
+                              'Project Tracker', 
+                              style: TextStyle(
+                                color: context.isDarkMode ? Colors.indigo.shade200 : AppColors.primary, 
+                                fontWeight: FontWeight.w600, 
+                                fontSize: 13,
+                              ),
                             ),
-                          ),
+                          ],
                         ],
                       ),
                     ),
@@ -1351,7 +1364,10 @@ class _CustomChannelChatPageState extends ConsumerState<CustomChannelChatPage> {
                     borderRadius: BorderRadius.circular(8),
                     child: Container(
                       margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      padding: EdgeInsets.symmetric(
+                        horizontal: isMobileLayout ? 8 : 12, 
+                        vertical: 8
+                      ),
                       decoration: BoxDecoration(
                         color: context.isDarkMode ? Colors.purple.withAlpha(40) : Colors.purple.shade50,
                         borderRadius: BorderRadius.circular(8),
@@ -1361,15 +1377,17 @@ class _CustomChannelChatPageState extends ConsumerState<CustomChannelChatPage> {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Icon(LucideIcons.layoutList, size: 16, color: context.isDarkMode ? Colors.purple.shade200 : Colors.purple.shade700),
-                          const SizedBox(width: 6),
-                          Text(
-                            'Project Status', 
-                            style: TextStyle(
-                              color: context.isDarkMode ? Colors.purple.shade200 : Colors.purple.shade700, 
-                              fontWeight: FontWeight.w600, 
-                              fontSize: 13,
+                          if (!isMobileLayout) ...[
+                            const SizedBox(width: 6),
+                            Text(
+                              'Project Status', 
+                              style: TextStyle(
+                                color: context.isDarkMode ? Colors.purple.shade200 : Colors.purple.shade700, 
+                                fontWeight: FontWeight.w600, 
+                                fontSize: 13,
+                              ),
                             ),
-                          ),
+                          ],
                         ],
                       ),
                     ),
@@ -2397,8 +2415,8 @@ class _ChatBubbleState extends ConsumerState<_ChatBubble> {
             },
             borderRadius: BorderRadius.circular(8),
             child: Container(
-              constraints: const BoxConstraints(minWidth: 280, maxWidth: 420),
-              padding: const EdgeInsets.all(12),
+              constraints: const BoxConstraints(minWidth: 350, maxWidth: 500),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
                 color: context.adaptiveCard,
                 borderRadius: BorderRadius.circular(8),
@@ -2459,7 +2477,7 @@ class _ChatBubbleState extends ConsumerState<_ChatBubble> {
                       ],
                     ],
                   ),
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 4),
                   Row(
                     children: [
                       Expanded(

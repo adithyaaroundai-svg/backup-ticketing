@@ -1,14 +1,52 @@
+
+import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'windows_notification_stub.dart';
 import 'package:timezone/data/latest_10y.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
+import 'package:ticketing_system/main.dart';
+import 'package:go_router/go_router.dart';
+import 'web_notification_helper.dart';
 
 class LocalNotificationService {
   static final FlutterLocalNotificationsPlugin _notificationsPlugin =
       FlutterLocalNotificationsPlugin();
+  
+  static WindowsNotification? _windowsNotification;
+      
+  static final Map<int, Timer> _scheduledTimers = {};
+  static final Map<String, String> _windowsPayloads = {};
+  
+  static const MethodChannel _activationChannel = MethodChannel('crm_notification_activation');
 
   static Future<void> init() async {
-    if (kIsWeb) return;
+    if (kIsWeb) {
+      requestWebNotificationPermission();
+      return;
+    }
+
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.windows) {
+      await windowManager.ensureInitialized();
+      _windowsNotification = WindowsNotification(applicationId: "AroundTally Ticketing");
+      
+      _activationChannel.setMethodCallHandler((call) async {
+        if (call.method == 'notification_click') {
+          final payload = call.arguments as String?;
+          if (payload != null) {
+            _handlePayload(payload);
+          }
+        }
+      });
+      
+      try {
+        await _activationChannel.invokeMethod('ready');
+      } catch (e) {
+        print("Failed to signal native ready: $e");
+      }
+      return;
+    }
 
     tz.initializeTimeZones();
 
@@ -28,7 +66,12 @@ class LocalNotificationService {
     );
 
     try {
-      await _notificationsPlugin.initialize(settings: initializationSettings);
+      await _notificationsPlugin.initialize(
+        settings: initializationSettings,
+        onDidReceiveNotificationResponse: (details) {
+          _handlePayload(details.payload);
+        },
+      );
       
       // Request permissions for Android 13+
       await _notificationsPlugin
@@ -45,13 +88,66 @@ class LocalNotificationService {
       debugPrint('Error initializing local notifications: $e');
     }
   }
+  
+  static void _handlePayload(String? payload) async {
+    print('Notification clicked! Payload: $payload');
+    if (payload == null || payload.isEmpty) return;
+    try {
+      if (!kIsWeb && defaultTargetPlatform == TargetPlatform.windows) {
+        print('Checking window state...');
+        bool isMinimized = await windowManager.isMinimized();
+        if (isMinimized) {
+          print('Window is minimized. Restoring...');
+          await windowManager.restore();
+        }
+        bool isFocused = await windowManager.isFocused();
+        if (!isFocused) {
+          print('Window is not focused. Showing and focusing...');
+          await windowManager.show();
+          await windowManager.focus();
+        }
+        print('Window should now be visible and focused.');
+      }
+      final context = rootNavigatorKey.currentContext;
+      if (context != null) {
+        print('Context found, navigating to $payload');
+        context.go(payload);
+      } else {
+        print('rootNavigatorKey.currentContext is null!');
+      }
+    } catch (e) {
+      print('Error handling notification payload: $e');
+    }
+  }
 
   static Future<void> showNotification({
     required int id,
     required String title,
     required String body,
+    String? payload,
   }) async {
-    if (kIsWeb) return;
+    if (kIsWeb) {
+      showWebNotification(title, body);
+      return;
+    }
+
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.windows) {
+      if (_windowsNotification != null) {
+        String customXml = '''
+<toast activationType="foreground" launch="${payload ?? ''}">
+  <visual>
+    <binding template="ToastGeneric">
+      <text>$title</text>
+      <text>$body</text>
+    </binding>
+  </visual>
+</toast>
+''';
+        NotificationMessage message = NotificationMessage.fromCustomTemplate(id.toString(), group: 'AroundTally Ticketing');
+        _windowsNotification?.showNotificationCustomTemplate(message, customXml);
+      }
+      return;
+    }
 
     const AndroidNotificationDetails androidNotificationDetails =
         AndroidNotificationDetails(
@@ -81,6 +177,7 @@ class LocalNotificationService {
         title: title,
         body: body,
         notificationDetails: notificationDetails,
+        payload: payload,
       );
     } catch (e) {
       debugPrint('Error showing local notification: $e');
@@ -92,9 +189,20 @@ class LocalNotificationService {
     required String title,
     required String body,
     required DateTime scheduledDate,
+    String? payload,
   }) async {
     if (kIsWeb) return;
     if (scheduledDate.isBefore(DateTime.now())) return;
+
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.windows) {
+      final delay = scheduledDate.difference(DateTime.now());
+      _scheduledTimers[id]?.cancel();
+      _scheduledTimers[id] = Timer(delay, () {
+        showNotification(id: id, title: title, body: body, payload: payload);
+        _scheduledTimers.remove(id);
+      });
+      return;
+    }
 
     try {
       await _notificationsPlugin.zonedSchedule(
@@ -118,6 +226,7 @@ class LocalNotificationService {
           ),
         ),
         androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        payload: payload,
       );
     } catch (e) {
       debugPrint('Error scheduling local notification: $e');
@@ -126,6 +235,13 @@ class LocalNotificationService {
 
   static Future<void> cancelNotification(int id) async {
     if (kIsWeb) return;
+    
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.windows) {
+      _scheduledTimers[id]?.cancel();
+      _scheduledTimers.remove(id);
+      return;
+    }
+    
     try {
       await _notificationsPlugin.cancel(id: id);
     } catch (e) {

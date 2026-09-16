@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -87,6 +88,18 @@ void main() async {
 
 final rootNavigatorKey = GlobalKey<NavigatorState>();
 
+String _getHomeRouteForAgent(Agent? agent) {
+  if (agent == null) return '/login';
+  if (!kIsWeb && (defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.iOS)) {
+    return '/mobile-home';
+  }
+  if (agent.isAdmin) return '/admin';
+  if (agent.isAccountant) return '/accountant';
+  if (agent.isSales) return '/sales';
+  if (agent.isSupport || agent.isHR || agent.isProjectCoordinator) return '/support';
+  return '/dashboard';
+}
+
 final routerProvider = Provider<GoRouter>((ref) {
   final authState = ref.watch(authProvider);
 
@@ -97,7 +110,6 @@ final routerProvider = Provider<GoRouter>((ref) {
   final isSupport = authState?.isSupport ?? false;
   final isHR = authState?.isHR ?? false;
   final isProjectCoordinator = authState?.isProjectCoordinator ?? false;
-  final isSales = authState?.isSales ?? false;
 
   return GoRouter(
     navigatorKey: rootNavigatorKey,
@@ -129,9 +141,9 @@ final routerProvider = Provider<GoRouter>((ref) {
         return '/login';
       }
 
-      // If logged in and hitting /login directly, send to role-specific home
-      if (isLoggedIn && isLoggingIn) {
-        return '/';
+      // If logged in and hitting /login or root /, send directly to role-specific home
+      if (isLoggedIn && (isLoggingIn || state.matchedLocation == '/')) {
+        return _getHomeRouteForAgent(authState);
       }
 
       // Role-based access control (Root handled by RootRedirectionWidget)
@@ -150,20 +162,14 @@ final routerProvider = Provider<GoRouter>((ref) {
         final enabled = appSettings[featureKey] ?? true;
         if (!enabled) {
           if (!isLoggedIn) return '/login';
-          if (isAdmin) return '/admin';
-          if (isAccountant) return '/accountant';
-          if (isSupport) return '/chat';
-          if (isSupportHead) return '/';
-          return '/';
+          return _getHomeRouteForAgent(authState);
         }
       }
 
       // Per-role screen visibility using advanced settings (role_permissions)
       if (advancedSettings != null && isLoggedIn) {
         String? screenId;
-        if (location == '/') {
-          screenId = 'dashboard';
-        } else if (location.startsWith('/reports')) {
+        if (location.startsWith('/reports')) {
           screenId = 'reports';
         } else if (location.startsWith('/deals')) {
           screenId = 'deals';
@@ -178,20 +184,14 @@ final routerProvider = Provider<GoRouter>((ref) {
             screenId,
           );
           if (!canSee) {
-            if (isAdmin) return '/admin';
-            if (isAccountant) return '/accountant';
-            if (isSupport) return '/chat';
-            if (isSupportHead) return '/';
-            return '/';
+            return _getHomeRouteForAgent(authState);
           }
         }
       }
 
       if (!isAdmin && !isAccountant && location.startsWith('/revenue')) {
         if (!isLoggedIn) return '/login';
-        if (isSupport || isHR || isProjectCoordinator) return '/chat';
-        if (isSupportHead) return '/';
-        return '/';
+        return _getHomeRouteForAgent(authState);
       }
 
       // Prevent unauthorized access (basic)
@@ -199,16 +199,16 @@ final routerProvider = Provider<GoRouter>((ref) {
       if (!isAdmin &&
           (state.matchedLocation == '/admin' ||
               state.matchedLocation.startsWith('/admin/'))) {
-        return '/login';
+        return _getHomeRouteForAgent(authState);
       }
       if (!isAccountant && state.matchedLocation.startsWith('/accountant')) {
-        return '/login';
+        return _getHomeRouteForAgent(authState);
       }
       if (!isSupport && !isHR && !isProjectCoordinator && !isAccountant && !isAdmin && state.matchedLocation.startsWith('/support')) {
-        return '/login';
+        return _getHomeRouteForAgent(authState);
       }
       if (!isAdmin && state.matchedLocation.startsWith('/settings')) {
-        return '/login';
+        return _getHomeRouteForAgent(authState);
       }
       if (!isAdmin &&
           !isAccountant &&
@@ -217,7 +217,7 @@ final routerProvider = Provider<GoRouter>((ref) {
           !isProjectCoordinator &&
           !isSupportHead &&
           state.matchedLocation.startsWith('/reports')) {
-        return '/login';
+        return _getHomeRouteForAgent(authState);
       }
 
       // Sales channel access: only specific agent IDs are allowed
@@ -234,11 +234,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         final userId = authState?.id ?? '';
         if (!allowedSalesChannelIds.contains(userId)) {
           if (!isLoggedIn) return '/login';
-          if (isAdmin) return '/admin';
-          if (isAccountant) return '/accountant';
-          if (isSupport) return '/chat';
-          if (isSales) return '/sales';
-          return '/';
+          return _getHomeRouteForAgent(authState);
         }
       }
 
@@ -250,11 +246,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         final userId = authState?.id ?? '';
         if (!allowedDealsTrackerIds.contains(userId)) {
           if (!isLoggedIn) return '/login';
-          if (isAdmin) return '/admin';
-          if (isAccountant) return '/accountant';
-          if (isSupport) return '/chat';
-          if (isSales) return '/sales';
-          return '/';
+          return _getHomeRouteForAgent(authState);
         }
       }
 
@@ -269,11 +261,7 @@ final routerProvider = Provider<GoRouter>((ref) {
             isAdmin;
         if (!isSidharth) {
           if (!isLoggedIn) return '/login';
-          if (isAdmin) return '/admin';
-          if (isAccountant) return '/accountant';
-          if (isSupport) return '/chat';
-          if (isSales) return '/sales';
-          return '/';
+          return _getHomeRouteForAgent(authState);
         }
       }
 
@@ -546,29 +534,15 @@ class RootRedirectionWidget extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    print('DEBUG: RootRedirectionWidget build() called');
     final isMobile = MediaQuery.of(context).size.width <= 900;
     
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      print('DEBUG: RootRedirectionWidget post-frame callback executed');
+      if (!context.mounted) return;
       if (isMobile) {
-        print('DEBUG: RootRedirectionWidget navigating to /mobile-home');
         context.go('/mobile-home');
       } else {
         final authState = ref.read(authProvider);
-        print('DEBUG: RootRedirectionWidget authState: ${authState?.role}');
-        if (authState?.isAdmin == true) {
-          context.go('/admin');
-        } else if (authState?.isAccountant == true) {
-          context.go('/accountant');
-        } else if (authState?.isSales == true) {
-          context.go('/sales');
-        } else if (authState?.isSupport == true || authState?.isHR == true || authState?.isProjectCoordinator == true) {
-          context.go('/support');
-        } else {
-          print('DEBUG: RootRedirectionWidget navigating to /dashboard');
-          context.go('/dashboard');
-        }
+        context.go(_getHomeRouteForAgent(authState));
       }
     });
 

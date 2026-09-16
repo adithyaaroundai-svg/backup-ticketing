@@ -31,6 +31,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       return;
     }
 
+    debugPrint('DEBUG: Starting login process...');
     setState(() => _isLoading = true);
 
     final success = await ref
@@ -40,22 +41,30 @@ class _LoginPageState extends ConsumerState<LoginPage> {
           _passwordController.text.trim(),
         );
 
+    debugPrint('DEBUG: Login finished with success=$success');
+
     if (mounted) {
       setState(() => _isLoading = false);
 
       if (success) {
         final agent = ref.read(authProvider);
-        // Navigate based on role
-        if (agent?.isAdmin == true) {
+        debugPrint('DEBUG: Logged in agent: ${agent?.username}, role: ${agent?.role}');
+        final isMobile = MediaQuery.of(context).size.width <= 900;
+        if (isMobile) {
+          context.go('/mobile-home');
+        } else if (agent?.isAdmin == true) {
           context.go('/admin');
         } else if (agent?.isAccountant == true) {
           context.go('/accountant');
-        } else if (agent?.isSupport == true) {
+        } else if (agent?.isSales == true) {
+          context.go('/sales');
+        } else if (agent?.isSupport == true || agent?.isHR == true || agent?.isProjectCoordinator == true) {
           context.go('/support');
         } else {
-          context.go('/');
+          context.go('/dashboard');
         }
       } else {
+        debugPrint('DEBUG: Showing SnackBar for failed login');
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(
@@ -65,6 +74,8 @@ class _LoginPageState extends ConsumerState<LoginPage> {
           ),
         );
       }
+    } else {
+      debugPrint('DEBUG: Widget unmounted after login');
     }
   }
 

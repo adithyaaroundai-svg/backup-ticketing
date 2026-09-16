@@ -1,8 +1,10 @@
-import '../../core/upload_part.dart';
+import 'dart:io';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/enums.dart';
+import '../../core/upload_part.dart';
 import '../../domain/entities/user.dart';
 
 class TaskFormResult {
@@ -62,6 +64,7 @@ class _TaskFormDialogState extends State<_TaskFormDialog> {
   late bool _pending;
   final Set<int> _assignees = {};
   final List<PlatformFile> _files = [];
+  bool _pickingFiles = false;
 
   @override
   void initState() {
@@ -78,9 +81,78 @@ class _TaskFormDialogState extends State<_TaskFormDialog> {
   }
 
   Future<void> _pickFiles() async {
-    final result = await FilePicker.platform.pickFiles(allowMultiple: true, withData: true);
-    if (result != null) {
-      setState(() => _files.addAll(result.files));
+    setState(() => _pickingFiles = true);
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        allowMultiple: true,
+        withData: true,
+      );
+      if (result != null && result.files.isNotEmpty) {
+        final List<PlatformFile> loaded = [];
+        for (final f in result.files) {
+          Uint8List? bytes = f.bytes;
+          if ((bytes == null || bytes.isEmpty) && !kIsWeb && f.path != null) {
+            try {
+              final file = File(f.path!);
+              if (file.existsSync()) {
+                bytes = await file.readAsBytes();
+              }
+            } catch (e) {
+              debugPrint('Error reading file bytes: $e');
+            }
+          }
+          loaded.add(PlatformFile(
+            name: f.name,
+            size: f.size > 0 ? f.size : (bytes?.length ?? 0),
+            bytes: bytes,
+            path: f.path,
+          ));
+        }
+        setState(() => _files.addAll(loaded));
+      }
+    } catch (e) {
+      debugPrint('Error picking files: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to pick files: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _pickingFiles = false);
+    }
+  }
+
+  String _formatFileSize(int bytes) {
+    if (bytes <= 0) return '0 B';
+    if (bytes < 1024) return '$bytes B';
+    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
+    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+  }
+
+  IconData _getFileIcon(String filename) {
+    final ext = filename.split('.').last.toLowerCase();
+    switch (ext) {
+      case 'pdf':
+        return Icons.picture_as_pdf_outlined;
+      case 'jpg':
+      case 'jpeg':
+      case 'png':
+      case 'webp':
+      case 'gif':
+        return Icons.image_outlined;
+      case 'doc':
+      case 'docx':
+        return Icons.description_outlined;
+      case 'xls':
+      case 'xlsx':
+      case 'csv':
+        return Icons.table_chart_outlined;
+      case 'zip':
+      case 'rar':
+      case '7z':
+        return Icons.folder_zip_outlined;
+      default:
+        return Icons.insert_drive_file_outlined;
     }
   }
 
@@ -100,10 +172,12 @@ class _TaskFormDialogState extends State<_TaskFormDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return AlertDialog(
       title: Text(_pending ? 'Add pending task' : 'Add task'),
       content: SizedBox(
-        width: 480,
+        width: 500,
         child: Form(
           key: _formKey,
           child: SingleChildScrollView(
@@ -180,9 +254,14 @@ class _TaskFormDialogState extends State<_TaskFormDialog> {
                   onChanged: (v) => setState(() => _pending = v ?? false),
                 ),
                 const SizedBox(height: 8),
-                Align(alignment: Alignment.centerLeft, child: Text('Assignees', style: Theme.of(context).textTheme.labelLarge)),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text('Assignees', style: theme.textTheme.labelLarge),
+                ),
+                const SizedBox(height: 6),
                 Wrap(
                   spacing: 6,
+                  runSpacing: 6,
                   children: [
                     for (final u in widget.users)
                       FilterChip(
@@ -198,12 +277,83 @@ class _TaskFormDialogState extends State<_TaskFormDialog> {
                       ),
                   ],
                 ),
-                const SizedBox(height: 12),
-                OutlinedButton.icon(
-                  onPressed: _pickFiles,
-                  icon: const Icon(Icons.attach_file),
-                  label: Text('Attach files (${_files.length})'),
+                const SizedBox(height: 16),
+
+                // Attached Files Section
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('Attachments', style: theme.textTheme.labelLarge),
+                    if (_files.isNotEmpty)
+                      TextButton(
+                        onPressed: () => setState(() => _files.clear()),
+                        style: TextButton.styleFrom(
+                          visualDensity: VisualDensity.compact,
+                          foregroundColor: Colors.red.shade700,
+                        ),
+                        child: const Text('Clear all', style: TextStyle(fontSize: 12)),
+                      ),
+                  ],
                 ),
+                const SizedBox(height: 6),
+                OutlinedButton.icon(
+                  onPressed: _pickingFiles ? null : _pickFiles,
+                  icon: _pickingFiles
+                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Icon(Icons.attach_file_rounded),
+                  label: Text(_pickingFiles ? 'Reading files...' : 'Attach files'),
+                ),
+                if (_files.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  Container(
+                    decoration: BoxDecoration(
+                      border: Border.all(color: theme.dividerColor.withValues(alpha: 0.6)),
+                      borderRadius: BorderRadius.circular(8),
+                      color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+                    ),
+                    child: Column(
+                      children: [
+                        for (int i = 0; i < _files.length; i++) ...[
+                          if (i > 0) Divider(height: 1, color: theme.dividerColor.withValues(alpha: 0.4)),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            child: Row(
+                              children: [
+                                Icon(_getFileIcon(_files[i].name), size: 20, color: theme.colorScheme.primary),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        _files[i].name,
+                                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      Text(
+                                        _formatFileSize(_files[i].size),
+                                        style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.close_rounded, size: 16),
+                                  tooltip: 'Remove',
+                                  visualDensity: VisualDensity.compact,
+                                  padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
+                                  onPressed: () => setState(() => _files.removeAt(i)),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
               ],
             ),
           ),

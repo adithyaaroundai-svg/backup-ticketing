@@ -17,6 +17,10 @@ class MarkdownTextEditingController extends TextEditingController {
     dotAll: true,
   );
 
+  String? _lastText;
+  TextStyle? _lastStyle;
+  TextSpan? _cachedSpan;
+
   @override
   TextSpan buildTextSpan({
     required BuildContext context,
@@ -25,6 +29,10 @@ class MarkdownTextEditingController extends TextEditingController {
   }) {
     final text = value.text;
     if (text.isEmpty) return TextSpan(style: style, text: '');
+
+    if (_lastText == text && _lastStyle == style && _cachedSpan != null) {
+      return _cachedSpan!;
+    }
 
     // Transparent style — characters take up space (so cursor math is correct)
     // but are invisible.
@@ -105,41 +113,33 @@ class MarkdownTextEditingController extends TextEditingController {
       spans.addAll(orphanSpans);
     }
 
-    return TextSpan(style: style, children: spans);
+    _lastText = text;
+    _lastStyle = style;
+    _cachedSpan = TextSpan(style: style, children: spans);
+    return _cachedSpan!;
   }
+
+  static final _orphanPattern = RegExp(
+    r'\*\*\*|\*\*|__|\~\~|\<u\>|\<\/u\>|\<i\>|\<\/i\>|`'
+  );
 
   /// Renders any standalone marker tokens (unmatched opening markers) as
   /// transparent so they don't show as raw symbols while the user is typing.
   List<InlineSpan> _hideOrphanMarkers(
       String text, TextStyle? style, TextStyle invisible) {
-    // Ordered longest-first so *** is checked before ** before *
-    const markers = ['***', '**', '__', '~~', '<u>', '</u>', '<i>', '</i>', '`'];
     final spans = <InlineSpan>[];
     int pos = 0;
-
-    while (pos < text.length) {
-      String? foundMarker;
-      int foundAt = -1;
-
-      // Find the next marker occurrence
-      for (final m in markers) {
-        final idx = text.indexOf(m, pos);
-        if (idx != -1 && (foundAt == -1 || idx < foundAt)) {
-          foundAt = idx;
-          foundMarker = m;
-        }
+    
+    for (final match in _orphanPattern.allMatches(text)) {
+      if (match.start > pos) {
+        spans.add(TextSpan(text: text.substring(pos, match.start), style: style));
       }
-
-      if (foundMarker == null) {
-        spans.add(TextSpan(text: text.substring(pos), style: style));
-        break;
-      }
-
-      if (foundAt > pos) {
-        spans.add(TextSpan(text: text.substring(pos, foundAt), style: style));
-      }
-      spans.add(TextSpan(text: foundMarker, style: invisible));
-      pos = foundAt + foundMarker.length;
+      spans.add(TextSpan(text: match.group(0), style: invisible));
+      pos = match.end;
+    }
+    
+    if (pos < text.length) {
+      spans.add(TextSpan(text: text.substring(pos), style: style));
     }
 
     return spans;
