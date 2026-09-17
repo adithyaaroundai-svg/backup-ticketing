@@ -81,6 +81,10 @@ dependencies:
   video_player: ^2.11.1
   chewie: ^1.13.1
   super_clipboard: ^0.9.1
+  googleapis: ^13.2.0
+  googleapis_auth: ^1.6.0
+  google_sign_in: ^6.2.2
+  extension_google_sign_in_as_googleapis_auth: ^2.0.12
 
 dev_dependencies:
   flutter_test:

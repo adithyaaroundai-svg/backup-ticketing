@@ -1326,6 +1326,9 @@ class _BackupCard extends ConsumerStatefulWidget {
 
 class _BackupCardState extends ConsumerState<_BackupCard> {
   bool _isRunning = false;
+  bool _isDriveRunning = false;
+  bool _includeMedia = true;
+  String? _progressStatus;
   String? _lastResultMessage;
   bool _lastWasSuccess = false;
 
@@ -1339,12 +1342,55 @@ class _BackupCardState extends ConsumerState<_BackupCard> {
     return DateFormat('MMM d, yyyy  hh:mm a').format(dt);
   }
 
+  Future<void> _runGoogleDriveBackup() async {
+    final user = ref.read(authProvider);
+    if (user == null) return;
+
+    setState(() {
+      _isDriveRunning = true;
+      _progressStatus = 'Starting backup...';
+      _lastResultMessage = null;
+    });
+
+    final result = await createGoogleDriveBackup(
+      agentId: user.id,
+      agentName: user.fullName,
+      agentRole: user.role,
+      includeMedia: _includeMedia,
+      onProgress: (status) {
+        if (mounted) {
+          setState(() => _progressStatus = status);
+        }
+      },
+    );
+
+    ref.invalidate(lastBackupTimeProvider);
+
+    if (!mounted) return;
+
+    setState(() {
+      _isDriveRunning = false;
+      _progressStatus = null;
+      _lastWasSuccess = result.success;
+      if (result.success) {
+        final counts = result.stats?['counts'] as Map<String, dynamic>?;
+        final summary = counts != null
+            ? '\n• Tickets: ${counts['tickets'] ?? 0}\n• Customers: ${counts['customers'] ?? 0}\n• Global Pipeline: ${counts['leads_global_pipeline'] ?? 0}\n• Private Pipeline: ${counts['leads_private_pipeline'] ?? 0}\n• Deals: ${counts['deals_sales_pipeline'] ?? 0}\n• Chat Messages: ${counts['chat_messages_total'] ?? 0}\n• Media Downloaded: ${counts['media_files_downloaded'] ?? 0}'
+            : '';
+        _lastResultMessage = 'Successfully backed up to Google Drive:\n${result.filePath}$summary';
+      } else {
+        _lastResultMessage = 'Google Drive Error:\n${result.error}';
+      }
+    });
+  }
+
   Future<void> _runBackup() async {
     final user = ref.read(authProvider);
     if (user == null) return;
 
     setState(() {
       _isRunning = true;
+      _progressStatus = 'Starting backup...';
       _lastResultMessage = null;
     });
 
@@ -1352,18 +1398,28 @@ class _BackupCardState extends ConsumerState<_BackupCard> {
       agentId: user.id,
       agentName: user.fullName,
       agentRole: user.role,
+      includeMedia: _includeMedia,
+      onProgress: (status) {
+        if (mounted) {
+          setState(() => _progressStatus = status);
+        }
+      },
     );
 
-    // Refresh the last-backup-time provider
     ref.invalidate(lastBackupTimeProvider);
 
     if (!mounted) return;
 
     setState(() {
       _isRunning = false;
+      _progressStatus = null;
       _lastWasSuccess = result.success;
       if (result.success) {
-        _lastResultMessage = 'Saved to:\n${result.filePath}';
+        final counts = result.stats?['counts'] as Map<String, dynamic>?;
+        final summary = counts != null
+            ? '\n• Tickets: ${counts['tickets'] ?? 0}\n• Customers: ${counts['customers'] ?? 0}\n• Global Pipeline: ${counts['leads_global_pipeline'] ?? 0}\n• Private Pipeline: ${counts['leads_private_pipeline'] ?? 0}\n• Deals: ${counts['deals_sales_pipeline'] ?? 0}\n• Chat Messages: ${counts['chat_messages_total'] ?? 0}\n• Media Downloaded: ${counts['media_files_downloaded'] ?? 0}'
+            : '';
+        _lastResultMessage = 'Saved to:\n${result.filePath}$summary';
       } else {
         _lastResultMessage = 'Error: ${result.error}';
       }
@@ -1373,6 +1429,7 @@ class _BackupCardState extends ConsumerState<_BackupCard> {
   @override
   Widget build(BuildContext context) {
     final lastBackupAsync = ref.watch(lastBackupTimeProvider);
+    final isWorking = _isDriveRunning || _isRunning;
 
     return AppCard(
       child: Column(
@@ -1388,7 +1445,7 @@ class _BackupCardState extends ConsumerState<_BackupCard> {
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: const Icon(
-                  LucideIcons.hardDrive,
+                  LucideIcons.cloudUpload,
                   size: 18,
                   color: AppColors.primary,
                 ),
@@ -1399,7 +1456,7 @@ class _BackupCardState extends ConsumerState<_BackupCard> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Local Backup',
+                      'Complete CRM Cloud Backup',
                       style: TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w600,
@@ -1408,7 +1465,7 @@ class _BackupCardState extends ConsumerState<_BackupCard> {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      'Exports tickets, customers & chat to a .zip file on your device.',
+                      'Full backup of pipelines, media, tickets, chat & dev CRM.',
                       style: TextStyle(fontSize: 12, color: context.adaptiveSlate500),
                     ),
                   ],
@@ -1452,6 +1509,48 @@ class _BackupCardState extends ConsumerState<_BackupCard> {
 
           const SizedBox(height: 14),
 
+          // Media Toggle Option
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: context.adaptiveSlate100.withValues(alpha: 0.5),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: context.adaptiveSlate200),
+            ),
+            child: Row(
+              children: [
+                Icon(LucideIcons.image, size: 16, color: AppColors.primary),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Include Media Attachments',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: context.adaptiveSlate800,
+                        ),
+                      ),
+                      Text(
+                        'Images, videos, audio notes & proposal PDFs',
+                        style: TextStyle(fontSize: 10, color: context.adaptiveSlate500),
+                      ),
+                    ],
+                  ),
+                ),
+                Switch(
+                  value: _includeMedia,
+                  onChanged: isWorking ? null : (val) => setState(() => _includeMedia = val),
+                  activeTrackColor: AppColors.primary,
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 12),
+
           // What's included note
           Container(
             padding: const EdgeInsets.all(10),
@@ -1472,17 +1571,56 @@ class _BackupCardState extends ConsumerState<_BackupCard> {
                   ),
                 ),
                 const SizedBox(height: 4),
-                _includeRow(LucideIcons.ticket, 'All tickets & comments'),
-                _includeRow(LucideIcons.users, 'All customers'),
-                _includeRow(LucideIcons.messageSquare, 'Chat messages (global + DMs)'),
+                _includeRow(LucideIcons.gitFork, 'Sales Pipeline (Global & Private Leads, Deals)'),
+                _includeRow(LucideIcons.ticket, 'All Tickets, Comments & Voice Notes'),
+                _includeRow(LucideIcons.users, 'Customers & Contacts'),
+                _includeRow(LucideIcons.messageSquare, 'Chat History (Global, DMs & Channels)'),
+                _includeRow(LucideIcons.code, 'Developer CRM (Tasks, Work Items & Clients)'),
+                _includeRow(LucideIcons.fileText, 'Proposals, Articles & Quick Templates'),
+                if (_includeMedia)
+                  _includeRow(LucideIcons.film, 'Media Binary Files (Images, Videos, Audio & PDFs)'),
               ],
             ),
           ),
 
           const SizedBox(height: 16),
 
+          // Live Progress status
+          if (isWorking && _progressStatus != null) ...[
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.indigo.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.indigo.withValues(alpha: 0.3)),
+              ),
+              child: Row(
+                children: [
+                  const SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      _progressStatus!,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        color: Colors.indigo,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
+
           // Result message
-          if (_lastResultMessage != null) ...[
+          if (_lastResultMessage != null && !isWorking) ...[
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(10),
@@ -1522,27 +1660,52 @@ class _BackupCardState extends ConsumerState<_BackupCard> {
             const SizedBox(height: 12),
           ],
 
-          // Button
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton.icon(
-              onPressed: _isRunning ? null : _runBackup,
-              icon: _isRunning
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                      ),
-                    )
-                  : Icon(LucideIcons.download, size: 16),
-              label: Text(_isRunning ? 'Creating backup...' : 'Create Local Backup'),
-              style: FilledButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                padding: const EdgeInsets.symmetric(vertical: 12),
+          // Buttons
+          Column(
+            children: [
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: isWorking ? null : _runGoogleDriveBackup,
+                  icon: _isDriveRunning
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                          ),
+                        )
+                      : const Icon(LucideIcons.cloudUpload, size: 16),
+                  label: Text(_isDriveRunning ? 'Uploading to Drive...' : 'Backup to Google Drive'),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: Colors.indigo.shade600,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                ),
               ),
-            ),
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: isWorking ? null : _runBackup,
+                  icon: _isRunning
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
+                          ),
+                        )
+                      : const Icon(LucideIcons.download, size: 16),
+                  label: Text(_isRunning ? 'Creating backup...' : 'Download Local Backup (.ZIP)'),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -1556,9 +1719,11 @@ class _BackupCardState extends ConsumerState<_BackupCard> {
         children: [
           Icon(icon, size: 12, color: context.adaptiveSlate400),
           const SizedBox(width: 6),
-          Text(
-            label,
-            style: TextStyle(fontSize: 12, color: context.adaptiveSlate600),
+          Expanded(
+            child: Text(
+              label,
+              style: TextStyle(fontSize: 12, color: context.adaptiveSlate600),
+            ),
           ),
         ],
       ),

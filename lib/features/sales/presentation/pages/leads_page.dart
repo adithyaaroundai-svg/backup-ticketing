@@ -875,67 +875,132 @@ class _LeadCard extends StatelessWidget {
 
   void _showLeadDetailsPopup(BuildContext context) {
     final remarkController = TextEditingController();
+    bool isWhatsAppChecked = false;
+
     showDialog(
       context: context,
       builder: (context) {
-        return Dialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          backgroundColor: context.isDarkMode ? const Color(0xFF1E293B) : Colors.white,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 400),
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return Dialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              backgroundColor: context.isDarkMode ? const Color(0xFF1E293B) : Colors.white,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 420),
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(
-                        child: Text(
-                          lead.companyName,
-                          style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18, color: AppColors.primaryLight),
-                        ),
-                      ),
                       Row(
-                        mainAxisSize: MainAxisSize.min,
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: context.isDarkMode ? Colors.orange.withValues(alpha: 0.15) : Colors.orange.shade50,
-                              borderRadius: BorderRadius.circular(4),
-                              border: Border.all(color: Colors.orange.shade200),
-                            ),
+                          Expanded(
                             child: Text(
-                              'LEAD',
-                              style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.orange.shade700),
+                              lead.companyName,
+                              style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18, color: AppColors.primaryLight),
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
                           const SizedBox(width: 8),
-                          Material(
-                            color: Colors.transparent,
-                            child: InkWell(
-                              onTap: () {
-                                Navigator.pop(context);
-                                showDialog(
-                                  context: context,
-                                  builder: (_) => EditLeadDialog(lead: lead),
-                                );
-                              },
-                              borderRadius: BorderRadius.circular(4),
-                              child: Padding(
-                                padding: const EdgeInsets.all(6),
-                                child: Icon(LucideIcons.pencil, size: 16, color: context.adaptiveSlate500),
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              // WhatsApp Checkbox Pill
+                              InkWell(
+                                onTap: () {
+                                  setDialogState(() {
+                                    isWhatsAppChecked = !isWhatsAppChecked;
+                                  });
+                                },
+                                borderRadius: BorderRadius.circular(8),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: context.isDarkMode
+                                        ? Colors.white.withValues(alpha: 0.07)
+                                        : const Color(0xFFF1F5F9),
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(
+                                      color: context.isDarkMode
+                                          ? Colors.white.withValues(alpha: 0.15)
+                                          : const Color(0xFFE2E8F0),
+                                    ),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      SizedBox(
+                                        width: 18,
+                                        height: 18,
+                                        child: Checkbox(
+                                          value: isWhatsAppChecked,
+                                          activeColor: const Color(0xFF25D366),
+                                          checkColor: Colors.white,
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                                          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                          visualDensity: VisualDensity.compact,
+                                          onChanged: (val) {
+                                            setDialogState(() {
+                                              isWhatsAppChecked = val ?? false;
+                                            });
+                                          },
+                                        ),
+                                      ),
+                                      const SizedBox(width: 5),
+                                      Container(
+                                        padding: const EdgeInsets.all(3),
+                                        decoration: const BoxDecoration(
+                                          color: Color(0xFF25D366),
+                                          shape: BoxShape.circle,
+                                        ),
+                                        child: const Icon(
+                                          LucideIcons.messageCircle,
+                                          size: 13,
+                                          color: Colors.white,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
                               ),
-                            ),
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: context.isDarkMode ? Colors.orange.withValues(alpha: 0.15) : Colors.orange.shade50,
+                                  borderRadius: BorderRadius.circular(4),
+                                  border: Border.all(color: Colors.orange.shade200),
+                                ),
+                                child: Text(
+                                  'LEAD',
+                                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.orange.shade700),
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              Material(
+                                color: Colors.transparent,
+                                child: InkWell(
+                                  onTap: () {
+                                    Navigator.pop(context);
+                                    showDialog(
+                                      context: context,
+                                      builder: (_) => EditLeadDialog(lead: lead),
+                                    );
+                                  },
+                                  borderRadius: BorderRadius.circular(4),
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(6),
+                                    child: Icon(LucideIcons.pencil, size: 16, color: context.adaptiveSlate500),
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       ),
-                    ],
-                  ),
                   if (lead.product != null && lead.product!.isNotEmpty) ...[
                     const SizedBox(height: 8),
                     Row(
@@ -1102,6 +1167,8 @@ class _LeadCard extends StatelessWidget {
               ),
             ),
           ),
+        );
+          },
         );
       },
     );

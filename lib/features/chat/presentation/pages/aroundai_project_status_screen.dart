@@ -23,6 +23,13 @@ class AroundaiProjectStatusScreen extends ConsumerStatefulWidget {
 class _AroundaiProjectStatusScreenState extends ConsumerState<AroundaiProjectStatusScreen> {
   String _selectedFilter = 'all';
   bool _isFollowUpSidebarOpen = true;
+  final ScrollController _tableHorizontalScrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _tableHorizontalScrollController.dispose();
+    super.dispose();
+  }
 
   void _showMobileFollowUpSheet(BuildContext context, List<AroundaiProjectStatus> allTasks) {
     showModalBottomSheet(
@@ -698,9 +705,9 @@ class _AroundaiProjectStatusScreenState extends ConsumerState<AroundaiProjectSta
                       child: Align(
                         alignment: Alignment.topCenter,
                         child: SingleChildScrollView(
-                          padding: EdgeInsets.all(isMobile ? 12 : 24),
+                          padding: EdgeInsets.all(isMobile ? 12 : 20),
                           child: ConstrainedBox(
-                            constraints: const BoxConstraints(maxWidth: 1400),
+                            constraints: const BoxConstraints(maxWidth: 1600),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
@@ -710,11 +717,10 @@ class _AroundaiProjectStatusScreenState extends ConsumerState<AroundaiProjectSta
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
                                       Expanded(
-                                        flex: 3,
                                         child: _buildTableCard(filteredTasks, prov),
                                       ),
                                       if (_isFollowUpSidebarOpen) ...[
-                                        const SizedBox(width: 20),
+                                        const SizedBox(width: 16),
                                         SizedBox(
                                           width: 280,
                                           child: _buildSidebar(
@@ -738,6 +744,7 @@ class _AroundaiProjectStatusScreenState extends ConsumerState<AroundaiProjectSta
 
   Widget _buildTableCard(List<AroundaiProjectStatus> filteredTasks, AroundaiProjectStatusNotifier prov) {
     return Container(
+      width: double.infinity,
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
@@ -752,17 +759,23 @@ class _AroundaiProjectStatusScreenState extends ConsumerState<AroundaiProjectSta
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(12),
-        child: SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(minWidth: 1000),
+        child: Scrollbar(
+          controller: _tableHorizontalScrollController,
+          thumbVisibility: true,
+          trackVisibility: true,
+          thickness: 8,
+          radius: const Radius.circular(4),
+          child: SingleChildScrollView(
+            controller: _tableHorizontalScrollController,
+            scrollDirection: Axis.horizontal,
+            physics: const BouncingScrollPhysics(),
             child: DataTable(
               headingRowColor: MaterialStateProperty.all(const Color(0xFFF8FAFC)),
-              dataRowMaxHeight: 70,
-              dataRowMinHeight: 60,
-              horizontalMargin: 20,
-              columnSpacing: 16,
-              headingTextStyle: const TextStyle(fontWeight: FontWeight.w600, color: Colors.black87, fontSize: 13),
+              dataRowMaxHeight: 64,
+              dataRowMinHeight: 52,
+              horizontalMargin: 16,
+              columnSpacing: 14,
+              headingTextStyle: const TextStyle(fontWeight: FontWeight.w700, color: Colors.black87, fontSize: 13),
               dividerThickness: 1,
               columns: const [
                 DataColumn(label: Text('Task Name')),
@@ -795,49 +808,58 @@ class _AroundaiProjectStatusScreenState extends ConsumerState<AroundaiProjectSta
                     return baseRowColor;
                   }),
                   cells: [
+                    // Task Name
                     DataCell(
-                      SizedBox(
-                        width: 220,
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(minWidth: 100, maxWidth: 170),
                         child: Tooltip(
                           message: task.taskName,
-                          waitDuration: const Duration(milliseconds: 500),
+                          waitDuration: const Duration(milliseconds: 400),
                           child: Text(
                             task.taskName,
-                            style: TextStyle(fontWeight: FontWeight.w700, color: Colors.indigo.shade800, fontSize: 14),
+                            style: TextStyle(fontWeight: FontWeight.w700, color: Colors.indigo.shade800, fontSize: 13),
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
                       ),
                     ),
+                    // Status Badge
                     DataCell(_buildStatusBadge(task, prov)),
+                    // Notes
                     DataCell(
                       Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           ConstrainedBox(
-                            constraints: const BoxConstraints(maxWidth: 280),
+                            constraints: const BoxConstraints(minWidth: 90, maxWidth: 200),
                             child: Tooltip(
                               message: _getLatestNoteText(task.notes).isNotEmpty ? _getLatestNoteText(task.notes) : '-',
-                              waitDuration: const Duration(milliseconds: 500),
+                              waitDuration: const Duration(milliseconds: 400),
                               child: Text(
                                 _getLatestNoteText(task.notes).isNotEmpty ? _getLatestNoteText(task.notes) : '-',
-                                style: TextStyle(color: _getLatestNoteText(task.notes).isNotEmpty ? Colors.black87 : Colors.grey.shade400, fontSize: 13),
+                                style: TextStyle(
+                                  color: _getLatestNoteText(task.notes).isNotEmpty ? Colors.black87 : Colors.grey.shade400,
+                                  fontSize: 12.5,
+                                ),
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
                           ),
-                          const SizedBox(width: 8),
+                          const SizedBox(width: 4),
                           IconButton(
-                            icon: Icon(LucideIcons.history, size: 16, color: Colors.indigo.shade400),
-                            splashRadius: 20,
+                            icon: Icon(LucideIcons.history, size: 15, color: Colors.indigo.shade400),
+                            splashRadius: 18,
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(minWidth: 26, minHeight: 26),
                             tooltip: 'Notes History',
                             onPressed: () => _showNotesHistory(task),
                           ),
                         ],
                       ),
                     ),
+                    // Follow Up
                     DataCell(
                       Text(
                         task.followUpDate != null ? _formatDateOnly(task.followUpDate) : '-',
@@ -845,39 +867,49 @@ class _AroundaiProjectStatusScreenState extends ConsumerState<AroundaiProjectSta
                           color: task.followUpDate != null && task.followUpDate!.isBefore(DateTime.now()) && task.taskStatus != 'completed' 
                               ? Colors.red 
                               : Colors.grey.shade600, 
-                          fontSize: 13,
+                          fontSize: 12,
                           fontWeight: task.followUpDate != null && task.followUpDate!.isBefore(DateTime.now()) && task.taskStatus != 'completed'
                               ? FontWeight.bold
                               : FontWeight.normal,
                         ),
                       ),
                     ),
+                    // Created At
                     DataCell(
                       Text(
                         _formatDate(task.createdAt),
-                        style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+                        style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
                       ),
                     ),
+                    // Updated At
                     DataCell(
                       Text(
                         _formatDate(task.updatedAt),
-                        style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+                        style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
                       ),
                     ),
+                    // Actions
                     DataCell(
                       Row(
-                        mainAxisAlignment: MainAxisAlignment.end,
+                        mainAxisSize: MainAxisSize.min,
                         children: [
                           IconButton(
-                            icon: const Icon(LucideIcons.edit2, size: 16),
+                            icon: const Icon(LucideIcons.edit2, size: 15),
                             color: Colors.blue.shade600,
-                            splashRadius: 20,
+                            splashRadius: 18,
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                            tooltip: 'Edit Task',
                             onPressed: () => _showTaskDialog(task: task),
                           ),
+                          const SizedBox(width: 4),
                           IconButton(
-                            icon: const Icon(LucideIcons.trash2, size: 16),
+                            icon: const Icon(LucideIcons.trash2, size: 15),
                             color: Colors.red.shade500,
-                            splashRadius: 20,
+                            splashRadius: 18,
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                            tooltip: 'Delete Task',
                             onPressed: () => _confirmDelete(task),
                           ),
                         ],
