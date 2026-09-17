@@ -7,8 +7,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../auth/presentation/providers/auth_provider.dart';
 import '../presentation/providers/chat_provider.dart';
 
-/// Target Agent Configuration
+/// Target Agent Configurations
 const String kSaneeshaAgentId = '26a252ac-1ace-46e8-aa86-1ce7d52fe578';
+const String kSupportAccountAgentId = '57d09532-e33a-4a52-8752-3a97e95a9895';
+
+/// Accounts authorized to receive the daily support briefing in self DM ("You")
+const Set<String> kSummaryRecipientAgentIds = {
+  kSaneeshaAgentId,
+  kSupportAccountAgentId,
+};
 
 /// Team members included in the daily performance breakdown
 const Map<String, String> kSupportTeamAgents = {
@@ -23,8 +30,8 @@ class DailySupportSummaryService {
   static Timer? _schedulerTimer;
   static bool _isRunning = false;
 
-  /// Starts the background scheduler for Saneesha.
-  /// Runs immediately on startup/login and checks every 10 minutes.
+  /// Starts the background scheduler for authorized accounts (Saneesha & Support).
+  /// Runs immediately on startup/login and checks periodically every 5 minutes.
   static void startScheduler(WidgetRef ref) {
     _schedulerTimer?.cancel();
 
@@ -42,18 +49,19 @@ class DailySupportSummaryService {
     _schedulerTimer = null;
   }
 
-  /// Checks if the current logged-in user is Saneesha and if it's 9:00 AM or later,
-  /// and today's summary for yesterday hasn't been sent yet.
+  /// Checks if the current logged-in user is an authorized recipient (Saneesha or Support)
+  /// and if it's 9:00 AM or later, and today's summary for yesterday hasn't been sent yet.
   static Future<void> _checkAndSendIfDue(WidgetRef ref) async {
     if (_isRunning) return;
 
     try {
       final currentUser = ref.read(authProvider);
-      if (currentUser == null || currentUser.id != kSaneeshaAgentId) {
-        // Strictly only for Saneesha
+      if (currentUser == null || !kSummaryRecipientAgentIds.contains(currentUser.id)) {
+        // Strictly only for authorized recipients
         return;
       }
 
+      final recipientId = currentUser.id;
       final now = DateTime.now();
 
       // Trigger condition: Morning 9:00 AM or later (9:00 to 23:59)
@@ -62,7 +70,7 @@ class DailySupportSummaryService {
       }
 
       final todayStr = DateFormat('yyyy-MM-dd').format(now);
-      final prefsKey = 'daily_support_summary_sent_$todayStr';
+      final prefsKey = 'daily_support_summary_sent_${recipientId}_$todayStr';
 
       final prefs = await SharedPreferences.getInstance();
       final alreadySentLocal = prefs.getBool(prefsKey) ?? false;
@@ -77,8 +85,8 @@ class DailySupportSummaryService {
       final existingMessages = await client
           .from('chat_messages')
           .select('id')
-          .eq('sender_id', kSaneeshaAgentId)
-          .eq('receiver_id', kSaneeshaAgentId)
+          .eq('sender_id', recipientId)
+          .eq('receiver_id', recipientId)
           .ilike('content', '%Daily Support Performance Summary%')
           .gte('created_at', startOfTodayUtc)
           .limit(1);
@@ -88,9 +96,12 @@ class DailySupportSummaryService {
         return;
       }
 
-      // Generate and send summary
+      // Generate and send summary to this recipient's self DM
       _isRunning = true;
-      await sendDailySummary(targetYesterdayDate: now.subtract(const Duration(days: 1)));
+      await sendDailySummary(
+        recipientAgentId: recipientId,
+        targetYesterdayDate: now.subtract(const Duration(days: 1)),
+      );
       await prefs.setBool(prefsKey, true);
 
       // Refresh DM list and chat
@@ -106,6 +117,7 @@ class DailySupportSummaryService {
 
   /// Generates and sends the daily summary message for a specific date (yesterday).
   static Future<void> sendDailySummary({
+    String recipientAgentId = kSaneeshaAgentId,
     DateTime? targetYesterdayDate,
   }) async {
     final client = Supabase.instance.client;
@@ -246,7 +258,7 @@ class DailySupportSummaryService {
     for (final entry in kSupportTeamAgents.entries) {
       final agentId = entry.key;
       final agentName = entry.value;
-      final isSelf = agentId == kSaneeshaAgentId;
+      final isSelf = agentId == recipientAgentId;
 
       // Agent Remarks & Attended tickets
       final agentRemarks = remarks.where((r) => r['agent_id']?.toString() == agentId).toList();
@@ -308,14 +320,14 @@ class DailySupportSummaryService {
 
     buffer.writeln('');
     buffer.writeln('━━━━━━━━━━━━━━━━━━━━━');
-    buffer.writeln('✨ *Automated Daily Support Briefing delivered exclusively to Saneesha.*');
+    buffer.writeln('✨ *Automated Daily Support Briefing delivered in DM ("You").*');
 
     final messageContent = buffer.toString();
 
-    // Send into Saneesha's Self DM Chat
+    // Send into recipient's Self DM Chat
     await client.from('chat_messages').insert({
-      'sender_id': kSaneeshaAgentId,
-      'receiver_id': kSaneeshaAgentId,
+      'sender_id': recipientAgentId,
+      'receiver_id': recipientAgentId,
       'sender_name': 'Daily Support Briefing',
       'sender_role': 'system',
       'content': messageContent,
@@ -323,6 +335,6 @@ class DailySupportSummaryService {
       'created_at': DateTime.now().toUtc().toIso8601String(),
     });
 
-    debugPrint('DailySupportSummaryService: Sent daily summary to Saneesha for $dateFormatted');
+    debugPrint('DailySupportSummaryService: Sent daily summary to $recipientAgentId for $dateFormatted');
   }
 }
