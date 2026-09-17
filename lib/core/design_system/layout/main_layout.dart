@@ -30,6 +30,7 @@ import '../../../features/sales/presentation/providers/lead_provider.dart';
 import '../../services/reminder_sound_service.dart';
 import '../../services/chat_sound_service.dart';
 import '../../constants/app_version.dart';
+import '../../../features/chat/services/daily_support_summary_service.dart';
 // -- Layout State Providers ---------------------------------------------------
 class TicketPaneOpenNotifier extends Notifier<bool> {
   @override
@@ -85,6 +86,7 @@ class _MainLayoutState extends ConsumerState<MainLayout> with WidgetsBindingObse
         _hasInitialized = true;
         _setupChatListener();
         _startLastSeenUpdates();
+        DailySupportSummaryService.startScheduler(ref);
       }
     });
   }
@@ -132,6 +134,7 @@ class _MainLayoutState extends ConsumerState<MainLayout> with WidgetsBindingObse
     WidgetsBinding.instance.removeObserver(this);
     _isDisposed = true;
     _hasInitialized = false;
+    DailySupportSummaryService.stopScheduler();
     _chatListenerSubscription?.close();
     _chatListenerSubscription = null;
     _aroundTallyListenerSubscription?.close();
