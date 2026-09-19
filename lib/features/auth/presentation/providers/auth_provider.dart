@@ -233,6 +233,19 @@ class AuthNotifier extends _$AuthNotifier {
       }
       state = Agent.fromJson(decoded);
       GlobalChatNotificationService.init(state!.id, ref);
+      
+      // Ensure Supabase Auth is restored as the generic agent so RLS policies pass
+      try {
+        final client = Supabase.instance.client;
+        if (client.auth.currentSession == null) {
+          await client.auth.signInWithPassword(
+            email: 'agents@tallycare.local', 
+            password: 'AgentShared#2026'
+          );
+        }
+      } catch (e) {
+        appLogger.error('Failed to restore Supabase Auth session', error: e);
+      }
     } catch (e, stackTrace) {
       appLogger.error(
         'Failed to restore persisted session',
