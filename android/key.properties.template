@@ -1,0 +1,8 @@
+# key.properties — DO NOT commit this file to Git (already in .gitignore)
+# Generated for TallyCare Play Store release signing
+# Fill in the values below after running the keystore generation command
+
+storePassword=YOUR_STORE_PASSWORD_HERE
+keyPassword=YOUR_KEY_PASSWORD_HERE
+keyAlias=tallycare-key
+storeFile=../tallycare-release.jks

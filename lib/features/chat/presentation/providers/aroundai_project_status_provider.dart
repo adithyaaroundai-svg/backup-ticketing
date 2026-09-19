@@ -155,6 +155,43 @@ class AroundaiProjectStatusNotifier extends Notifier<AroundaiProjectStatusState>
     }
   }
 
+  Future<void> addNoteToTask(int id, String newNote, String? oldNotes, String? currentUserId) async {
+    try {
+      if (newNote.trim().isEmpty) return;
+
+      List<dynamic> history = [];
+      if (oldNotes != null && oldNotes.isNotEmpty) {
+        try {
+          history = jsonDecode(oldNotes);
+        } catch (_) {
+          history = [
+            {
+              'note': oldNotes,
+              'created_at': DateTime.now().toUtc().toIso8601String(),
+              'created_by': null,
+            }
+          ];
+        }
+      }
+
+      history.insert(0, {
+        'note': newNote.trim(),
+        'created_at': DateTime.now().toUtc().toIso8601String(),
+        'created_by': currentUserId,
+      });
+
+      await Supabase.instance.client.from('aroundai_project_status').update({
+        'notes': jsonEncode(history),
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
+      }).eq('id', id);
+
+      await load();
+    } catch (e) {
+      debugPrint('Error adding note to task: $e');
+      rethrow;
+    }
+  }
+
   Future<void> deleteTask(int id) async {
     try {
       await Supabase.instance.client.from('aroundai_project_status').delete().eq('id', id);

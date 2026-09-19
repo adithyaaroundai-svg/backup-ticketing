@@ -133,31 +133,17 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              // Logo with gradient background
-                              Container(
-                                padding: const EdgeInsets.all(16),
-                                decoration: BoxDecoration(
-                                  gradient: AppColors.sidebarGradient,
-                                  borderRadius: BorderRadius.circular(16),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: AppColors.primary.withValues(alpha: 0.4),
-                                      blurRadius: 20,
-                                      offset: const Offset(0, 8),
-                                    ),
-                                  ],
-                                ),
-                                child: const Icon(
-                                  LucideIcons.building2,
-                                  size: 40,
-                                  color: Colors.white,
-                                ),
+                              // TallyCare Logo
+                              Image.asset(
+                                'assets/company_logo.png',
+                                width: 130,
+                                height: 130,
                               ),
                               const SizedBox(height: 28),
 
-                              // Company Logo Text
+                              // Company Name
                               Text(
-                                'AroundTally',
+                                'TallyCare',
                                 style: GoogleFonts.inter(
                                   fontSize: 32,
                                   fontWeight: FontWeight.w800,

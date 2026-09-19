@@ -155,6 +155,11 @@ class AuthNotifier extends _$AuthNotifier {
       await _persistAgent(state!);
       await _updateLastSeen(state!.id);
       GlobalChatNotificationService.init(state!.id, ref);
+      try {
+        await client.auth.signInWithPassword(email: 'agents@tallycare.local', password: 'AgentShared#2026');
+      } catch (e) {
+        appLogger.error('Failed to sign in to Supabase Auth', error: e);
+      }
       return true;
     }
 
@@ -186,6 +191,11 @@ class AuthNotifier extends _$AuthNotifier {
       await _persistAgent(state!);
       await _updateLastSeen(state!.id);
       GlobalChatNotificationService.init(state!.id, ref);
+      try {
+        await client.auth.signInWithPassword(email: 'agents@tallycare.local', password: 'AgentShared#2026');
+      } catch (e) {
+        appLogger.error('Failed to sign in to Supabase Auth (RPC fallback)', error: e);
+      }
       return true;
     }
 
@@ -205,6 +215,7 @@ class AuthNotifier extends _$AuthNotifier {
     GlobalChatNotificationService.dispose();
     state = null;
     _clearPersistedAgent();
+    Supabase.instance.client.auth.signOut();
   }
 
   Future<void> restoreSession() async {

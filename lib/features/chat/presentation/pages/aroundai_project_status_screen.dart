@@ -447,6 +447,163 @@ class _AroundaiProjectStatusScreenState extends ConsumerState<AroundaiProjectSta
     );
   }
 
+  void _showAddNoteDialog(AroundaiProjectStatus task) {
+    final noteCtrl = TextEditingController();
+    bool saving = false;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (dialogCtx, setDialogState) => Dialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          elevation: 0,
+          backgroundColor: Colors.white,
+          child: Container(
+            constraints: const BoxConstraints(maxWidth: 480),
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(6),
+                                decoration: BoxDecoration(
+                                  color: Colors.indigo.shade50,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Icon(LucideIcons.messageSquarePlus, size: 18, color: Colors.indigo.shade700),
+                              ),
+                              const SizedBox(width: 10),
+                              const Text(
+                                'Add Note',
+                                style: TextStyle(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.textPrimary,
+                                  letterSpacing: -0.5,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            task.taskName,
+                            style: TextStyle(
+                              color: Colors.indigo.shade700,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 14,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: () => Navigator.pop(dialogCtx),
+                      icon: const Icon(LucideIcons.x, size: 20, color: Colors.black54),
+                      splashRadius: 20,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                const Text(
+                  'Note Details',
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.black87),
+                ),
+                const SizedBox(height: 8),
+                TextFormField(
+                  controller: noteCtrl,
+                  autofocus: true,
+                  maxLines: 4,
+                  style: const TextStyle(fontSize: 14, color: AppColors.textPrimary),
+                  decoration: InputDecoration(
+                    hintText: 'Enter note description or updates...',
+                    hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 14),
+                    contentPadding: const EdgeInsets.all(14),
+                    filled: true,
+                    fillColor: const Color(0xFFF8FAFC),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide(color: Colors.grey.shade300),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide(color: Colors.grey.shade200),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 24),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(dialogCtx),
+                      style: TextButton.styleFrom(
+                        foregroundColor: Colors.grey.shade700,
+                        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                      ),
+                      child: const Text('Cancel', style: TextStyle(fontWeight: FontWeight.w600)),
+                    ),
+                    const SizedBox(width: 10),
+                    FilledButton.icon(
+                      style: FilledButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        elevation: 0,
+                      ),
+                      onPressed: saving
+                          ? null
+                          : () async {
+                              final text = noteCtrl.text.trim();
+                              if (text.isEmpty) return;
+                              setDialogState(() => saving = true);
+                              final prov = ref.read(aroundaiProjectStatusProvider.notifier);
+                              final currentUserId = ref.read(authProvider)?.id;
+                              try {
+                                await prov.addNoteToTask(task.id, text, task.notes, currentUserId);
+                                if (dialogCtx.mounted) Navigator.pop(dialogCtx);
+                              } catch (e) {
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error adding note: $e')));
+                                }
+                              } finally {
+                                if (dialogCtx.mounted) setDialogState(() => saving = false);
+                              }
+                            },
+                      icon: saving
+                          ? const SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                            )
+                          : const Icon(LucideIcons.plus, size: 16),
+                      label: const Text('Add Note', style: TextStyle(fontWeight: FontWeight.w600)),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildPopupMenuItemChild(String label, Color textColor, Color bgColor) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -706,35 +863,32 @@ class _AroundaiProjectStatusScreenState extends ConsumerState<AroundaiProjectSta
                         alignment: Alignment.topCenter,
                         child: SingleChildScrollView(
                           padding: EdgeInsets.all(isMobile ? 12 : 20),
-                          child: ConstrainedBox(
-                            constraints: const BoxConstraints(maxWidth: 1600),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                _buildFilterTabs(isMobile: isMobile),
-                                if (!isMobile)
-                                  Row(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Expanded(
-                                        child: _buildTableCard(filteredTasks, prov),
-                                      ),
-                                      if (_isFollowUpSidebarOpen) ...[
-                                        const SizedBox(width: 16),
-                                        SizedBox(
-                                          width: 280,
-                                          child: _buildSidebar(
-                                            state.tasks,
-                                            onClose: () => setState(() => _isFollowUpSidebarOpen = false),
-                                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _buildFilterTabs(isMobile: isMobile),
+                              if (!isMobile)
+                                Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Expanded(
+                                      child: _buildTableCard(filteredTasks, prov),
+                                    ),
+                                    if (_isFollowUpSidebarOpen) ...[
+                                      const SizedBox(width: 16),
+                                      SizedBox(
+                                        width: 280,
+                                        child: _buildSidebar(
+                                          state.tasks,
+                                          onClose: () => setState(() => _isFollowUpSidebarOpen = false),
                                         ),
-                                      ],
+                                      ),
                                     ],
-                                  )
-                                else
-                                  _buildTableCard(filteredTasks, prov),
-                              ],
-                            ),
+                                  ],
+                                )
+                              else
+                                _buildTableCard(filteredTasks, prov),
+                            ],
                           ),
                         ),
                       ),
@@ -759,167 +913,193 @@ class _AroundaiProjectStatusScreenState extends ConsumerState<AroundaiProjectSta
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(12),
-        child: Scrollbar(
-          controller: _tableHorizontalScrollController,
-          thumbVisibility: true,
-          trackVisibility: true,
-          thickness: 8,
-          radius: const Radius.circular(4),
-          child: SingleChildScrollView(
-            controller: _tableHorizontalScrollController,
-            scrollDirection: Axis.horizontal,
-            physics: const BouncingScrollPhysics(),
-            child: DataTable(
-              headingRowColor: MaterialStateProperty.all(const Color(0xFFF8FAFC)),
-              dataRowMaxHeight: 64,
-              dataRowMinHeight: 52,
-              horizontalMargin: 16,
-              columnSpacing: 14,
-              headingTextStyle: const TextStyle(fontWeight: FontWeight.w700, color: Colors.black87, fontSize: 13),
-              dividerThickness: 1,
-              columns: const [
-                DataColumn(label: Text('Task Name')),
-                DataColumn(label: Text('Status')),
-                DataColumn(label: Text('Notes')),
-                DataColumn(label: Text('Follow Up')),
-                DataColumn(label: Text('Created At')),
-                DataColumn(label: Text('Updated At')),
-                DataColumn(label: Text('Actions'), numeric: true),
-              ],
-              rows: filteredTasks.map((task) {
-                Color baseRowColor;
-                if (task.taskStatus == 'completed') {
-                  baseRowColor = Colors.green.shade50.withOpacity(0.3);
-                } else if (task.taskStatus == 'working') {
-                  baseRowColor = Colors.orange.shade50.withOpacity(0.3);
-                } else if (task.taskStatus == 'paused') {
-                  baseRowColor = Colors.red.shade50.withOpacity(0.3);
-                } else if (task.taskStatus == 'trial') {
-                  baseRowColor = Colors.blue.shade50.withOpacity(0.3);
-                } else {
-                  baseRowColor = Colors.white;
-                }
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            return Scrollbar(
+              controller: _tableHorizontalScrollController,
+              thumbVisibility: true,
+              trackVisibility: true,
+              thickness: 8,
+              radius: const Radius.circular(4),
+              child: SingleChildScrollView(
+                controller: _tableHorizontalScrollController,
+                scrollDirection: Axis.horizontal,
+                physics: const BouncingScrollPhysics(),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minWidth: constraints.maxWidth),
+                  child: DataTable(
+                    headingRowColor: MaterialStateProperty.all(const Color(0xFFF8FAFC)),
+                    dataRowMaxHeight: 68,
+                    dataRowMinHeight: 52,
+                    horizontalMargin: 20,
+                    columnSpacing: 24,
+                    headingTextStyle: const TextStyle(fontWeight: FontWeight.w700, color: Colors.black87, fontSize: 13),
+                    dividerThickness: 1,
+                    columns: const [
+                      DataColumn(label: Text('Task Name')),
+                      DataColumn(label: Text('Status')),
+                      DataColumn(label: Text('Notes')),
+                      DataColumn(label: Text('Follow Up')),
+                      DataColumn(label: Text('Created At')),
+                      DataColumn(label: Text('Updated At')),
+                      DataColumn(label: Text('Actions'), numeric: true),
+                    ],
+                    rows: filteredTasks.map((task) {
+                      Color baseRowColor;
+                      if (task.taskStatus == 'completed') {
+                        baseRowColor = Colors.green.shade50.withOpacity(0.3);
+                      } else if (task.taskStatus == 'working') {
+                        baseRowColor = Colors.orange.shade50.withOpacity(0.3);
+                      } else if (task.taskStatus == 'paused') {
+                        baseRowColor = Colors.red.shade50.withOpacity(0.3);
+                      } else if (task.taskStatus == 'trial') {
+                        baseRowColor = Colors.blue.shade50.withOpacity(0.3);
+                      } else {
+                        baseRowColor = Colors.white;
+                      }
 
-                return DataRow(
-                  color: MaterialStateProperty.resolveWith<Color>((Set<MaterialState> states) {
-                    if (states.contains(MaterialState.hovered)) {
-                      return Colors.indigo.shade50.withOpacity(0.5);
-                    }
-                    return baseRowColor;
-                  }),
-                  cells: [
-                    // Task Name
-                    DataCell(
-                      ConstrainedBox(
-                        constraints: const BoxConstraints(minWidth: 100, maxWidth: 170),
-                        child: Tooltip(
-                          message: task.taskName,
-                          waitDuration: const Duration(milliseconds: 400),
-                          child: Text(
-                            task.taskName,
-                            style: TextStyle(fontWeight: FontWeight.w700, color: Colors.indigo.shade800, fontSize: 13),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ),
-                    ),
-                    // Status Badge
-                    DataCell(_buildStatusBadge(task, prov)),
-                    // Notes
-                    DataCell(
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          ConstrainedBox(
-                            constraints: const BoxConstraints(minWidth: 90, maxWidth: 200),
-                            child: Tooltip(
-                              message: _getLatestNoteText(task.notes).isNotEmpty ? _getLatestNoteText(task.notes) : '-',
-                              waitDuration: const Duration(milliseconds: 400),
-                              child: Text(
-                                _getLatestNoteText(task.notes).isNotEmpty ? _getLatestNoteText(task.notes) : '-',
-                                style: TextStyle(
-                                  color: _getLatestNoteText(task.notes).isNotEmpty ? Colors.black87 : Colors.grey.shade400,
-                                  fontSize: 12.5,
+                      return DataRow(
+                        color: MaterialStateProperty.resolveWith<Color>((Set<MaterialState> states) {
+                          if (states.contains(MaterialState.hovered)) {
+                            return Colors.indigo.shade50.withOpacity(0.5);
+                          }
+                          return baseRowColor;
+                        }),
+                        cells: [
+                          // Task Name
+                          DataCell(
+                            ConstrainedBox(
+                              constraints: const BoxConstraints(minWidth: 120, maxWidth: 240),
+                              child: Tooltip(
+                                message: task.taskName,
+                                waitDuration: const Duration(milliseconds: 400),
+                                child: Text(
+                                  task.taskName,
+                                  style: TextStyle(fontWeight: FontWeight.w700, color: Colors.indigo.shade800, fontSize: 13.5),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
                           ),
-                          const SizedBox(width: 4),
-                          IconButton(
-                            icon: Icon(LucideIcons.history, size: 15, color: Colors.indigo.shade400),
-                            splashRadius: 18,
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints(minWidth: 26, minHeight: 26),
-                            tooltip: 'Notes History',
-                            onPressed: () => _showNotesHistory(task),
+                          // Status Badge
+                          DataCell(_buildStatusBadge(task, prov)),
+                          // Notes
+                          DataCell(
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                ConstrainedBox(
+                                  constraints: const BoxConstraints(minWidth: 140, maxWidth: 380),
+                                  child: Tooltip(
+                                    message: _getLatestNoteText(task.notes).isNotEmpty ? _getLatestNoteText(task.notes) : 'No notes yet',
+                                    waitDuration: const Duration(milliseconds: 400),
+                                    child: Text(
+                                      _getLatestNoteText(task.notes).isNotEmpty ? _getLatestNoteText(task.notes) : '-',
+                                      style: TextStyle(
+                                        color: _getLatestNoteText(task.notes).isNotEmpty ? Colors.black87 : Colors.grey.shade400,
+                                        fontSize: 12.5,
+                                      ),
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                // Plus button to add note
+                                Tooltip(
+                                  message: 'Add Note',
+                                  child: InkWell(
+                                    borderRadius: BorderRadius.circular(6),
+                                    onTap: () => _showAddNoteDialog(task),
+                                    child: Container(
+                                      padding: const EdgeInsets.all(4),
+                                      decoration: BoxDecoration(
+                                        color: Colors.indigo.shade50,
+                                        borderRadius: BorderRadius.circular(6),
+                                        border: Border.all(color: Colors.indigo.shade100),
+                                      ),
+                                      child: Icon(LucideIcons.plus, size: 14, color: Colors.indigo.shade700),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                                // History icon
+                                IconButton(
+                                  icon: Icon(LucideIcons.history, size: 16, color: Colors.indigo.shade400),
+                                  splashRadius: 18,
+                                  padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints(minWidth: 26, minHeight: 26),
+                                  tooltip: 'Notes History',
+                                  onPressed: () => _showNotesHistory(task),
+                                ),
+                              ],
+                            ),
+                          ),
+                          // Follow Up
+                          DataCell(
+                            Text(
+                              task.followUpDate != null ? _formatDateOnly(task.followUpDate) : '-',
+                              style: TextStyle(
+                                color: task.followUpDate != null && task.followUpDate!.isBefore(DateTime.now()) && task.taskStatus != 'completed' 
+                                    ? Colors.red 
+                                    : Colors.grey.shade600, 
+                                fontSize: 12,
+                                fontWeight: task.followUpDate != null && task.followUpDate!.isBefore(DateTime.now()) && task.taskStatus != 'completed'
+                                    ? FontWeight.bold
+                                    : FontWeight.normal,
+                              ),
+                            ),
+                          ),
+                          // Created At
+                          DataCell(
+                            Text(
+                              _formatDate(task.createdAt),
+                              style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+                            ),
+                          ),
+                          // Updated At
+                          DataCell(
+                            Text(
+                              _formatDate(task.updatedAt),
+                              style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+                            ),
+                          ),
+                          // Actions
+                          DataCell(
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(
+                                  icon: const Icon(LucideIcons.edit2, size: 15),
+                                  color: Colors.blue.shade600,
+                                  splashRadius: 18,
+                                  padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                                  tooltip: 'Edit Task',
+                                  onPressed: () => _showTaskDialog(task: task),
+                                ),
+                                const SizedBox(width: 4),
+                                IconButton(
+                                  icon: const Icon(LucideIcons.trash2, size: 15),
+                                  color: Colors.red.shade500,
+                                  splashRadius: 18,
+                                  padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                                  tooltip: 'Delete Task',
+                                  onPressed: () => _confirmDelete(task),
+                                ),
+                              ],
+                            ),
                           ),
                         ],
-                      ),
-                    ),
-                    // Follow Up
-                    DataCell(
-                      Text(
-                        task.followUpDate != null ? _formatDateOnly(task.followUpDate) : '-',
-                        style: TextStyle(
-                          color: task.followUpDate != null && task.followUpDate!.isBefore(DateTime.now()) && task.taskStatus != 'completed' 
-                              ? Colors.red 
-                              : Colors.grey.shade600, 
-                          fontSize: 12,
-                          fontWeight: task.followUpDate != null && task.followUpDate!.isBefore(DateTime.now()) && task.taskStatus != 'completed'
-                              ? FontWeight.bold
-                              : FontWeight.normal,
-                        ),
-                      ),
-                    ),
-                    // Created At
-                    DataCell(
-                      Text(
-                        _formatDate(task.createdAt),
-                        style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
-                      ),
-                    ),
-                    // Updated At
-                    DataCell(
-                      Text(
-                        _formatDate(task.updatedAt),
-                        style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
-                      ),
-                    ),
-                    // Actions
-                    DataCell(
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          IconButton(
-                            icon: const Icon(LucideIcons.edit2, size: 15),
-                            color: Colors.blue.shade600,
-                            splashRadius: 18,
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-                            tooltip: 'Edit Task',
-                            onPressed: () => _showTaskDialog(task: task),
-                          ),
-                          const SizedBox(width: 4),
-                          IconButton(
-                            icon: const Icon(LucideIcons.trash2, size: 15),
-                            color: Colors.red.shade500,
-                            splashRadius: 18,
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-                            tooltip: 'Delete Task',
-                            onPressed: () => _confirmDelete(task),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                );
-              }).toList(),
-            ),
-          ),
+                      );
+                    }).toList(),
+                  ),
+                ),
+              ),
+            );
+          },
         ),
       ),
     );
