@@ -123,7 +123,6 @@ String _getHomeRouteForAgent(Agent? agent) {
   if (agent.isAccountant) return '/accountant';
   if (agent.isSales) return '/sales';
   if (agent.isSupport || agent.isHR || agent.isProjectCoordinator) return '/support';
-  if (agent.isSoftwareDeveloper) return '/developer-crm';
   return '/dashboard';
 }
 
