@@ -24,6 +24,7 @@ import 'features/auth/presentation/pages/reset_password_verify_page.dart';
 import 'features/auth/presentation/pages/admin_signup_email_verify_page.dart';
 import 'features/auth/presentation/pages/admin_signup_details_page.dart';
 import 'features/auth/presentation/providers/auth_provider.dart';
+import 'features/tickets/presentation/providers/ticket_provider.dart';
 import 'features/tickets/presentation/pages/ticket_detail_page.dart';
 import 'features/tickets/presentation/pages/tickets_page.dart';
 import 'features/tickets/presentation/pages/bills_page.dart';
@@ -76,7 +77,19 @@ void main() async {
 
 
   final container = ProviderContainer();
-  await container.read(authProvider.notifier).restoreSession();
+  
+  // Listen for Supabase Auth changes (like the background login completing after app reload)
+  // and invalidate the key dashboard providers so they fetch data securely instead of staying empty.
+  Supabase.instance.client.auth.onAuthStateChange.listen((data) {
+    if (data.event == AuthChangeEvent.signedIn || data.event == AuthChangeEvent.tokenRefreshed) {
+      // Invalidate the critical streams so they re-fetch securely now that we're authenticated
+      container.invalidate(rawTicketsStreamProvider);
+      container.invalidate(rawAllTicketsStreamProvider);
+      container.invalidate(ticketStatsProvider);
+    }
+  });
+
+  container.read(authProvider.notifier).restoreSession(); // Removed await to prevent app startup lag
 
   runApp(
     UncontrolledProviderScope(

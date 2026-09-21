@@ -185,17 +185,20 @@ class AuthNotifier extends _$AuthNotifier {
     }
 
     if (response['success'] == true && response['agent'] is Map) {
+      // Authenticate to Supabase BEFORE setting state, so the dashboard
+      // doesn't load until we are fully authenticated and RLS passes.
+      try {
+        await client.auth.signInWithPassword(email: 'agents@tallycare.local', password: 'AgentShared#2026');
+      } catch (e) {
+        appLogger.error('Failed to sign in to Supabase Auth (RPC fallback)', error: e);
+      }
+      
       state = Agent.fromJson(
         Map<String, dynamic>.from(response['agent'] as Map),
       );
       await _persistAgent(state!);
       await _updateLastSeen(state!.id);
       GlobalChatNotificationService.init(state!.id, ref);
-      try {
-        await client.auth.signInWithPassword(email: 'agents@tallycare.local', password: 'AgentShared#2026');
-      } catch (e) {
-        appLogger.error('Failed to sign in to Supabase Auth (RPC fallback)', error: e);
-      }
       return true;
     }
 
@@ -231,14 +234,19 @@ class AuthNotifier extends _$AuthNotifier {
         await prefs.remove(_agentPrefsKey);
         return;
       }
+      
+      // Set state IMMEDIATELY so the app renders without lag!
       state = Agent.fromJson(decoded);
       GlobalChatNotificationService.init(state!.id, ref);
       
       // Ensure Supabase Auth is restored as the generic agent so RLS policies pass
+      // We run this in the background WITHOUT awaiting, so the app startup doesn't lag.
+      // Once authenticated, the global Supabase onAuthStateChange listener will invalidate
+      // streams so the dashboard auto-populates correctly.
       try {
         final client = Supabase.instance.client;
         if (client.auth.currentSession == null) {
-          await client.auth.signInWithPassword(
+          client.auth.signInWithPassword(
             email: 'agents@tallycare.local', 
             password: 'AgentShared#2026'
           );

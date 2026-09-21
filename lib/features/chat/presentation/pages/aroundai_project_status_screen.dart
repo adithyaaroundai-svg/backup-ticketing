@@ -1187,30 +1187,35 @@ class _AroundaiProjectStatusScreenState extends ConsumerState<AroundaiProjectSta
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Row(
-              children: [
-                Icon(LucideIcons.bell, size: 18, color: Colors.indigo.shade600),
-                const SizedBox(width: 8),
-                const Text(
-                  'Follow-up Reminders',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
-                ),
-                if (upcoming.isNotEmpty) ...[
+            Expanded(
+              child: Row(
+                children: [
+                  Icon(LucideIcons.bell, size: 18, color: Colors.indigo.shade600),
                   const SizedBox(width: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: Colors.indigo.shade50,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: Colors.indigo.shade200),
-                    ),
+                  const Expanded(
                     child: Text(
-                      '${upcoming.length}',
-                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.indigo.shade700),
+                      'Follow-up Reminders',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
+                  if (upcoming.isNotEmpty) ...[
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.indigo.shade50,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.indigo.shade200),
+                      ),
+                      child: Text(
+                        '${upcoming.length}',
+                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.indigo.shade700),
+                      ),
+                    ),
+                  ],
                 ],
-              ],
+              ),
             ),
             if (onClose != null)
               IconButton(
