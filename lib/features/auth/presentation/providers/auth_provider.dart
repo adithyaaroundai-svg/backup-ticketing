@@ -9,6 +9,7 @@ import '../../../../core/logging/app_logger.dart';
 import '../../../../core/services/global_chat_notification_service.dart';
 import '../../../chat/presentation/providers/chat_provider.dart'
     show ChatNewMessageEvent, DmNewMessageEvent, CustomChannelNewMessageEvent;
+import '../../../../core/services/push_notification_service.dart';
 
 part 'auth_provider.g.dart';
 
@@ -157,6 +158,7 @@ class AuthNotifier extends _$AuthNotifier {
       GlobalChatNotificationService.init(state!.id, ref);
       try {
         await client.auth.signInWithPassword(email: 'agents@tallycare.local', password: 'AgentShared#2026');
+        PushNotificationService().saveTokenToSupabase();
       } catch (e) {
         appLogger.error('Failed to sign in to Supabase Auth', error: e);
       }
@@ -189,6 +191,7 @@ class AuthNotifier extends _$AuthNotifier {
       // doesn't load until we are fully authenticated and RLS passes.
       try {
         await client.auth.signInWithPassword(email: 'agents@tallycare.local', password: 'AgentShared#2026');
+        PushNotificationService().saveTokenToSupabase();
       } catch (e) {
         appLogger.error('Failed to sign in to Supabase Auth (RPC fallback)', error: e);
       }
@@ -216,6 +219,7 @@ class AuthNotifier extends _$AuthNotifier {
     DmNewMessageEvent.resetSession();
     CustomChannelNewMessageEvent.resetSession();
     GlobalChatNotificationService.dispose();
+    PushNotificationService().deleteToken();
     state = null;
     _clearPersistedAgent();
     Supabase.instance.client.auth.signOut();
@@ -249,7 +253,9 @@ class AuthNotifier extends _$AuthNotifier {
           client.auth.signInWithPassword(
             email: 'agents@tallycare.local', 
             password: 'AgentShared#2026'
-          );
+          ).then((_) => PushNotificationService().saveTokenToSupabase());
+        } else {
+          PushNotificationService().saveTokenToSupabase();
         }
       } catch (e) {
         appLogger.error('Failed to restore Supabase Auth session', error: e);

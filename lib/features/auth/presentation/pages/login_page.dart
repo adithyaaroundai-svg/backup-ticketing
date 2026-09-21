@@ -1,3 +1,4 @@
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -95,8 +96,10 @@ class _LoginPageState extends ConsumerState<LoginPage> {
             Positioned.fill(
               child: Opacity(
                 opacity: 0.06,
-                child: CustomPaint(
-                  painter: _LoginPatternPainter(),
+                child: RepaintBoundary(
+                  child: CustomPaint(
+                    painter: _LoginPatternPainter(),
+                  ),
                 ),
               ),
             ),
@@ -512,15 +515,20 @@ class _LoginPatternPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
       ..color = Colors.white.withValues(alpha: 0.4)
-      ..strokeWidth = 0.8;
+      ..strokeWidth = 2.4 // 1.2 radius * 2
+      ..strokeCap = StrokeCap.round;
 
     const double gap = 24;
+    final List<Offset> points = [];
 
     for (double x = 0; x < size.width; x += gap) {
       for (double y = 0; y < size.height; y += gap) {
-        canvas.drawCircle(Offset(x, y), 1.2, paint);
+        points.add(Offset(x, y));
       }
     }
+
+    // Drawing all points at once is immensely faster than thousands of drawCircle calls
+    canvas.drawPoints(ui.PointMode.points, points, paint);
   }
 
   @override

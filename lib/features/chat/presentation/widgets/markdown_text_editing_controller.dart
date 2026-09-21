@@ -34,6 +34,19 @@ class MarkdownTextEditingController extends TextEditingController {
       return _cachedSpan!;
     }
 
+    // FAST PATH: If the text contains no markdown markers, skip regex entirely.
+    // This dramatically improves typing performance for regular messages.
+    if (!text.contains('*') && 
+        !text.contains('_') && 
+        !text.contains('~') && 
+        !text.contains('<') && 
+        !text.contains('`')) {
+      _lastText = text;
+      _lastStyle = style;
+      _cachedSpan = TextSpan(style: style, text: text);
+      return _cachedSpan!;
+    }
+
     // Transparent style — characters take up space (so cursor math is correct)
     // but are invisible.
     final invisible = (style ?? const TextStyle()).copyWith(

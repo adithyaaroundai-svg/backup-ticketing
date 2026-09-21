@@ -4948,6 +4948,11 @@ class _InlineParser {
   );
 
   TextSpan parse() {
+    // FAST PATH: If no markdown formatting tokens are present, skip the regex loop entirely
+    if (!text.contains('*') && !text.contains('_') && !text.contains('~') && !text.contains('<') && !text.contains('`')) {
+      return TextSpan(children: [_plain(text)]);
+    }
+
     final spans = <InlineSpan>[];
     int pos = 0;
 

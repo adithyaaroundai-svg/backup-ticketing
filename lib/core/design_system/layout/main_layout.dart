@@ -649,28 +649,35 @@ class _TopNav extends ConsumerWidget {
 
         if (!isRestrictedAgent)
           _TopNavItem(
-            label: showBillsAsDashboard
-                ? 'Bills'
-                : (isSales
-                      ? 'Dashboard'
-                      : (showClaimTicketsLabel ? 'Tickets' : 'Dashboard')),
-            icon: showBillsAsDashboard
-                ? LucideIcons.receipt
-                : (showClaimTicketsLabel
-                      ? LucideIcons.ticket
-                      : LucideIcons.layoutDashboard),
-            path: showBillsAsDashboard
-                ? '/accountant'
-                : (isSales
-                      ? '/sales'
-                      : (currentUser?.isSupport == true ||
-                                currentUser?.isHR == true ||
-                                currentUser?.isProjectCoordinator == true
-                            ? '/support'
-                            : '/dashboard')),
+            label: currentUser?.isSoftwareDeveloper == true
+                ? 'Project Tracker'
+                : (showBillsAsDashboard
+                    ? 'Bills'
+                    : (isSales
+                          ? 'Dashboard'
+                          : (showClaimTicketsLabel ? 'Tickets' : 'Dashboard'))),
+            icon: currentUser?.isSoftwareDeveloper == true
+                ? LucideIcons.layoutTemplate
+                : (showBillsAsDashboard
+                    ? LucideIcons.receipt
+                    : (showClaimTicketsLabel
+                          ? LucideIcons.ticket
+                          : LucideIcons.layoutDashboard)),
+            path: currentUser?.isSoftwareDeveloper == true
+                ? '/developer-crm'
+                : (showBillsAsDashboard
+                    ? '/accountant'
+                    : (isSales
+                          ? '/sales'
+                          : (currentUser?.isSupport == true ||
+                                    currentUser?.isHR == true ||
+                                    currentUser?.isProjectCoordinator == true
+                                ? '/support'
+                                : '/dashboard'))),
             isActive:
                 currentPath == '/' ||
                 currentPath == '/dashboard' ||
+                currentPath == '/developer-crm' ||
                 currentPath == '/admin' ||
                 currentPath == '/accountant' ||
                 currentPath == '/sales' ||

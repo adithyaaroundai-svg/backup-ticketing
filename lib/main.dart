@@ -56,6 +56,9 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'features/chat/data/local/hive_chat_message.dart';
 import 'package:ticketing_system/core/design_system/layout/main_layout.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:ticketing_system/firebase_options.dart';
+import 'package:ticketing_system/core/services/push_notification_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -73,6 +76,16 @@ void main() async {
     anonKey:
         'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlibXhwbXNpaWh0YXN5and4dG9sIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE5MDExNTEsImV4cCI6MjA4NzQ3NzE1MX0.dOoJWDf4j_etF0NTq4uuaVG47e0y_pDe-AdgDRhWI68',
   );
+
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+    // Initialize Push Notifications
+    await PushNotificationService().init();
+  } catch (e) {
+    debugPrint("Firebase init failed: $e (Run flutterfire configure)");
+  }
 
 
 
@@ -110,6 +123,7 @@ String _getHomeRouteForAgent(Agent? agent) {
   if (agent.isAccountant) return '/accountant';
   if (agent.isSales) return '/sales';
   if (agent.isSupport || agent.isHR || agent.isProjectCoordinator) return '/support';
+  if (agent.isSoftwareDeveloper) return '/developer-crm';
   return '/dashboard';
 }
 
