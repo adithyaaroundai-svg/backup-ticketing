@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "915499333951",
+    "project_id": "tallycare-644ee",
+    "storage_bucket": "tallycare-644ee.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:915499333951:android:f0f0bc7a925a6c1bf67b8a",
+        "android_client_info": {
+          "package_name": "com.aroundtally.tallycare"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAyEkFMvW0UoRF1JwU9LA8E21CIPh2bDBM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

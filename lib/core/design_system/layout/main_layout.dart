@@ -4094,8 +4094,6 @@ class _TicketTile extends ConsumerWidget {
         final customerName = companyName.isNotEmpty
             ? companyName
             : (contactPerson.isNotEmpty ? contactPerson : 'Unknown Customer');
-        // ignore: unused_local_variable
-        final customerEmail = customerData?['contact_email'] ?? '';
 
         return Tooltip(
           message: _getTicketDescription(ticket),
@@ -4114,10 +4112,10 @@ class _TicketTile extends ConsumerWidget {
           waitDuration: const Duration(milliseconds: 500),
           showDuration: const Duration(seconds: 3),
           child: Container(
-            margin: const EdgeInsets.symmetric(vertical: 2),
+            margin: const EdgeInsets.symmetric(vertical: 2.5),
             decoration: BoxDecoration(
               color: cardColor,
-              borderRadius: BorderRadius.circular(6),
+              borderRadius: BorderRadius.circular(8),
               border: Border.all(color: cardBorderColor),
             ),
             child: Material(
@@ -4127,85 +4125,84 @@ class _TicketTile extends ConsumerWidget {
                   // Navigate to ticket detail
                   context.push('/ticket/${ticket.ticketId}');
                 },
-                borderRadius: BorderRadius.circular(6),
+                borderRadius: BorderRadius.circular(8),
                 child: Padding(
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 6,
+                    horizontal: 10,
+                    vertical: 8,
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      // Customer name and claim status
+                      // Top Row: Customer Name & Status Badge
                       Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // Left: customer name + time
                           Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  customerName,
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 12,
+                            child: Text(
+                              customerName,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 7,
+                              vertical: 2.5,
+                            ),
+                            decoration: BoxDecoration(
+                              color: badgeColor,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Text(
+                              badgeLabel,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 9,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 5),
+                      // Bottom Row: Time Ago & Assignee Name
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            timeAgo,
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.6),
+                              fontSize: 10,
+                              fontWeight: FontWeight.w400,
+                            ),
+                          ),
+                          if (isClaimed &&
+                              assignedAgentName != null &&
+                              assignedAgentName.isNotEmpty)
+                            Flexible(
+                              child: Padding(
+                                padding: const EdgeInsets.only(left: 8),
+                                child: Text(
+                                  assignedAgentName,
+                                  style: TextStyle(
+                                    color: Colors.white.withValues(alpha: 0.75),
+                                    fontSize: 11,
                                     fontWeight: FontWeight.w500,
                                   ),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
+                                  textAlign: TextAlign.end,
                                 ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  timeAgo,
-                                  style: TextStyle(
-                                    color: Colors.white.withValues(alpha: 0.6),
-                                    fontSize: 10,
-                                  ),
-                                ),
-                              ],
+                              ),
                             ),
-                          ),
-                          const SizedBox(width: 4),
-                          // Right: claimed badge + agent name stacked
-                          Flexible(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.end,
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 6,
-                                    vertical: 2,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: badgeColor,
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: Text(
-                                    badgeLabel,
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 8,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ),
-                                if (isClaimed && assignedAgentName != null) ...[
-                                  const SizedBox(height: 3),
-                                  Text(
-                                    assignedAgentName,
-                                    style: TextStyle(
-                                      color: Colors.white.withValues(alpha: 0.7),
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ],
-                              ],
-                            ),
-                          ),
                         ],
                       ),
                     ],
@@ -4217,15 +4214,20 @@ class _TicketTile extends ConsumerWidget {
         );
       },
       loading: () => Container(
-        margin: const EdgeInsets.symmetric(vertical: 2),
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        margin: const EdgeInsets.symmetric(vertical: 2.5),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.03),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+        ),
         child: Row(
           children: [
             SizedBox(
               width: 12,
               height: 12,
               child: CircularProgressIndicator(
-                strokeWidth: 1,
+                strokeWidth: 1.5,
                 valueColor: AlwaysStoppedAnimation<Color>(Colors.white54),
               ),
             ),
@@ -4241,8 +4243,13 @@ class _TicketTile extends ConsumerWidget {
         ),
       ),
       error: (_, __) => Container(
-        margin: const EdgeInsets.symmetric(vertical: 2),
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        margin: const EdgeInsets.symmetric(vertical: 2.5),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          color: Colors.red.withValues(alpha: 0.05),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: Colors.red.withValues(alpha: 0.2)),
+        ),
         child: Text(
           'Customer not found',
           style: TextStyle(

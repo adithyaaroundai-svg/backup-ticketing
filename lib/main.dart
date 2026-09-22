@@ -68,20 +68,20 @@ void main() async {
     debugPrint("Could not load .env file: $e");
   }
   
-  await LocalNotificationService.init();
-
-  await Hive.initFlutter();
-  Hive.registerAdapter(HiveChatMessageAdapter());
-  
+  // Initialize Hive
   try {
+    await Hive.initFlutter();
+    Hive.registerAdapter(HiveChatMessageAdapter());
     await Hive.openBox<HiveChatMessage>('chat_messages_cache');
     await Hive.openBox<String>('chat_cache_meta');
   } catch (e) {
-    debugPrint("Hive cache corrupted, deleting and recreating: $e");
-    await Hive.deleteBoxFromDisk('chat_messages_cache');
-    await Hive.deleteBoxFromDisk('chat_cache_meta');
-    await Hive.openBox<HiveChatMessage>('chat_messages_cache');
-    await Hive.openBox<String>('chat_cache_meta');
+    debugPrint("Hive init error, resetting boxes: $e");
+    try {
+      await Hive.deleteBoxFromDisk('chat_messages_cache');
+      await Hive.deleteBoxFromDisk('chat_cache_meta');
+      await Hive.openBox<HiveChatMessage>('chat_messages_cache');
+      await Hive.openBox<String>('chat_cache_meta');
+    } catch (_) {}
   }
 
   // Initialize Supabase
@@ -91,15 +91,26 @@ void main() async {
         'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlibXhwbXNpaWh0YXN5and4dG9sIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE5MDExNTEsImV4cCI6MjA4NzQ3NzE1MX0.dOoJWDf4j_etF0NTq4uuaVG47e0y_pDe-AdgDRhWI68',
   );
 
-  try {
-    await Firebase.initializeApp(
-      options: DefaultFirebaseOptions.currentPlatform,
-    );
-    // Initialize Push Notifications
-    await PushNotificationService().init();
-  } catch (e) {
-    debugPrint("Firebase init failed: $e (Run flutterfire configure)");
-  }
+  // Initialize notifications asynchronously so runApp() starts immediately
+  // and does not get stuck on Android/iOS native splash screen
+  Future.microtask(() async {
+    try {
+      await LocalNotificationService.init();
+    } catch (e) {
+      debugPrint("LocalNotificationService init error: $e");
+    }
+
+    try {
+      if (!kIsWeb && (defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.iOS)) {
+        await Firebase.initializeApp(
+          options: DefaultFirebaseOptions.currentPlatform,
+        );
+        await PushNotificationService().init();
+      }
+    } catch (e) {
+      debugPrint("Firebase init error: $e");
+    }
+  });
 
 
 

@@ -8,12 +8,10 @@ list(APPEND FLUTTER_PLUGIN_LIST
   connectivity_plus
   file_selector_windows
   firebase_core
-  irondash_engine_context
   permission_handler_windows
   printing
   record_windows
   share_plus
-  super_native_extensions
   url_launcher_windows
 )
 

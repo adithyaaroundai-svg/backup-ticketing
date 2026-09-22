@@ -74,16 +74,24 @@ class LocalNotificationService {
       );
       
       // Request permissions for Android 13+
-      await _notificationsPlugin
-          .resolvePlatformSpecificImplementation<
-              AndroidFlutterLocalNotificationsPlugin>()
-          ?.requestNotificationsPermission();
+      try {
+        await _notificationsPlugin
+            .resolvePlatformSpecificImplementation<
+                AndroidFlutterLocalNotificationsPlugin>()
+            ?.requestNotificationsPermission();
+      } catch (e) {
+        debugPrint('Failed to request notifications permission: $e');
+      }
           
       // Request exact alarm permissions for Android 12+ (needed for zonedSchedule)
-      await _notificationsPlugin
-          .resolvePlatformSpecificImplementation<
-              AndroidFlutterLocalNotificationsPlugin>()
-          ?.requestExactAlarmsPermission();
+      try {
+        await _notificationsPlugin
+            .resolvePlatformSpecificImplementation<
+                AndroidFlutterLocalNotificationsPlugin>()
+            ?.requestExactAlarmsPermission();
+      } catch (e) {
+        debugPrint('Failed to request exact alarms permission: $e');
+      }
     } catch (e) {
       debugPrint('Error initializing local notifications: $e');
     }
@@ -151,12 +159,14 @@ class LocalNotificationService {
 
     const AndroidNotificationDetails androidNotificationDetails =
         AndroidNotificationDetails(
-      'reminder_channel',
-      'Reminders',
-      channelDescription: 'Channel for reminder alerts',
+      'tallycare_high_importance_channel',
+      'TallyCare High Importance Notifications',
+      channelDescription: 'Channel for important alerts',
       importance: Importance.max,
       priority: Priority.high,
+      visibility: NotificationVisibility.public,
       playSound: true,
+      enableVibration: true,
     );
 
     const DarwinNotificationDetails darwinNotificationDetails =

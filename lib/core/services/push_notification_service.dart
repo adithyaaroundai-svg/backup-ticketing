@@ -1,16 +1,53 @@
+import 'dart:async';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'local_notification_service.dart';
 
-// Top-level function for handling background messages
+// Top-level function for handling background messages when app is closed
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  // If you're going to use other Firebase services in the background, such as Firestore,
-  // make sure you call `initializeApp` before using other Firebase services.
-  await Firebase.initializeApp();
+  try {
+    await Firebase.initializeApp();
+    debugPrint("Handling a background message: ${message.messageId}");
 
-  debugPrint("Handling a background message: ${message.messageId}");
+    // If message already has a notification payload, Android system handles display
+    // Otherwise if it's data-only, or to ensure heads-up display:
+    if (message.notification == null) {
+      final title = message.data['title'] ?? 'TallyCare';
+      final body = message.data['body'] ?? message.data['content'] ?? 'You have a new update';
+
+      final plugin = FlutterLocalNotificationsPlugin();
+      const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
+      await plugin.initialize(
+        settings: const InitializationSettings(android: androidInit),
+      );
+
+      const androidDetails = AndroidNotificationDetails(
+        'tallycare_high_importance_channel',
+        'TallyCare High Importance Notifications',
+        channelDescription: 'Used for important chat and ticket alerts',
+        importance: Importance.max,
+        priority: Priority.high,
+        visibility: NotificationVisibility.public,
+        playSound: true,
+        enableVibration: true,
+      );
+
+      await plugin.show(
+        id: message.hashCode,
+        title: title,
+        body: body,
+        notificationDetails: const NotificationDetails(android: androidDetails),
+        payload: message.data['link'],
+      );
+    }
+  } catch (e) {
+    debugPrint("Error in _firebaseMessagingBackgroundHandler: $e");
+  }
 }
 
 class PushNotificationService {
@@ -27,64 +64,109 @@ class PushNotificationService {
 
   bool _initialized = false;
 
+  static const String highImportanceChannelId = 'tallycare_high_importance_channel';
+
   Future<void> init() async {
     if (_initialized) return;
 
-    // Set background message handler
-    FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+    try {
+      // 1. Set background message handler
+      FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
 
-    // Request permissions (especially for iOS)
-    NotificationSettings settings = await _fcm.requestPermission(
-      alert: true,
-      announcement: false,
-      badge: true,
-      carPlay: false,
-      criticalAlert: false,
-      provisional: false,
-      sound: true,
-    );
+      // 2. Request permissions (especially for iOS & Android 13+)
+      try {
+        NotificationSettings settings = await _fcm.requestPermission(
+          alert: true,
+          announcement: false,
+          badge: true,
+          carPlay: false,
+          criticalAlert: false,
+          provisional: false,
+          sound: true,
+        ).timeout(const Duration(seconds: 4));
+        debugPrint('User granted push permission: ${settings.authorizationStatus}');
+      } catch (e) {
+        debugPrint('PushNotificationService permission check timed out or failed: $e');
+      }
 
-    debugPrint('User granted permission: ${settings.authorizationStatus}');
+      // 3. Create high importance Android notification channel
+      if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+        const AndroidNotificationChannel channel = AndroidNotificationChannel(
+          highImportanceChannelId,
+          'TallyCare High Importance Notifications',
+          description: 'This channel is used for important notifications.',
+          importance: Importance.max,
+          playSound: true,
+          enableVibration: true,
+        );
 
-    if (settings.authorizationStatus == AuthorizationStatus.authorized ||
-        settings.authorizationStatus == AuthorizationStatus.provisional) {
-      
-      // Update token to supabase on first initialization
-      await saveTokenToSupabase();
+        final flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
+        await flutterLocalNotificationsPlugin
+            .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+            ?.createNotificationChannel(channel);
+      }
 
-      // Listen for token refresh
+      // 4. Update token to supabase
+      unawaited(saveTokenToSupabase());
+
+      // 5. Listen for token refresh
       _fcm.onTokenRefresh.listen((fcmToken) {
         _updateTokenInSupabase(fcmToken);
       }).onError((err) {
-        debugPrint("Error getting FCM token: $err");
+        debugPrint("Error getting FCM token on refresh: $err");
       });
 
-      // Handle foreground messages
+      // 6. Handle foreground messages by popping a local notification
       FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-        debugPrint('Got a message whilst in the foreground!');
-        debugPrint('Message data: ${message.data}');
-
-        if (message.notification != null) {
-          debugPrint('Message also contained a notification: ${message.notification}');
-          // Note: If you want to show a heads up notification while the app is in the foreground,
-          // you should use flutter_local_notifications plugin.
+        debugPrint('Got a message whilst in the foreground: ${message.messageId}');
+        final notification = message.notification;
+        if (notification != null) {
+          LocalNotificationService.showNotification(
+            id: message.hashCode,
+            title: notification.title ?? 'TallyCare Notification',
+            body: notification.body ?? '',
+            payload: message.data['link'],
+          );
         }
       });
+    } catch (e) {
+      debugPrint("PushNotificationService.init error: $e");
     }
 
     _initialized = true;
   }
 
-  /// Fetches the current FCM token and sends it to Supabase using our RPC function
-  Future<void> saveTokenToSupabase() async {
+  /// Fetches the current FCM token and sends it to Supabase for the active agent
+  Future<void> saveTokenToSupabase([String? agentId]) async {
     try {
-      // If we are not authenticated, we shouldn't save the token
-      if (_supabase.auth.currentUser == null) return;
+      String? targetAgentId = agentId;
+      if (targetAgentId == null) {
+        // Retrieve agent ID from SharedPreferences if not passed
+        final prefs = await SharedPreferences.getInstance();
+        final rawAgent = prefs.getString('auth.agent');
+        if (rawAgent != null && rawAgent.contains('"id"')) {
+          final match = RegExp(r'"id"\s*:\s*"([^"]+)"').firstMatch(rawAgent);
+          if (match != null) {
+            targetAgentId = match.group(1);
+          }
+        }
+      }
+
+      if (targetAgentId == null || targetAgentId.isEmpty) {
+        debugPrint("PushNotificationService: No agent ID available yet to associate FCM token.");
+        return;
+      }
 
       if (Firebase.apps.isNotEmpty) {
-        final fcmToken = await _fcm.getToken();
+        final fcmToken = await _fcm.getToken().timeout(
+          const Duration(seconds: 5),
+          onTimeout: () => null,
+        );
         if (fcmToken != null) {
-          await _updateTokenInSupabase(fcmToken);
+          await _updateTokenInSupabase(fcmToken, targetAgentId).timeout(
+            const Duration(seconds: 5),
+            onTimeout: () => null,
+          );
         }
       }
     } catch (e) {
@@ -92,31 +174,55 @@ class PushNotificationService {
     }
   }
 
-  Future<void> _updateTokenInSupabase(String token) async {
+  Future<void> _updateTokenInSupabase(String token, [String? agentId]) async {
     try {
-      if (_supabase.auth.currentUser == null) return;
+      String? targetAgentId = agentId;
+      if (targetAgentId == null) {
+        final prefs = await SharedPreferences.getInstance();
+        final rawAgent = prefs.getString('auth.agent');
+        if (rawAgent != null) {
+          final match = RegExp(r'"id"\s*:\s*"([^"]+)"').firstMatch(rawAgent);
+          if (match != null) targetAgentId = match.group(1);
+        }
+      }
 
-      // Call the RPC function we created in the migration
-      await _supabase.rpc('update_agent_fcm_token', params: {
-        'new_token': token
-      });
-      debugPrint("FCM token successfully saved to Supabase.");
+      if (targetAgentId == null) return;
+
+      // 1. Try RPC function with SECURITY DEFINER
+      try {
+        await _supabase.rpc('set_agent_fcm_token', params: {
+          'p_agent_id': targetAgentId,
+          'p_token': token,
+        });
+        debugPrint("FCM token successfully registered via RPC for agent $targetAgentId");
+        return;
+      } catch (rpcErr) {
+        debugPrint("RPC set_agent_fcm_token failed, trying direct update: $rpcErr");
+      }
+
+      // 2. Fallback to direct table update
+      await _supabase
+          .from('agents')
+          .update({'fcm_token': token})
+          .eq('id', targetAgentId);
+
+      debugPrint("FCM token successfully registered in Supabase for agent $targetAgentId");
     } catch (e) {
       debugPrint("Error updating FCM token in Supabase: $e");
     }
   }
 
-  Future<void> deleteToken() async {
+  Future<void> deleteToken([String? agentId]) async {
     try {
       if (Firebase.apps.isNotEmpty) {
         await _fcm.deleteToken();
       }
       
-      // Remove from supabase as well (pass null or empty string depending on db constraints)
-      if (_supabase.auth.currentUser != null) {
-        await _supabase.rpc('update_agent_fcm_token', params: {
-          'new_token': null
-        });
+      if (agentId != null) {
+        await _supabase
+            .from('agents')
+            .update({'fcm_token': null})
+            .eq('id', agentId);
       }
     } catch (e) {
       debugPrint("Error deleting FCM token: $e");

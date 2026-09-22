@@ -202,6 +202,7 @@ class AuthNotifier extends _$AuthNotifier {
       await _persistAgent(state!);
       await _updateLastSeen(state!.id);
       GlobalChatNotificationService.init(state!.id, ref);
+      PushNotificationService().saveTokenToSupabase(state!.id);
       return true;
     }
 
@@ -215,11 +216,12 @@ class AuthNotifier extends _$AuthNotifier {
   void logout() {
     // Clear the in-memory set of notified message IDs so the next user
     // doesn't inherit the previous user's notification history.
+    final currentAgentId = state?.id;
     ChatNewMessageEvent.resetSession();
     DmNewMessageEvent.resetSession();
     CustomChannelNewMessageEvent.resetSession();
     GlobalChatNotificationService.dispose();
-    PushNotificationService().deleteToken();
+    PushNotificationService().deleteToken(currentAgentId);
     state = null;
     _clearPersistedAgent();
     Supabase.instance.client.auth.signOut();
@@ -242,6 +244,7 @@ class AuthNotifier extends _$AuthNotifier {
       // Set state IMMEDIATELY so the app renders without lag!
       state = Agent.fromJson(decoded);
       GlobalChatNotificationService.init(state!.id, ref);
+      PushNotificationService().saveTokenToSupabase(state!.id);
       
       // Ensure Supabase Auth is restored as the generic agent so RLS policies pass
       // We run this in the background WITHOUT awaiting, so the app startup doesn't lag.
@@ -253,9 +256,7 @@ class AuthNotifier extends _$AuthNotifier {
           client.auth.signInWithPassword(
             email: 'agents@tallycare.local', 
             password: 'AgentShared#2026'
-          ).then((_) => PushNotificationService().saveTokenToSupabase());
-        } else {
-          PushNotificationService().saveTokenToSupabase();
+          ).then((_) => PushNotificationService().saveTokenToSupabase(state?.id));
         }
       } catch (e) {
         appLogger.error('Failed to restore Supabase Auth session', error: e);
