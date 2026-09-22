@@ -92,17 +92,8 @@ class _LoginPageState extends ConsumerState<LoginPage> {
         ),
         child: Stack(
           children: [
-            // Subtle pattern overlay (offline-safe custom painter)
-            Positioned.fill(
-              child: Opacity(
-                opacity: 0.06,
-                child: RepaintBoundary(
-                  child: CustomPaint(
-                    painter: _LoginPatternPainter(),
-                  ),
-                ),
-              ),
-            ),
+            // Subtle pattern overlay removed for performance
+
             // Main content
             Center(
               child: SingleChildScrollView(
@@ -141,6 +132,8 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                                 'assets/company_logo.png',
                                 width: 130,
                                 height: 130,
+                                cacheWidth: 260,
+                                cacheHeight: 260,
                               ),
                               const SizedBox(height: 28),
 

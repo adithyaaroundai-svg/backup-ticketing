@@ -62,13 +62,27 @@ import 'package:ticketing_system/core/services/push_notification_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await dotenv.load(fileName: ".env");
+  try {
+    await dotenv.load(fileName: ".env");
+  } catch (e) {
+    debugPrint("Could not load .env file: $e");
+  }
+  
   await LocalNotificationService.init();
 
   await Hive.initFlutter();
   Hive.registerAdapter(HiveChatMessageAdapter());
-  await Hive.openBox<HiveChatMessage>('chat_messages_cache');
-  await Hive.openBox<String>('chat_cache_meta');
+  
+  try {
+    await Hive.openBox<HiveChatMessage>('chat_messages_cache');
+    await Hive.openBox<String>('chat_cache_meta');
+  } catch (e) {
+    debugPrint("Hive cache corrupted, deleting and recreating: $e");
+    await Hive.deleteBoxFromDisk('chat_messages_cache');
+    await Hive.deleteBoxFromDisk('chat_cache_meta');
+    await Hive.openBox<HiveChatMessage>('chat_messages_cache');
+    await Hive.openBox<String>('chat_cache_meta');
+  }
 
   // Initialize Supabase
   await Supabase.initialize(
