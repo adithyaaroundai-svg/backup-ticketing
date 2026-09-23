@@ -8,6 +8,7 @@ import '../providers/lead_provider.dart';
 import '../../domain/entities/lead.dart';
 import '../widgets/edit_lead_dialog.dart';
 import '../widgets/follow_up_sidebar.dart';
+import '../../../auth/presentation/providers/auth_provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class LeadsPage extends ConsumerStatefulWidget {
@@ -802,7 +803,7 @@ class _DetailRow extends StatelessWidget {
   }
 }
 
-class _LeadCard extends StatefulWidget {
+class _LeadCard extends ConsumerStatefulWidget {
   final Lead lead;
   final Color color;
   final void Function(String) onStageChange;
@@ -818,14 +819,21 @@ class _LeadCard extends StatefulWidget {
   });
 
   @override
-  State<_LeadCard> createState() => _LeadCardState();
+  ConsumerState<_LeadCard> createState() => _LeadCardState();
 }
 
-class _LeadCardState extends State<_LeadCard> {
+class _LeadCardState extends ConsumerState<_LeadCard> {
   bool isWhatsAppChecked = false;
 
   @override
   Widget build(BuildContext context) {
+    final currentUser = ref.watch(authProvider);
+    final isMarketingAI = currentUser?.isMarketingAI ?? false;
+
+    final String currentStatus = widget.lead.status == 'pending' || widget.lead.status == 'New' ? 'New Lead' : (widget.lead.status ?? 'New Lead');
+    const pipelineStages = ['New Lead', 'Contacted', 'Qualified', 'Negotiation'];
+    final int stageIndex = pipelineStages.indexOf(currentStatus);
+
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
@@ -851,7 +859,7 @@ class _LeadCardState extends State<_LeadCard> {
         color: Colors.transparent,
         child: InkWell(
           borderRadius: BorderRadius.circular(8),
-          onTap: () {
+          onTap: isMarketingAI ? null : () {
             _showLeadDetailsPopup(context);
           },
           child: Padding(
@@ -870,7 +878,7 @@ class _LeadCardState extends State<_LeadCard> {
                         maxLines: 2, overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 4),
                     // WhatsApp Checkbox Pill
                     InkWell(
                       onTap: () {
@@ -939,6 +947,44 @@ class _LeadCardState extends State<_LeadCard> {
                     maxLines: 1, overflow: TextOverflow.ellipsis,
                   ),
                 ],
+                if ((isMarketingAI && widget.lead.phoneNumber != null && widget.lead.phoneNumber!.isNotEmpty) || stageIndex >= 0) ...[
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      if (isMarketingAI && widget.lead.phoneNumber != null && widget.lead.phoneNumber!.isNotEmpty) ...[
+                        Icon(LucideIcons.phone, size: 12, color: context.adaptiveSlate400),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            widget.lead.phoneNumber!,
+                            style: TextStyle(fontSize: 12, color: context.adaptiveSlate600, fontWeight: FontWeight.w500),
+                            maxLines: 1, overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ] else ...[
+                        const Spacer(),
+                      ],
+                      if (stageIndex >= 0) ...[
+                        if (stageIndex > 0)
+                          InkWell(
+                            onTap: () => widget.onStageChange(pipelineStages[stageIndex - 1]),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              child: Icon(LucideIcons.arrowLeft, size: 15, color: context.adaptiveSlate500),
+                            ),
+                          ),
+                        if (stageIndex < pipelineStages.length - 1)
+                          InkWell(
+                            onTap: () => widget.onStageChange(pipelineStages[stageIndex + 1]),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              child: Icon(LucideIcons.arrowRight, size: 15, color: context.adaptiveSlate500),
+                            ),
+                          ),
+                      ],
+                    ],
+                  ),
+                ],
               ],
             ),
           ),
@@ -982,65 +1028,6 @@ class _LeadCardState extends State<_LeadCard> {
                           Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              // WhatsApp Checkbox Pill
-                              InkWell(
-                                onTap: () {
-                                  setDialogState(() {
-                                    isWhatsAppChecked = !isWhatsAppChecked;
-                                  });
-                                },
-                                borderRadius: BorderRadius.circular(8),
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                                  decoration: BoxDecoration(
-                                    color: context.isDarkMode
-                                        ? Colors.white.withValues(alpha: 0.07)
-                                        : const Color(0xFFF1F5F9),
-                                    borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(
-                                      color: context.isDarkMode
-                                          ? Colors.white.withValues(alpha: 0.15)
-                                          : const Color(0xFFE2E8F0),
-                                    ),
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      SizedBox(
-                                        width: 18,
-                                        height: 18,
-                                        child: Checkbox(
-                                          value: isWhatsAppChecked,
-                                          activeColor: const Color(0xFF25D366),
-                                          checkColor: Colors.white,
-                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-                                          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                          visualDensity: VisualDensity.compact,
-                                          onChanged: (val) {
-                                            setDialogState(() {
-                                              isWhatsAppChecked = val ?? false;
-                                            });
-                                          },
-                                        ),
-                                      ),
-                                      const SizedBox(width: 5),
-                                      Container(
-                                        padding: const EdgeInsets.all(3),
-                                        decoration: const BoxDecoration(
-                                          color: Color(0xFF25D366),
-                                          shape: BoxShape.circle,
-                                        ),
-                                        child: const Icon(
-                                          LucideIcons.messageCircle,
-                                          size: 13,
-                                          color: Colors.white,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                 decoration: BoxDecoration(

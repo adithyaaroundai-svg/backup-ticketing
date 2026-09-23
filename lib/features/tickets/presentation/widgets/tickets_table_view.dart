@@ -384,6 +384,10 @@ class _TicketsTableViewState extends ConsumerState<TicketsTableView> {
       filteredTickets = filteredTickets.where((t) => !isCompleted(t.status) && !isCancelled(t.status)).toList();
     }
 
+    if (dropdownValue != null) {
+      filteredTickets = filteredTickets.where((t) => t.assignedTo == dropdownValue).toList();
+    }
+
     if (_searchQuery.isNotEmpty) {
       final query = _searchQuery.toLowerCase();
       filteredTickets = filteredTickets.where((ticket) {
@@ -777,7 +781,7 @@ class _TicketsTableViewState extends ConsumerState<TicketsTableView> {
                                                         border: OutlineInputBorder(),
                                                         contentPadding: EdgeInsets.symmetric(horizontal: 4, vertical: 4),
                                                       ),
-                                                      items: ['Open', 'InProgress', 'Paused', 'CallBack', 'WontPay', 'Resolved', 'Cancelled', 'Closed'].map((s) {
+                                                      items: ['Open', 'InProgress', 'Paused', 'CallBack', 'CallNotAttended', 'WontPay', 'Resolved', 'Cancelled', 'Closed'].map((s) {
                                                         return DropdownMenuItem(value: s, child: Text(s, style: TextStyle(fontSize: 11)));
                                                       }).toList(),
                                                       onChanged: (v) => setState(() => _newStatus = v ?? 'Open'),
@@ -1359,7 +1363,7 @@ class _TicketsTableViewState extends ConsumerState<TicketsTableView> {
                   isExpanded: true,
                   initialValue: _newStatus,
                   decoration: const InputDecoration(labelText: 'Status', border: OutlineInputBorder(), contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8)),
-                  items: ['Open', 'InProgress', 'Paused', 'CallBack', 'WontPay', 'Resolved', 'Cancelled', 'Closed'].map((s) {
+                  items: ['Open', 'InProgress', 'Paused', 'CallBack', 'CallNotAttended', 'WontPay', 'Resolved', 'Cancelled', 'Closed'].map((s) {
                     return DropdownMenuItem(value: s, child: Text(s, style: TextStyle(fontSize: 12)));
                   }).toList(),
                   onChanged: (v) => setState(() => _newStatus = v ?? 'Open'),
@@ -1949,26 +1953,28 @@ class _TicketTableRowState extends ConsumerState<TicketTableRow> {
                       final isAccountant = currentUser?.role?.toString().toLowerCase() == 'accountant';
                       final allowedStatuses = isAccountant 
                           ? ['BillProcessed', 'Closed'] 
-                          : ['New', 'Open', 'InProgress', 'Paused', 'CallBack', 'WontPay', 'Resolved', 'Cancelled', 'Closed', 'BillRaised', 'BillProcessed'];
+                          : ['New', 'Open', 'InProgress', 'Paused', 'CallBack', 'CallNotAttended', 'WontPay', 'Resolved', 'Cancelled', 'Closed', 'BillRaised', 'BillProcessed'];
                           
                       final currentStatus = allowedStatuses.contains(ticket.status) ? ticket.status : ticket.status;
                       
                       return DropdownButton<String>(
                         value: currentStatus,
+                        isExpanded: true,
                         items: [
                           if (!isAccountant) ...[
-                            DropdownMenuItem(value: 'New', child: Text('New')),
-                            DropdownMenuItem(value: 'Open', child: Text('Open')),
-                            DropdownMenuItem(value: 'InProgress', child: Text('In Progress')),
-                            DropdownMenuItem(value: 'Paused', child: Text('Paused')),
-                            DropdownMenuItem(value: 'CallBack', child: Text('Call Back')),
-                            DropdownMenuItem(value: 'WontPay', child: Text("Won't Pay")),
-                            DropdownMenuItem(value: 'Resolved', child: Text('Resolved')),
-                            DropdownMenuItem(value: 'Cancelled', child: Text('Cancelled')),
-                            DropdownMenuItem(value: 'BillRaised', child: Text('Bill Raised')),
+                            DropdownMenuItem(value: 'New', child: Text('New', overflow: TextOverflow.ellipsis)),
+                            DropdownMenuItem(value: 'Open', child: Text('Open', overflow: TextOverflow.ellipsis)),
+                            DropdownMenuItem(value: 'InProgress', child: Text('In Progress', overflow: TextOverflow.ellipsis)),
+                            DropdownMenuItem(value: 'Paused', child: Text('Paused', overflow: TextOverflow.ellipsis)),
+                            DropdownMenuItem(value: 'CallBack', child: Text('Call Back', overflow: TextOverflow.ellipsis)),
+                            DropdownMenuItem(value: 'CallNotAttended', child: Text('Call Not Attended', overflow: TextOverflow.ellipsis)),
+                            DropdownMenuItem(value: 'WontPay', child: Text("Won't Pay", overflow: TextOverflow.ellipsis)),
+                            DropdownMenuItem(value: 'Resolved', child: Text('Resolved', overflow: TextOverflow.ellipsis)),
+                            DropdownMenuItem(value: 'Cancelled', child: Text('Cancelled', overflow: TextOverflow.ellipsis)),
+                            DropdownMenuItem(value: 'BillRaised', child: Text('Bill Raised', overflow: TextOverflow.ellipsis)),
                           ],
-                          DropdownMenuItem(value: 'BillProcessed', child: Text('Billed')),
-                          DropdownMenuItem(value: 'Closed', child: Text('Closed')),
+                          DropdownMenuItem(value: 'BillProcessed', child: Text('Billed', overflow: TextOverflow.ellipsis)),
+                          DropdownMenuItem(value: 'Closed', child: Text('Closed', overflow: TextOverflow.ellipsis)),
                           if (!allowedStatuses.contains(ticket.status))
                             DropdownMenuItem(value: ticket.status, child: Text(ticket.status)),
                         ],
@@ -2742,6 +2748,12 @@ class _TicketTableRowState extends ConsumerState<TicketTableRow> {
       case "won't pay":
         textColor = isDark ? Colors.orange.shade300 : const Color(0xFFEA580C);
         displayText = "Won't Pay";
+        break;
+      case 'callnotattended':
+      case 'call_not_attended':
+      case 'call not attended':
+        textColor = isDark ? Colors.orange.shade300 : const Color(0xFFEA580C);
+        displayText = "Call Not Attended";
         break;
       case 'closed':
         textColor = isDark ? AppColors.slate300 : AppColors.slate600;

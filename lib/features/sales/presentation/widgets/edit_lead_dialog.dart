@@ -63,6 +63,8 @@ class _EditLeadDialogState extends ConsumerState<EditLeadDialog> {
     'STP',
     'Existing Customer',
     'Other Customer referral',
+    'Whatsapp Marketing',
+    'Email Marketing',
     'Other',
   ];
 
@@ -535,6 +537,10 @@ class _EditLeadDialogState extends ConsumerState<EditLeadDialog> {
 
                                   if (!ownerOptions.contains('Admin')) {
                                     ownerOptions.add('Admin');
+                                  }
+                                  
+                                  if (!ownerOptions.contains('Marketing AI')) {
+                                    ownerOptions.add('Marketing AI');
                                   }
 
                                   return DropdownButtonFormField<String>(

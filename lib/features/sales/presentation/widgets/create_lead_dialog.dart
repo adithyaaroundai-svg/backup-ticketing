@@ -57,6 +57,8 @@ class _CreateLeadDialogState extends ConsumerState<CreateLeadDialog> {
     'STP',
     'Existing Customer',
     'Other Customer referral',
+    'Whatsapp Marketing',
+    'Email Marketing',
     'Other',
   ];
 
@@ -438,6 +440,9 @@ class _CreateLeadDialogState extends ConsumerState<CreateLeadDialog> {
                                     
                                     if (!ownerOptions.contains('Admin')) {
                                       ownerOptions.add('Admin');
+                                    }
+                                    if (!ownerOptions.contains('Marketing AI')) {
+                                      ownerOptions.add('Marketing AI');
                                     }
                                     return DropdownButtonFormField<String>(
                                       value: _selectedOwner,

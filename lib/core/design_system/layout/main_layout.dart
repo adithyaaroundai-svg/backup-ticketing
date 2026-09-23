@@ -650,37 +650,30 @@ class _TopNav extends ConsumerWidget {
           badgeCount: unreadCount,
         ),
 
-        if (!isRestrictedAgent)
+        if (!isRestrictedAgent && currentUser?.isSoftwareDeveloper != true)
           _TopNavItem(
-            label: currentUser?.isSoftwareDeveloper == true
-                ? 'Project Tracker'
-                : (showBillsAsDashboard
-                    ? 'Bills'
-                    : (isSales
-                          ? 'Dashboard'
-                          : (showClaimTicketsLabel ? 'Tickets' : 'Dashboard'))),
-            icon: currentUser?.isSoftwareDeveloper == true
-                ? LucideIcons.layoutTemplate
-                : (showBillsAsDashboard
-                    ? LucideIcons.receipt
-                    : (showClaimTicketsLabel
-                          ? LucideIcons.ticket
-                          : LucideIcons.layoutDashboard)),
-            path: currentUser?.isSoftwareDeveloper == true
-                ? '/developer-crm'
-                : (showBillsAsDashboard
-                    ? '/accountant'
-                    : (isSales
-                          ? '/sales'
-                          : (currentUser?.isSupport == true ||
-                                    currentUser?.isHR == true ||
-                                    currentUser?.isProjectCoordinator == true
-                                ? '/support'
-                                : '/dashboard'))),
+            label: showBillsAsDashboard
+                ? 'Bills'
+                : (isSales
+                      ? 'Dashboard'
+                      : (showClaimTicketsLabel ? 'Tickets' : 'Dashboard')),
+            icon: showBillsAsDashboard
+                ? LucideIcons.receipt
+                : (showClaimTicketsLabel
+                      ? LucideIcons.ticket
+                      : LucideIcons.layoutDashboard),
+            path: showBillsAsDashboard
+                ? '/accountant'
+                : (isSales
+                      ? '/sales'
+                      : (currentUser?.isSupport == true ||
+                                currentUser?.isHR == true ||
+                                currentUser?.isProjectCoordinator == true
+                            ? '/support'
+                            : '/dashboard')),
             isActive:
                 currentPath == '/' ||
                 currentPath == '/dashboard' ||
-                currentPath == '/developer-crm' ||
                 currentPath == '/admin' ||
                 currentPath == '/accountant' ||
                 currentPath == '/sales' ||
@@ -4060,8 +4053,8 @@ class _TicketTile extends ConsumerWidget {
     } else if (status == 'CallBack' || status == 'Call Back') {
       badgeLabel = 'Call Back';
       badgeColor = const Color(0xFFEA580C);
-    } else if (status == 'WontPay' || status == "Won't Pay") {
-      badgeLabel = "Won't Pay";
+    } else if (status == 'WontPay' || status == "Won't Pay" || status == 'CallNotAttended' || status == 'Call Not Attended') {
+      badgeLabel = status == 'CallNotAttended' || status == 'Call Not Attended' ? "Call Not Attended" : "Won't Pay";
       badgeColor = const Color(0xFFEA580C);
     } else if (status == 'BillProcessed' || status == 'BillRaised') {
       badgeLabel = 'Billed';
@@ -4084,7 +4077,9 @@ class _TicketTile extends ConsumerWidget {
         status == 'CallBack' ||
         status == 'Call Back' ||
         status == 'WontPay' ||
-        status == "Won't Pay") {
+        status == "Won't Pay" ||
+        status == 'CallNotAttended' ||
+        status == 'Call Not Attended') {
       cardColor = const Color(0xFFEA580C).withValues(alpha: 0.08);
       cardBorderColor = const Color(0xFFEA580C).withValues(alpha: 0.35);
     } else if (status == 'BillProcessed' || status == 'BillRaised') {

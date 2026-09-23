@@ -2271,6 +2271,9 @@ class _ChatBubbleState extends ConsumerState<_ChatBubble> {
       case 'wontpay':
       case "won't pay":
         return "Won't Pay";
+      case 'callnotattended':
+      case 'call not attended':
+        return "Call Not Attended";
       case 'waitingforcustomer':
       case 'waiting':
         return 'Waiting';

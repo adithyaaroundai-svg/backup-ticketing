@@ -861,6 +861,16 @@ class _TicketCardWithAmcBody extends ConsumerWidget {
       );
     }
 
+    if (normalized == 'callnotattended' || normalized == 'call_not_attended' || normalized == "call not attended") {
+      return _buildInfoPill(
+        icon: LucideIcons.phoneOff,
+        label: "Call Not Attended",
+        iconColor: context.isDarkMode ? Colors.orange.shade300 : const Color(0xFFEA580C),
+        textColor: context.isDarkMode ? Colors.orange.shade300 : const Color(0xFFEA580C),
+        backgroundColor: context.isDarkMode ? Colors.orange.shade300.withValues(alpha: 0.12) : const Color(0xFFEA580C).withValues(alpha: 0.12),
+      );
+    }
+
     if (!isUnassigned) {
       String label = 'Claimed';
       if (isMyTicket) {

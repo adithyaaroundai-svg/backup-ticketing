@@ -337,10 +337,9 @@ class _SupportDashboardPageState extends ConsumerState<SupportDashboardPage> {
   }
 
   Widget _buildTopActions(BuildContext context, WidgetRef ref) {
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      crossAxisAlignment: WrapCrossAlignment.center,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      mainAxisSize: MainAxisSize.min,
       children: [
         Row(
           mainAxisSize: MainAxisSize.min,
@@ -368,6 +367,7 @@ class _SupportDashboardPageState extends ConsumerState<SupportDashboardPage> {
               ),
           ],
         ),
+        const SizedBox(height: 8),
         if (!_isRestrictedAgent)
           OutlinedButton.icon(
             icon: const Icon(LucideIcons.hourglass, size: 14),
@@ -377,6 +377,7 @@ class _SupportDashboardPageState extends ConsumerState<SupportDashboardPage> {
               foregroundColor: Theme.of(context).brightness == Brightness.dark ? Colors.white : null,
             ),
           ),
+        const SizedBox(height: 8),
         if (!_isRestrictedAgent)
           OutlinedButton.icon(
             icon: const Icon(LucideIcons.alertTriangle, size: 14),
@@ -386,6 +387,7 @@ class _SupportDashboardPageState extends ConsumerState<SupportDashboardPage> {
               foregroundColor: Theme.of(context).brightness == Brightness.dark ? Colors.white : null,
             ),
           ),
+        const SizedBox(height: 8),
         IconButton(
           icon: const Icon(Icons.refresh, size: 20),
           onPressed: () => ref.invalidate(rawTicketsStreamProvider),

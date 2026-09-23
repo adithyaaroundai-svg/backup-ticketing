@@ -1022,6 +1022,32 @@ class _TicketDetailPageState extends ConsumerState<TicketDetailPage> {
                             );
                           },
                         ),
+                        _SubStatusButton(
+                          label: "Call Not Attended",
+                          icon: LucideIcons.phoneOff,
+                          color: const Color(0xFFEA580C),
+                          active: ticket.status == 'CallNotAttended',
+                          onTap: () async {
+                            final newStatus =
+                                ticket.status == 'CallNotAttended' ? 'In Progress' : 'CallNotAttended';
+                            final error = await ref
+                                .read(ticketStatusUpdaterProvider.notifier)
+                                .updateStatus(ticket.ticketId, newStatus);
+                            if (!mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(error == null
+                                    ? (newStatus == 'CallNotAttended'
+                                        ? "Marked as Call Not Attended"
+                                        : "Cleared Call Not Attended")
+                                    : 'Failed: $error'),
+                                backgroundColor: error == null
+                                    ? AppColors.success
+                                    : AppColors.error,
+                              ),
+                            );
+                          },
+                        ),
                       ],
                     ),
 
@@ -1556,14 +1582,14 @@ class _TicketDetailPageState extends ConsumerState<TicketDetailPage> {
       variant = StatusVariant.warning;
     } else if (status == 'CallBack') {
       variant = StatusVariant.warning;
-    } else if (status == 'WontPay') {
+    } else if (status == 'WontPay' || status == 'CallNotAttended') {
       variant = StatusVariant.warning;
     } else if (status.contains('Resolved')) {
       variant = StatusVariant.success;
     } else {
       variant = StatusVariant.neutral;
     }
-    final label = status == 'CallBack' ? 'Call Back' : status == 'WontPay' ? "Won't Pay" : status;
+    final label = status == 'CallBack' ? 'Call Back' : status == 'WontPay' ? "Won't Pay" : status == 'CallNotAttended' ? "Call Not Attended" : status;
     return StatusBadge(label: label, variant: variant);
   }
 

@@ -735,6 +735,7 @@ class _TicketCard extends StatelessWidget {
   static String _formatStatus(String status) {
     if (status == 'WontPay' || status == "Won't Pay") return "Won't Pay";
     if (status == 'CallBack' || status == "Call Back") return "Call Back";
+    if (status == 'CallNotAttended' || status == "Call Not Attended") return "Call Not Attended";
     return status.replaceAllMapped(
       RegExp(r'([a-z])([A-Z])'),
       (match) => '${match.group(1)} ${match.group(2)}',
@@ -762,6 +763,8 @@ class _TicketCard extends StatelessWidget {
       case 'CallBack':
         return const Color(0xFFEA580C);
       case 'WontPay':
+        return const Color(0xFFEA580C);
+      case 'CallNotAttended':
         return const Color(0xFFEA580C);
       default:
         return context.adaptiveSlate500;
