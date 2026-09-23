@@ -15,6 +15,7 @@ import 'package:flutter_linkify/flutter_linkify.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:intl/intl.dart';
+import 'dart:ui';
 
 import '../../../../core/design_system/design_system.dart';
 import '../../../tickets/presentation/providers/ticket_provider.dart';
@@ -79,6 +80,69 @@ final devTasksMapStreamProvider = StreamProvider<Map<int, Map<String, dynamic>>>
         event: PostgresChangeEvent.all,
         schema: 'aroundtally',
         table: 'tasks',
+        callback: (_) => fetch(),
+      )
+      .subscribe();
+
+  controller.onCancel = () => supabase.removeChannel(channel);
+  return controller.stream;
+});
+
+final softwareDevPendingTasksProvider = StreamProvider<Map<String, List<Map<String, dynamic>>>>((ref) {
+  final supabase = Supabase.instance.client;
+  final controller = StreamController<Map<String, List<Map<String, dynamic>>>>.broadcast();
+
+  Future<void> fetch() async {
+    try {
+      final data = await supabase
+          .schema('aroundtally')
+          .from('tasks')
+          .select('''
+            id, status, description, priority,
+            clients (name),
+            task_assignees (
+              users (name)
+            )
+          ''')
+          .neq('status', 'completed')
+          .neq('status', 'cancelled');
+          
+      // Parse data and group by agent
+      final grouped = <String, List<Map<String, dynamic>>>{};
+      for (final row in (data as List)) {
+        final taskAssignees = row['task_assignees'] as List?;
+        if (taskAssignees == null || taskAssignees.isEmpty) {
+          grouped.putIfAbsent('Unassigned', () => []).add(row);
+        } else {
+          for (final a in taskAssignees) {
+            final users = a['users'];
+            final name = (users != null && users['name'] != null) ? users['name'] : 'Unknown Agent';
+            if (name != 'Anil') {
+              grouped.putIfAbsent(name, () => []).add(row);
+            }
+          }
+        }
+      }
+      if (!controller.isClosed) controller.add(grouped);
+    } catch (e) {
+      if (!controller.isClosed) controller.addError(e);
+    }
+  }
+
+  fetch();
+
+  final channel = supabase
+      .channel('realtime_aroundtally_software_dev_tasks')
+      .onPostgresChanges(
+        event: PostgresChangeEvent.all,
+        schema: 'aroundtally',
+        table: 'tasks',
+        callback: (_) => fetch(),
+      )
+      .onPostgresChanges(
+        event: PostgresChangeEvent.all,
+        schema: 'aroundtally',
+        table: 'task_assignees',
         callback: (_) => fetch(),
       )
       .subscribe();
@@ -1430,14 +1494,57 @@ class _CustomChannelChatPageState extends ConsumerState<CustomChannelChatPage> {
                 ),
               ),
               const SizedBox(width: 8),
+              if (channel!.name.toLowerCase().contains('software') || 
+                  channel!.name.toLowerCase().contains('development') ||
+                  channel!.name.toLowerCase().contains('dev')) ...[
+                if (isMobileLayout)
+                  Tooltip(
+                    message: 'Pending Tasks',
+                    child: InkWell(
+                      onTap: () {
+                        showModalBottomSheet(
+                          context: context,
+                          isScrollControlled: true,
+                          backgroundColor: Colors.transparent,
+                          builder: (context) => ClipRRect(
+                            borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                            child: SizedBox(
+                              height: MediaQuery.of(context).size.height * 0.8,
+                              child: const _SoftwareDevTasksSidebar(),
+                            ),
+                          ),
+                        );
+                      },
+                      borderRadius: BorderRadius.circular(8),
+                      child: Container(
+                        margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: context.isDarkMode ? Colors.blue.withAlpha(40) : Colors.blue.shade50,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: context.isDarkMode ? Colors.blue.withAlpha(80) : Colors.blue.shade200),
+                        ),
+                        child: Icon(LucideIcons.listTodo, size: 18, color: Colors.blue.shade700),
+                      ),
+                    ),
+                  ),
+                if (isMobileLayout)
+                  const SizedBox(width: 4),
+              ],
             ]
           ],
         ),
-        body: Stack(
-          children: [
-            Column(
-              children: [
-                Expanded(
+        body: (() {
+          final isSoftwareDevChannel = channel != null && 
+              (channel.name.toLowerCase().contains('software') || 
+               channel.name.toLowerCase().contains('development') || 
+               channel.name.toLowerCase().contains('dev'));
+               
+          final chatContent = Stack(
+            children: [
+              Column(
+                children: [
+                  Expanded(
                   child: messagesAsync.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
                 data: (messages) {
                   _markVisibleMessagesRead(messages);
@@ -1961,9 +2068,27 @@ class _CustomChannelChatPageState extends ConsumerState<CustomChannelChatPage> {
         ),
         ChatDropOverlay(isVisible: _isDragging),
       ],
-    ),
-  ),
-);
+    );
+
+    if (isSoftwareDevChannel && !isMobileLayout) {
+      return Row(
+        children: [
+          Expanded(
+            flex: 6,
+            child: chatContent,
+          ),
+          const Expanded(
+            flex: 4,
+            child: _SoftwareDevTasksSidebar(),
+          ),
+        ],
+      );
+    }
+    
+    return chatContent;
+  })(),
+      ),
+    );
   }
 }
 
@@ -3306,6 +3431,316 @@ class _DateHeader extends StatelessWidget {
             ),
           ),
           Expanded(child: Divider(color: Colors.grey.shade300)),
+        ],
+      ),
+    );
+  }
+}
+
+class _SoftwareDevTasksSidebar extends ConsumerWidget {
+  const _SoftwareDevTasksSidebar({Key? key}) : super(key: key);
+
+  Color _getPriorityColor(String priority) {
+    switch (priority.toLowerCase()) {
+      case 'high':
+        return Colors.red;
+      case 'medium':
+        return Colors.orange;
+      case 'low':
+        return Colors.green;
+      default:
+        return Colors.grey;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final tasksAsync = ref.watch(softwareDevPendingTasksProvider);
+
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: context.isDarkMode 
+              ? [const Color(0xFF0F172A), const Color(0xFF1E1B4B)]
+              : [const Color(0xFFF0F9FF), const Color(0xFFEEF2FF)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        border: Border(
+          left: BorderSide(
+            color: Theme.of(context).dividerColor,
+            width: 1,
+          ),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: context.isDarkMode
+                    ? [const Color(0xFF1E293B), const Color(0xFF0F172A)]
+                    : [const Color(0xFFF8FAFC), const Color(0xFFF1F5F9)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              border: Border(
+                bottom: BorderSide(
+                  color: Theme.of(context).dividerColor,
+                  width: 1,
+                ),
+              ),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(LucideIcons.layoutDashboard, size: 20, color: AppColors.primary),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  'Pending Dev Tasks',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 18,
+                    letterSpacing: -0.5,
+                    color: context.adaptiveSlate900,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: tasksAsync.when(
+              data: (groupedTasks) {
+                if (groupedTasks.isEmpty) {
+                  return Center(
+                    child: Text(
+                      'No pending tasks',
+                      style: TextStyle(color: context.adaptiveSlate400),
+                    ),
+                  );
+                }
+
+                // Sort agents alphabetically, but put Archana first, Unassigned at the end
+                final agents = groupedTasks.keys.toList()..sort((a, b) {
+                  if (a == 'Archana') return -1;
+                  if (b == 'Archana') return 1;
+                  if (a == 'Unassigned') return 1;
+                  if (b == 'Unassigned') return -1;
+                  return a.compareTo(b);
+                });
+
+                return ListView.builder(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: agents.length,
+                  itemBuilder: (context, index) {
+                    final agent = agents[index];
+                    final tasks = groupedTasks[agent]!;
+                    
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Padding(
+                          padding: EdgeInsets.only(bottom: 16, top: index == 0 ? 0 : 28),
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(2),
+                                decoration: const BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  gradient: LinearGradient(
+                                    colors: [Colors.indigo, Colors.purple],
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                  ),
+                                ),
+                                child: CircleAvatar(
+                                  radius: 14,
+                                  backgroundColor: context.isDarkMode ? Colors.indigo.shade900 : Colors.white,
+                                  child: Text(
+                                    agent.substring(0, 1).toUpperCase(),
+                                    style: TextStyle(
+                                      fontSize: 12, 
+                                      color: context.isDarkMode ? Colors.indigo.shade300 : Colors.indigo.shade700, 
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Text(
+                                agent,
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 15,
+                                  color: context.adaptiveSlate900,
+                                  letterSpacing: 0.2,
+                                ),
+                              ),
+                              const Spacer(),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    colors: context.isDarkMode
+                                      ? [Colors.blue.shade900.withOpacity(0.5), Colors.indigo.shade900.withOpacity(0.5)]
+                                      : [Colors.blue.shade50, Colors.indigo.shade50],
+                                  ),
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(color: context.isDarkMode ? Colors.indigo.shade800 : Colors.indigo.shade100),
+                                ),
+                                child: Text(
+                                  '${tasks.length} pending',
+                                  style: TextStyle(
+                                    fontSize: 11, 
+                                    color: context.isDarkMode ? Colors.indigo.shade200 : Colors.indigo.shade700, 
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        ...tasks.map((task) {
+                          final clientName = (task['clients'] as Map?)?['name'] ?? 'No Client';
+                          final priority = task['priority']?.toString() ?? 'Normal';
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: InkWell(
+                              onTap: () {
+                                final taskId = task['id'];
+                                if (taskId != null) {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => Scaffold(
+                                        appBar: AppBar(title: const Text('Edit Task')),
+                                        body: TaskEditScreen(taskId: int.parse(taskId.toString())),
+                                      ),
+                                    ),
+                                  );
+                                }
+                              },
+                              borderRadius: BorderRadius.circular(12),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(12),
+                                child: BackdropFilter(
+                                  filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                                  child: Container(
+                                    padding: const EdgeInsets.all(16),
+                                    decoration: BoxDecoration(
+                                      color: context.isDarkMode ? Colors.white.withOpacity(0.05) : Colors.white.withOpacity(0.6),
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(color: context.isDarkMode ? Colors.white.withOpacity(0.1) : Colors.white.withOpacity(0.8)),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.black.withOpacity(0.05),
+                                          blurRadius: 10,
+                                          offset: const Offset(0, 4),
+                                        ),
+                                      ],
+                                    ),
+                                    child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Icon(LucideIcons.building2, size: 12, color: context.adaptiveSlate400),
+                                        const SizedBox(width: 4),
+                                        Expanded(
+                                          child: Text(
+                                            clientName,
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w600,
+                                              color: context.adaptiveSlate500,
+                                              letterSpacing: 0.2,
+                                            ),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                          decoration: BoxDecoration(
+                                            color: _getPriorityColor(priority).withOpacity(0.1),
+                                            borderRadius: BorderRadius.circular(12),
+                                            border: Border.all(color: _getPriorityColor(priority).withOpacity(0.2)),
+                                          ),
+                                          child: Text(
+                                            priority.toUpperCase(),
+                                            style: TextStyle(
+                                              fontSize: 9,
+                                              fontWeight: FontWeight.w800,
+                                              color: _getPriorityColor(priority),
+                                              letterSpacing: 0.5,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 10),
+                                    Text(
+                                      task['description'] ?? 'No description provided.',
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w500,
+                                        color: context.adaptiveSlate900,
+                                        height: 1.4,
+                                      ),
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    const SizedBox(height: 12),
+                                    Row(
+                                      children: [
+                                        Icon(LucideIcons.hash, size: 14, color: context.adaptiveSlate400),
+                                        const SizedBox(width: 2),
+                                        Text(
+                                          '${task['id']} • ',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w600,
+                                            color: context.adaptiveSlate500,
+                                          ),
+                                        ),
+                                        Text(
+                                          task['status']?.toString().toUpperCase() ?? 'UNKNOWN',
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w700,
+                                            color: context.adaptiveSlate500,
+                                            letterSpacing: 0.5,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                                ),
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                      ],
+                    );
+                  },
+                );
+              },
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (err, _) => Center(
+                child: Text('Error loading tasks: $err', style: const TextStyle(color: Colors.red)),
+              ),
+            ),
+          ),
         ],
       ),
     );
