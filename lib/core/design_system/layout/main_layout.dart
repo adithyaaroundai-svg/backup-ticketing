@@ -613,11 +613,14 @@ class _TopNav extends ConsumerWidget {
     final staleCount = ref.watch(staleUnclaimedTicketsProvider).asData?.value.length ?? 0;
     final alertCount = overdueCount + staleCount;
 
+    final isMarketingAI = currentUser?.isMarketingAI == true;
+
     // Main navigation items (left side)
     final isSalesChannel = currentPath.startsWith('/sales-channel');
     final mainNavItems = <Widget>[
       if (isSalesChannel) ...[
-        _TopNavItem(
+        if (!isMarketingAI)
+          _TopNavItem(
           label: 'Sales Chat',
           icon: LucideIcons.messageCircle,
           path: '/sales-channel?tab=0',
@@ -638,7 +641,7 @@ class _TopNav extends ConsumerWidget {
               (GoRouterState.of(context).uri.queryParameters['tab'] ?? '') ==
                   '2',
         ),
-      ] else ...[
+      ] else if (!isMarketingAI) ...[
         _TopNavItem(
           label: 'Chat',
           icon: LucideIcons.messageSquare,
@@ -718,7 +721,7 @@ class _TopNav extends ConsumerWidget {
         currentUser?.isAdmin == true || currentUser?.isAccountant == true;
 
     final rightNavItems = <Widget>[
-      if (enableNotifications)
+      if (enableNotifications && !isMarketingAI)
         _TopNavButton(
           label: 'Alerts',
           icon: LucideIcons.bell,
@@ -727,7 +730,7 @@ class _TopNav extends ConsumerWidget {
             context.go('/alerts');
           }
         ),
-      if (enableGlobalSearch)
+      if (enableGlobalSearch && !isMarketingAI)
         _TopNavButton(
           label: 'Search',
           icon: LucideIcons.search,
@@ -738,8 +741,9 @@ class _TopNav extends ConsumerWidget {
             );
           },
         ),
-      _TopNavButton(
-        label: 'Reminder',
+      if (!isMarketingAI)
+        _TopNavButton(
+          label: 'Reminder',
         icon: LucideIcons.alarmClock,
         onTap: () {
           showDialog(
@@ -749,7 +753,7 @@ class _TopNav extends ConsumerWidget {
         },
       ),
 
-      if (!useGroupedNav) ...[
+      if (!useGroupedNav && !isMarketingAI) ...[
         if (currentUser?.isTeleCaller != true && !isRestrictedAgent)
           _TopNavItem(
             label: 'Customers',
@@ -849,7 +853,7 @@ class _TopNav extends ConsumerWidget {
             path: '/settings',
             isActive: currentPath.startsWith('/settings'),
           ),
-      ] else ...[
+      ] else if (!isMarketingAI) ...[
         // Grouped Icon Menus for Admin and Accountant
         _TopNavHoverMenu(
           icon: LucideIcons.briefcase,
@@ -2107,6 +2111,9 @@ class _BottomNav extends ConsumerWidget {
     final int totalCustomChannelUnread = ref.watch(totalCustomChannelUnreadProvider(customChannelIds));
     final int aggregateUnread = (ref.watch(chatUnreadCountProvider) + ref.watch(allAroundTallyUnreadCountProvider) + totalDmUnread + totalCustomChannelUnread).toInt();
 
+    final currentUser = ref.watch(authProvider);
+    final isMarketingAI = currentUser?.isMarketingAI == true;
+
     final bgColor = isLight 
         ? Colors.white 
         : const Color(0xFF1A1D21);
@@ -2119,17 +2126,19 @@ class _BottomNav extends ConsumerWidget {
         : Colors.white;
 
     final destinations = <NavigationDestination>[
-      NavigationDestination(
-        icon: Icon(LucideIcons.home, color: unselectedColor),
-        selectedIcon: Icon(LucideIcons.home, color: selectedColor),
-        label: 'Home',
-      ),
-      if (isSalesChannel) ...[
+      if (!isMarketingAI)
         NavigationDestination(
-          icon: Icon(LucideIcons.messageCircle, color: unselectedColor),
-          selectedIcon: Icon(LucideIcons.messageCircle, color: selectedColor),
-          label: 'Sales Chat',
+          icon: Icon(LucideIcons.home, color: unselectedColor),
+          selectedIcon: Icon(LucideIcons.home, color: selectedColor),
+          label: 'Home',
         ),
+      if (isSalesChannel) ...[
+        if (!isMarketingAI)
+          NavigationDestination(
+            icon: Icon(LucideIcons.messageCircle, color: unselectedColor),
+            selectedIcon: Icon(LucideIcons.messageCircle, color: selectedColor),
+            label: 'Sales Chat',
+          ),
         NavigationDestination(
           icon: Icon(LucideIcons.layers, color: unselectedColor),
           selectedIcon: Icon(LucideIcons.layers, color: selectedColor),
@@ -2152,25 +2161,30 @@ class _BottomNav extends ConsumerWidget {
           label: 'Chat',
         ),
       ],
-      if (!isSalesChannel)
+      if (!isSalesChannel && !isMarketingAI)
         NavigationDestination(
           icon: Icon(LucideIcons.search, color: unselectedColor),
           selectedIcon: Icon(LucideIcons.search, color: selectedColor),
           label: 'Search',
         ),
-      NavigationDestination(
-        icon: Icon(Icons.more_horiz, color: unselectedColor),
-        selectedIcon: Icon(Icons.more_horiz, color: selectedColor),
-        label: 'More',
-      ),
+      if (!isMarketingAI)
+        NavigationDestination(
+          icon: Icon(Icons.more_horiz, color: unselectedColor),
+          selectedIcon: Icon(Icons.more_horiz, color: selectedColor),
+          label: 'More',
+        ),
     ];
     
-    final navRoutes = isSalesChannel
-        ? ['/mobile-home', '/sales-channel?tab=0', '/sales-channel?tab=2', '__more__']
-        : ['/mobile-home', '/chat', '__search__', '__more__'];
+    final navRoutes = isMarketingAI 
+        ? ['/sales-channel?tab=2']
+        : isSalesChannel
+            ? ['/mobile-home', '/sales-channel?tab=0', '/sales-channel?tab=2', '__more__']
+            : ['/mobile-home', '/chat', '__search__', '__more__'];
     
     int selectedIndex = 0;
-    if (currentPath == '/mobile-home') {
+    if (isMarketingAI) {
+      selectedIndex = 0;
+    } else if (currentPath == '/mobile-home') {
       selectedIndex = 0;
     } else if (isSalesChannel) {
       final tab = GoRouterState.of(context).uri.queryParameters['tab'] ?? '0';

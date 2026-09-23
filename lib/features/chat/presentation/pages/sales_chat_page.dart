@@ -319,20 +319,22 @@ class _SalesChatPageState extends ConsumerState<SalesChatPage> {
                   ),
                 ),
                 const SizedBox(height: 16),
-                ListTile(
-                  leading: const Icon(Icons.chat_bubble, color: Colors.white),
-                  title: const Text('Messages', style: TextStyle(color: Colors.white)),
-                  onTap: () {
-                    Navigator.pop(context);
-                    DefaultTabController.of(parentContext).animateTo(0);
-                  },
-                ),
+                if (ref.read(authProvider)?.isMarketingAI != true)
+                  ListTile(
+                    leading: const Icon(Icons.chat_bubble, color: Colors.white),
+                    title: const Text('Messages', style: TextStyle(color: Colors.white)),
+                    onTap: () {
+                      Navigator.pop(context);
+                      DefaultTabController.of(parentContext).animateTo(0);
+                    },
+                  ),
                 ListTile(
                   leading: const Icon(LucideIcons.kanban, color: Colors.white),
                   title: const Text('Pipelines', style: TextStyle(color: Colors.white)),
                   onTap: () {
                     Navigator.pop(context);
-                    DefaultTabController.of(parentContext).animateTo(1);
+                    final isMarketingAI = ref.read(authProvider)?.isMarketingAI == true;
+                    DefaultTabController.of(parentContext).animateTo(isMarketingAI ? 0 : 1);
                   },
                 ),
                 ListTile(
@@ -392,12 +394,14 @@ class _SalesChatPageState extends ConsumerState<SalesChatPage> {
       final actualAgents = agentsList.where((a) => allowedSalesChannelIds.contains(a['id'])).toList();
       final memberCount = actualAgents.isNotEmpty ? actualAgents.length : allowedSalesChannelIds.length;
       
+      final isMarketingAI = ref.read(authProvider)?.isMarketingAI == true;
+      
       return MainLayout(
         currentPath: currentPath,
         child: DefaultTabController(
           key: ValueKey(tab),
-          length: 2,
-          initialIndex: tab == 2 ? 1 : 0,
+          length: isMarketingAI ? 1 : 2,
+          initialIndex: isMarketingAI ? 0 : (tab == 2 ? 1 : 0),
           child: Builder(
             builder: (tabContext) {
               return Scaffold(
@@ -437,7 +441,7 @@ class _SalesChatPageState extends ConsumerState<SalesChatPage> {
                           ],
                         ),
                         Text(
-                          '$memberCount members • 2 tabs',
+                          isMarketingAI ? '$memberCount members • 1 tab' : '$memberCount members • 2 tabs',
                           style: const TextStyle(
                             color: Colors.white70,
                             fontSize: 12,
@@ -458,21 +462,23 @@ class _SalesChatPageState extends ConsumerState<SalesChatPage> {
                     ),
                     const SizedBox(width: 8),
                   ],
-                  bottom: const TabBar(
+                  bottom: TabBar(
                     labelColor: Colors.white,
                     unselectedLabelColor: Colors.white60,
                     indicatorColor: Colors.white,
                     indicatorSize: TabBarIndicatorSize.tab,
                     tabs: [
-                      Tab(text: 'Sales Chat'),
-                      Tab(text: 'Pipelines'),
+                      if (!isMarketingAI)
+                        const Tab(text: 'Sales Chat'),
+                      const Tab(text: 'Pipelines'),
                     ],
                   ),
                 ),
-                body: const TabBarView(
+                body: TabBarView(
                   children: [
-                    _ChatTab(),
-                    _PipelineTab(),
+                    if (!isMarketingAI)
+                      const _ChatTab(),
+                    const _PipelineTab(),
                   ],
                 ),
               );

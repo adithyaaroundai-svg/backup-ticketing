@@ -91,7 +91,11 @@ class _ForwardMessageDialogState extends ConsumerState<ForwardMessageDialog> {
                 data: (agents) {
                   // Filter agents
                   final filteredAgents = agents.where((agent) {
+                    final role = (agent['role'] ?? '').toString().toLowerCase();
                     final name = (agent['full_name'] ?? agent['username'] ?? '').toString().toLowerCase();
+                    
+                    if (role == 'marketing ai' || name.contains('marketing ai')) return false;
+                    
                     return name.contains(_searchQuery) && agent['id'] != currentUser?.id;
                   }).toList();
 

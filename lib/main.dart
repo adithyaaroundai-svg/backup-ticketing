@@ -141,6 +141,7 @@ final rootNavigatorKey = GlobalKey<NavigatorState>();
 
 String _getHomeRouteForAgent(Agent? agent) {
   if (agent == null) return '/login';
+  if (agent.isMarketingAI) return '/sales-channel?tab=2';
   if (!kIsWeb && (defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.iOS)) {
     return '/mobile-home';
   }
@@ -195,6 +196,12 @@ final routerProvider = Provider<GoRouter>((ref) {
       // If logged in and hitting /login or root /, send directly to role-specific home
       if (isLoggedIn && (isLoggingIn || state.matchedLocation == '/')) {
         return _getHomeRouteForAgent(authState);
+      }
+
+      if (authState?.isMarketingAI == true) {
+        if (!state.matchedLocation.startsWith('/sales-channel') && !state.matchedLocation.startsWith('/profile')) {
+          return _getHomeRouteForAgent(authState);
+        }
       }
 
       // Role-based access control (Root handled by RootRedirectionWidget)
@@ -283,7 +290,8 @@ final routerProvider = Provider<GoRouter>((ref) {
           'f3b54de6-0372-4648-ad87-3e98089efc2d',
         };
         final userId = authState?.id ?? '';
-        if (!allowedSalesChannelIds.contains(userId)) {
+        final isMarketingAI = authState?.isMarketingAI ?? false;
+        if (!allowedSalesChannelIds.contains(userId) && !isMarketingAI) {
           if (!isLoggedIn) return '/login';
           return _getHomeRouteForAgent(authState);
         }

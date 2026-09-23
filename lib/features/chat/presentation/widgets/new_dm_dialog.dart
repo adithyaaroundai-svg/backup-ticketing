@@ -83,7 +83,10 @@ class _NewDmDialogState extends ConsumerState<NewDmDialog> {
                       final id = a['id'] as String;
                       if (hiddenAgentIds.contains(id)) return false;
                       
+                      final role = (a['role'] ?? '').toString().toLowerCase();
                       final name = (a['full_name'] ?? a['username'] ?? '').toString().toLowerCase();
+                      
+                      if (role == 'marketing ai' || name.contains('marketing ai')) return false;
                       
                       if (_searchQuery.isNotEmpty && !name.contains(_searchQuery)) {
                         return false;

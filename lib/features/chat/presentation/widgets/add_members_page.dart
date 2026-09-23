@@ -79,8 +79,12 @@ class _AddMembersPageState extends ConsumerState<AddMembersPage> {
                 final nonMembers = agents.where((a) => !widget.existingMemberIds.contains(a['id'])).toList();
                 
                 final filtered = nonMembers.where((a) {
-                  if (_searchQuery.isEmpty) return true;
+                  final role = (a['role'] ?? '').toString().toLowerCase();
                   final name = (a['full_name'] ?? '').toString().toLowerCase();
+                  
+                  if (role == 'marketing ai' || name.contains('marketing ai')) return false;
+
+                  if (_searchQuery.isEmpty) return true;
                   final email = (a['email'] ?? '').toString().toLowerCase();
                   final username = (a['username'] ?? '').toString().toLowerCase();
                   return name.contains(_searchQuery) || email.contains(_searchQuery) || username.contains(_searchQuery);

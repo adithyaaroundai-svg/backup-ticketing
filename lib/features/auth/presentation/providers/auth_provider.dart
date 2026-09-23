@@ -77,6 +77,7 @@ class Agent {
   bool get isHR => _roleLower == 'hr' || _roleLower == 'human resource' || _roleLower == 'human_resource' || _roleLower == 'human-resource';
   bool get isProjectCoordinator => _roleLower == 'project coordinator' || _roleLower == 'project_coordinator' || _roleLower == 'projectcoordinator';
   bool get isDigitalMarketing => _roleLower == 'digital marketing' || _roleLower == 'digital_marketing' || _roleLower == 'digitalmarketing' || _roleLower == 'digital marketing executive';
+  bool get isMarketingAI => fullName.toLowerCase() == 'marketing ai' || username.toLowerCase() == 'marketing ai' || _roleLower == 'marketing ai';
 }
 
 // Auth state notifier
