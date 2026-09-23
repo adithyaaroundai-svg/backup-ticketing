@@ -2864,8 +2864,8 @@ class _ChannelsListState extends ConsumerState<_ChannelsList> {
       currentUser?.id ?? '',
     );
     final canAccessSalesChannel =
-        allowedSalesChannelIds.contains(currentUser?.id ?? '') &&
-        !isRestrictedAgent;
+        (allowedSalesChannelIds.contains(currentUser?.id ?? '') && !isRestrictedAgent) ||
+        (currentUser?.isMarketingAI == true);
     final canAccessDealsTracker =
         currentUser?.id == '0a5aeeb8-9544-4dc8-920f-e26c192b0dd3';
     final canAccessPrivateLeads =
@@ -2901,7 +2901,7 @@ class _ChannelsListState extends ConsumerState<_ChannelsList> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
 
-
+        if (currentUser?.isMarketingAI != true) ...[
         // Channels Header
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 16, 8, 8),
@@ -3081,6 +3081,7 @@ class _ChannelsListState extends ConsumerState<_ChannelsList> {
             );
           },
         ),
+        ],
         // Sales Channel
         if (canAccessSalesChannel)
           Material(
@@ -3126,6 +3127,8 @@ class _ChannelsListState extends ConsumerState<_ChannelsList> {
               ),
             ),
           ),
+          
+        if (currentUser?.isMarketingAI != true) ...[
         // Private Pipeline
         if (canAccessPrivateLeads)
           Material(
@@ -3557,6 +3560,7 @@ class _ChannelsListState extends ConsumerState<_ChannelsList> {
                 ),
               ),
             ),
+        ],
       ],
     ));
   }

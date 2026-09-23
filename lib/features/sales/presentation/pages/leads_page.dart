@@ -802,7 +802,7 @@ class _DetailRow extends StatelessWidget {
   }
 }
 
-class _LeadCard extends StatelessWidget {
+class _LeadCard extends StatefulWidget {
   final Lead lead;
   final Color color;
   final void Function(String) onStageChange;
@@ -818,23 +818,30 @@ class _LeadCard extends StatelessWidget {
   });
 
   @override
+  State<_LeadCard> createState() => _LeadCardState();
+}
+
+class _LeadCardState extends State<_LeadCard> {
+  bool isWhatsAppChecked = false;
+
+  @override
   Widget build(BuildContext context) {
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
         color: context.isDarkMode 
-            ? Color.alphaBlend(color.withValues(alpha: 0.16), const Color(0xFF1E293B))
+            ? Color.alphaBlend(widget.color.withValues(alpha: 0.16), const Color(0xFF1E293B))
             : Colors.white,
         borderRadius: BorderRadius.circular(8),
         border: Border.all(
           color: context.isDarkMode
-              ? color.withValues(alpha: 0.5)
-              : (lead.status == 'pending' || lead.status == 'New' || lead.status == 'New Lead' ? Colors.orange.shade300 : context.adaptiveBorder),
+              ? widget.color.withValues(alpha: 0.5)
+              : (widget.lead.status == 'pending' || widget.lead.status == 'New' || widget.lead.status == 'New Lead' ? Colors.orange.shade300 : context.adaptiveBorder),
           width: 1.5,
         ),
         boxShadow: [
           BoxShadow(
-            color: context.isDarkMode ? color.withValues(alpha: 0.15) : Colors.black.withValues(alpha: 0.02),
+            color: context.isDarkMode ? widget.color.withValues(alpha: 0.15) : Colors.black.withValues(alpha: 0.02),
             blurRadius: context.isDarkMode ? 6 : 2,
             offset: const Offset(0, 1),
           ),
@@ -852,15 +859,82 @@ class _LeadCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  lead.companyName,
-                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: AppColors.primaryLight),
-                  maxLines: 2, overflow: TextOverflow.ellipsis,
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        widget.lead.companyName,
+                        style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: AppColors.primaryLight),
+                        maxLines: 2, overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    // WhatsApp Checkbox Pill
+                    InkWell(
+                      onTap: () {
+                        setState(() {
+                          isWhatsAppChecked = !isWhatsAppChecked;
+                        });
+                      },
+                      borderRadius: BorderRadius.circular(8),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: context.isDarkMode
+                              ? Colors.white.withValues(alpha: 0.07)
+                              : const Color(0xFFF1F5F9),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: context.isDarkMode
+                                ? Colors.white.withValues(alpha: 0.15)
+                                : const Color(0xFFE2E8F0),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: Checkbox(
+                                value: isWhatsAppChecked,
+                                activeColor: const Color(0xFF25D366),
+                                checkColor: Colors.white,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                visualDensity: VisualDensity.compact,
+                                onChanged: (val) {
+                                  setState(() {
+                                    isWhatsAppChecked = val ?? false;
+                                  });
+                                },
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            Container(
+                              padding: const EdgeInsets.all(2),
+                              decoration: const BoxDecoration(
+                                color: Color(0xFF25D366),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                LucideIcons.messageCircle,
+                                size: 10,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-                if (lead.product != null && lead.product!.isNotEmpty) ...[
+                if (widget.lead.product != null && widget.lead.product!.isNotEmpty) ...[
                   const SizedBox(height: 4),
                   Text(
-                    lead.product!,
+                    widget.lead.product!,
                     style: TextStyle(fontSize: 12, color: context.adaptiveSlate500),
                     maxLines: 1, overflow: TextOverflow.ellipsis,
                   ),
@@ -899,7 +973,7 @@ class _LeadCard extends StatelessWidget {
                         children: [
                           Expanded(
                             child: Text(
-                              lead.companyName,
+                              widget.lead.companyName,
                               style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18, color: AppColors.primaryLight),
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -987,7 +1061,7 @@ class _LeadCard extends StatelessWidget {
                                     Navigator.pop(context);
                                     showDialog(
                                       context: context,
-                                      builder: (_) => EditLeadDialog(lead: lead),
+                                      builder: (_) => EditLeadDialog(lead: widget.lead),
                                     );
                                   },
                                   borderRadius: BorderRadius.circular(4),
@@ -1001,14 +1075,14 @@ class _LeadCard extends StatelessWidget {
                           ),
                         ],
                       ),
-                  if (lead.product != null && lead.product!.isNotEmpty) ...[
+                  if (widget.lead.product != null && widget.lead.product!.isNotEmpty) ...[
                     const SizedBox(height: 8),
                     Row(
                       children: [
                         Icon(LucideIcons.box, size: 14, color: context.adaptiveSlate500),
                         const SizedBox(width: 6),
                         Text(
-                          lead.product!,
+                          widget.lead.product!,
                           style: TextStyle(fontSize: 14, color: context.adaptiveSlate700, fontWeight: FontWeight.w500),
                         ),
                       ],
@@ -1028,7 +1102,7 @@ class _LeadCard extends StatelessWidget {
                             const SizedBox(width: 6),
                             Flexible(
                               child: Text(
-                                lead.phoneNumber ?? 'N/A',
+                                widget.lead.phoneNumber ?? 'N/A',
                                 style: TextStyle(fontSize: 14, color: context.adaptiveSlate600),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
@@ -1045,8 +1119,8 @@ class _LeadCard extends StatelessWidget {
                             const SizedBox(width: 6),
                             Flexible(
                                 child: Text(
-                                  lead.followUpDate != null ? DateFormat('dd-MM-yyyy').format(lead.followUpDate!) : 'No follow-up',
-                                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: lead.followUpDate != null ? AppColors.error : context.adaptiveSlate500),
+                                  widget.lead.followUpDate != null ? DateFormat('dd-MM-yyyy').format(widget.lead.followUpDate!) : 'No follow-up',
+                                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: widget.lead.followUpDate != null ? AppColors.error : context.adaptiveSlate500),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
@@ -1056,10 +1130,10 @@ class _LeadCard extends StatelessWidget {
                       ),
                     ],
                   ),
-                  if (lead.description != null && lead.description!.isNotEmpty) ...[
+                  if (widget.lead.description != null && widget.lead.description!.isNotEmpty) ...[
                     const SizedBox(height: 12),
                     Text(
-                      lead.description!,
+                      widget.lead.description!,
                       style: TextStyle(fontSize: 13, color: context.adaptiveSlate600, fontStyle: FontStyle.italic),
                     ),
                   ],
@@ -1073,7 +1147,7 @@ class _LeadCard extends StatelessWidget {
                     ),
                     child: PopupMenuButton<String>(
                       onSelected: (String nextStage) {
-                        onStageChange(nextStage);
+                        widget.onStageChange(nextStage);
                         Navigator.pop(context);
                       },
                       itemBuilder: (BuildContext context) {
@@ -1092,7 +1166,7 @@ class _LeadCard extends StatelessWidget {
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Text(
-                              (lead.status == 'pending' || lead.status == 'New') ? 'New Lead' : (lead.status == 'win' ? 'Won' : (lead.status == 'loss' ? 'Lost' : lead.status)), 
+                              (widget.lead.status == 'pending' || widget.lead.status == 'New') ? 'New Lead' : (widget.lead.status == 'win' ? 'Won' : (widget.lead.status == 'loss' ? 'Lost' : widget.lead.status)), 
                               style: TextStyle(fontSize: 14, color: context.adaptiveSlate700, fontWeight: FontWeight.w600),
                             ),
                             Icon(LucideIcons.chevronDown, size: 18, color: context.adaptiveSlate500),
@@ -1132,7 +1206,7 @@ class _LeadCard extends StatelessWidget {
                     child: ElevatedButton.icon(
                       onPressed: () {
                         if (remarkController.text.trim().isNotEmpty) {
-                          onAddRemark(remarkController.text.trim());
+                          widget.onAddRemark(remarkController.text.trim());
                           Navigator.pop(context);
                         }
                       },
@@ -1151,7 +1225,7 @@ class _LeadCard extends StatelessWidget {
                     width: double.infinity,
                     child: OutlinedButton.icon(
                       onPressed: () {
-                        onDelete();
+                        widget.onDelete();
                         Navigator.pop(context);
                       },
                       icon: const Icon(LucideIcons.trash2, size: 16, color: AppColors.error),
