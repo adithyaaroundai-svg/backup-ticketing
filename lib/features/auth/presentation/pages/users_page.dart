@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../../core/design_system/design_system.dart';
 import '../providers/auth_provider.dart';
+import '../../../leaves/presentation/widgets/employee_leaves_dialog.dart';
 
 class User {
   final String id;
@@ -285,21 +286,38 @@ class _UsersPageState extends ConsumerState<UsersPage> {
               ),
               const SizedBox(height: 16),
               if (_canManageUsers)
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: ElevatedButton.icon(
-                    onPressed: () => context.go('/users/add'),
-                    icon: const Icon(LucideIcons.userPlus, size: 18),
-                    label: const Text('Add User'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 12,
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    OutlinedButton.icon(
+                      onPressed: () => context.go('/leaves'),
+                      icon: const Icon(LucideIcons.calendarCheck, size: 18, color: Colors.white),
+                      label: const Text('Leave Management', style: TextStyle(color: Colors.white)),
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: Colors.white24),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                       ),
                     ),
-                  ),
+                    const SizedBox(width: 12),
+                    ElevatedButton.icon(
+                      onPressed: () => context.go('/users/add'),
+                      icon: const Icon(LucideIcons.userPlus, size: 18),
+                      label: const Text('Add User'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                    ),
+                  ],
                 ),
               if (_canManageUsers) const SizedBox(height: 24),
 
@@ -516,16 +534,60 @@ class _UserTile extends StatelessWidget {
               ),
             ],
           ),
-          trailing: (onDelete != null || onEditRole != null)
-              ? PopupMenuButton<String>(
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (user.role.toLowerCase() != 'admin')
+                Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: OutlinedButton.icon(
+                    onPressed: () {
+                      EmployeeLeavesDialog.show(
+                        context,
+                        agentId: user.id,
+                        agentName: user.fullName,
+                        agentRole: user.role,
+                        email: user.email,
+                      );
+                    },
+                    icon: const Icon(LucideIcons.calendarDays, size: 14, color: AppColors.primary),
+                    label: const Text('Leaves', style: TextStyle(fontSize: 12, color: AppColors.primary)),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      side: BorderSide(color: AppColors.primary.withValues(alpha: 0.5)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                  ),
+                ),
+              if (onDelete != null || onEditRole != null)
+                PopupMenuButton<String>(
                   onSelected: (value) {
                     if (value == 'delete' && onDelete != null) {
                       onDelete!();
                     } else if (value == 'editRole' && onEditRole != null) {
                       onEditRole!();
+                    } else if (value == 'leaves') {
+                      EmployeeLeavesDialog.show(
+                        context,
+                        agentId: user.id,
+                        agentName: user.fullName,
+                        agentRole: user.role,
+                        email: user.email,
+                      );
                     }
                   },
                   itemBuilder: (context) => [
+                    if (user.role.toLowerCase() != 'admin')
+                      const PopupMenuItem(
+                        value: 'leaves',
+                        child: Row(
+                          children: [
+                            Icon(LucideIcons.calendarDays, color: AppColors.primary, size: 16),
+                            SizedBox(width: 8),
+                            Text('View / Apply Leaves'),
+                          ],
+                        ),
+                      ),
                     if (onEditRole != null)
                       const PopupMenuItem(
                         value: 'editRole',
@@ -552,8 +614,9 @@ class _UserTile extends StatelessWidget {
                         ),
                       ),
                   ],
-                )
-              : null,
+                ),
+            ],
+          ),
         ),
         if (!isLast) const Divider(height: 1, color: Colors.white12),
       ],

@@ -50,6 +50,7 @@ import 'features/sales/presentation/pages/proposal_generator_page.dart';
 import 'features/sales/presentation/pages/private_leads_page.dart';
 import 'features/tickets/presentation/pages/ticket_alerts_page.dart';
 import 'features/developer_crm/presentation/dev_crm_app.dart';
+import 'features/leaves/presentation/pages/leaves_page.dart';
 
 import 'core/services/local_notification_service.dart';
 import 'package:hive_flutter/hive_flutter.dart';
@@ -499,6 +500,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const SalesOpportunityPage(),
       ),
       GoRoute(path: '/deals', builder: (context, state) => const DealsPage()),
+      GoRoute(path: '/leaves', builder: (context, state) => const LeavesPage()),
       GoRoute(
         path: '/proposal-generator',
         builder: (context, state) => const ProposalGeneratorPage(),

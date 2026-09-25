@@ -810,6 +810,14 @@ class _TopNav extends ConsumerWidget {
             path: '/users',
             isActive: currentPath.startsWith('/users'),
           ),
+        _TopNavItem(
+          label: (currentUser?.isAdmin == true || currentUser?.isHR == true)
+              ? 'Leave Management'
+              : 'My Leaves',
+          icon: LucideIcons.calendarDays,
+          path: '/leaves',
+          isActive: currentPath.startsWith('/leaves'),
+        ),
         if (canViewDeals)
           _TopNavItem(
             label: 'Deals',
@@ -944,6 +952,7 @@ class _TopNav extends ConsumerWidget {
           tooltip: 'Administration',
           isParentActive:
               currentPath.startsWith('/users') ||
+              currentPath.startsWith('/leaves') ||
               currentPath.startsWith('/settings'),
           items: [
             if (currentUser?.isAdmin == true || currentUser?.isHR == true)
@@ -953,6 +962,14 @@ class _TopNav extends ConsumerWidget {
                 path: '/users',
                 isActive: currentPath.startsWith('/users'),
               ),
+            _DropdownItem(
+              label: (currentUser?.isAdmin == true || currentUser?.isHR == true)
+                  ? 'Leave Management'
+                  : 'My Leaves',
+              icon: LucideIcons.calendarDays,
+              path: '/leaves',
+              isActive: currentPath.startsWith('/leaves'),
+            ),
             if (currentUser?.isAdmin == true)
               _DropdownItem(
                 label: 'Settings',
