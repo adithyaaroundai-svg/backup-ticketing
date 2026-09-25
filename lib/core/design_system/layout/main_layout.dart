@@ -459,7 +459,7 @@ class _MainLayoutState extends ConsumerState<MainLayout> with WidgetsBindingObse
                     });
                   },
                 ),
-                if (!_isRestrictedAgent && !widget.currentPath.startsWith('/sales-channel') && currentUser?.isSoftwareDeveloper != true)
+                if (currentUser?.id == '2f9066b9-ca8b-4f21-8a83-eb746358b9a0')
                   _CollapsibleTicketPane(
                     currentPath: widget.currentPath,
                     isOpen: ref.watch(ticketPaneOpenProvider),
@@ -2647,9 +2647,7 @@ class _CollapsibleTicketPane extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final currentUser = ref.watch(authProvider);
-    final canViewPane = currentUser?.isSupport == true || 
-                        currentUser?.isSupportHead == true || 
-                        currentUser?.isHR == true;
+    final canViewPane = currentUser?.id == '2f9066b9-ca8b-4f21-8a83-eb746358b9a0';
     
     if (!canViewPane) {
       return const SizedBox.shrink();
@@ -3858,9 +3856,7 @@ class _RecentTicketsList extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final currentUser = ref.watch(authProvider);
-    final canViewPane = currentUser?.isSupport == true || 
-                        currentUser?.isSupportHead == true || 
-                        currentUser?.isHR == true;
+    final canViewPane = currentUser?.id == '2f9066b9-ca8b-4f21-8a83-eb746358b9a0';
     
     if (!canViewPane) {
       return const SizedBox.shrink();
