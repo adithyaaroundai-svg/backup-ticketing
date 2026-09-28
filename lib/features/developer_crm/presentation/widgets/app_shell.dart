@@ -25,23 +25,23 @@ class AppShell extends StatelessWidget {
   List<NavItem> _navItemsFor(String role) {
     final items = <NavItem>[];
     if (roleIsAccountant(role)) {
-      items.add(NavItem('Billing', '/billing', Icons.receipt_long));
+      items.add(NavItem('Billing', '/dev-crm/billing', Icons.receipt_long));
       return items;
     }
     if (roleCanSeeDashboard(role)) {
-      items.add(NavItem('Dashboard', '/dashboard', Icons.dashboard));
+      items.add(NavItem('Dashboard', '/dev-crm/dashboard', Icons.dashboard));
     }
-    items.add(NavItem('Deliverables', '/deliverables', Icons.local_shipping));
-    items.add(NavItem("Today's Tasks", '/tasks', Icons.checklist));
-    items.add(NavItem('Pending', '/pending', Icons.pending_actions));
+    items.add(NavItem('Deliverables', '/dev-crm/deliverables', Icons.local_shipping));
+    items.add(NavItem("Today's Tasks", '/dev-crm/tasks', Icons.checklist));
+    items.add(NavItem('Pending', '/dev-crm/pending', Icons.pending_actions));
     if (roleCanSeeTeam(role)) {
-      items.add(NavItem('Team', '/team', Icons.groups));
+      items.add(NavItem('Team', '/dev-crm/team', Icons.groups));
     }
     if (roleCanSeeBilling(role) && role == 'manager') {
-      items.add(NavItem('Billing', '/billing', Icons.receipt_long));
+      items.add(NavItem('Billing', '/dev-crm/billing', Icons.receipt_long));
     }
-    items.add(NavItem('Clients', '/clients', Icons.business));
-    items.add(NavItem('Activity', '/activity', Icons.history));
+    items.add(NavItem('Clients', '/dev-crm/clients', Icons.business));
+    items.add(NavItem('Activity', '/dev-crm/activity', Icons.history));
     return items;
   }
 
@@ -73,12 +73,12 @@ class AppShell extends StatelessWidget {
             IconButton(
               tooltip: 'Settings',
               icon: const Icon(Icons.settings),
-              onPressed: () => context.push('/settings'),
+              onPressed: () => context.push('/dev-crm/settings'),
             ),
           IconButton(
             tooltip: 'Change password',
             icon: const Icon(Icons.lock_outline),
-            onPressed: () => context.push('/change-password'),
+            onPressed: () => context.push('/dev-crm/change-password'),
           ),
         ],
       ),

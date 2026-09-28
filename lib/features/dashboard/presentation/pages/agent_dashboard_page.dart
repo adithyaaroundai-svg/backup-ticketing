@@ -169,6 +169,15 @@ class _AgentDashboardPageState extends ConsumerState<AgentDashboardPage> {
                             foregroundColor: Theme.of(context).brightness == Brightness.dark ? Colors.white : null,
                           ),
                         ),
+                        if (user?.isAdmin == true)
+                          OutlinedButton.icon(
+                            icon: const Icon(LucideIcons.layoutDashboard, size: 16),
+                            label: const Text('Admin Dashboard'),
+                            onPressed: () => context.go('/admin'),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: Theme.of(context).brightness == Brightness.dark ? Colors.white : null,
+                            ),
+                          ),
                       ],
                     );
                   },

@@ -97,9 +97,17 @@ class TaskBoardProvider extends ChangeNotifier {
     };
   }
 
-  Future<void> load({int? assignee, int? client, bool silent = false}) async {
-    assigneeFilter = assignee ?? assigneeFilter;
-    clientFilter = client ?? clientFilter;
+  Future<void> setAssigneeFilter(int? assignee) async {
+    assigneeFilter = assignee;
+    await load();
+  }
+
+  Future<void> setClientFilter(int? client) async {
+    clientFilter = client;
+    await load();
+  }
+
+  Future<void> load({bool silent = false}) async {
     if (!silent || tasks.isEmpty) {
       loading = true;
       error = null;

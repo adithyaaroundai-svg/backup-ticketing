@@ -110,7 +110,7 @@ class _WorkItemEditBodyState extends State<_WorkItemEditBody> {
         title: const Text('Edit work item'),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
-          onPressed: () => context.canPop() ? context.pop() : context.go('/clients'),
+          onPressed: () => context.canPop() ? context.pop() : context.go('/dev-crm/clients'),
         ),
       ),
       body: ListView(

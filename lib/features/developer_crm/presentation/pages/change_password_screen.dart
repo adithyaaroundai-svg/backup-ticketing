@@ -45,7 +45,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
       );
       if (!mounted) return;
       if (wasForced) {
-        context.go('/');
+        context.go('/dev-crm');
       } else {
         setState(() => _success = 'Password changed successfully.');
         _currentCtrl.clear();

@@ -38,6 +38,7 @@ import '../../../tickets/domain/entities/ticket.dart';
 import '../../../tickets/presentation/providers/ticket_provider.dart';
 import '../widgets/chat_attachment_renderer.dart';
 import '../widgets/forward_message_dialog.dart';
+import '../widgets/forwarded_lead_card.dart';
 import '../widgets/chat_voice_recorder.dart';
 import '../widgets/chat_drop_overlay.dart';
 import '../../../../core/services/chat_drag_drop_paste_helper.dart';
@@ -395,10 +396,22 @@ class _DirectMessagePageState extends ConsumerState<DirectMessagePage> {
   void dispose() {
     _dragDropPasteSub?.cancel();
     try {
-      final currentOpen = (ref.read(currentOpenConversationProvider) ?? '').trim().toLowerCase();
       final currentPartner = widget.partnerId.trim().toLowerCase();
+      final currentOpen = (ref.read(currentOpenConversationProvider) ?? '')
+          .trim()
+          .toLowerCase();
       if (currentOpen == currentPartner) {
-        ref.read(currentOpenConversationProvider.notifier).state = null;
+        final container = ProviderScope.containerOf(context, listen: false);
+        Future(() {
+          try {
+            final stillOpen = (container.read(currentOpenConversationProvider) ?? '')
+                .trim()
+                .toLowerCase();
+            if (stillOpen == currentPartner) {
+              container.read(currentOpenConversationProvider.notifier).state = null;
+            }
+          } catch (_) {}
+        });
       }
     } catch (_) {}
 
@@ -3389,7 +3402,7 @@ class _ChatBubble extends ConsumerWidget {
                           : CrossAxisAlignment.start,
 
                       children: [
-                        if (message.isForwarded)
+                        if (message.isForwarded && tryParseLeadCard(message.content) == null)
                           Padding(
                             padding: const EdgeInsets.only(bottom: 4, left: 4),
                             child: Row(
@@ -4085,6 +4098,42 @@ class _ChatBubble extends ConsumerWidget {
       return const SizedBox.shrink();
     }
 
+    final leadCard = tryParseLeadCard(message.content);
+    if (leadCard != null) {
+      return Column(
+        crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+        children: [
+          ForwardedLeadCardView(lead: leadCard),
+          const SizedBox(height: 4),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                DateFormat('h:mm a').format(message.createdAt.toLocal()),
+                style: TextStyle(
+                  fontSize: 10,
+                  color: context.isDarkMode ? Colors.white54 : AppColors.slate400,
+                ),
+              ),
+              if (isMe) ...[
+                const SizedBox(width: 4),
+                Builder(
+                  builder: (context) {
+                    final isRead = ReadReceiptsTracker.getReadBy(message.id).isNotEmpty;
+                    return Icon(
+                      isRead ? Icons.done_all : Icons.check,
+                      size: 14,
+                      color: isRead ? Colors.blue : (context.isDarkMode ? Colors.white54 : Colors.black38),
+                    );
+                  },
+                ),
+              ],
+            ],
+          ),
+        ],
+      );
+    }
+
     return ClipRRect(
       borderRadius: BorderRadius.only(
         topLeft: const Radius.circular(16),
@@ -4199,6 +4248,8 @@ class _ChatBubble extends ConsumerWidget {
                         .trim();
                   }
 
+                  final leadCard = tryParseLeadCard(displayContent);
+
                   return Column(
                     crossAxisAlignment: isMe
                         ? CrossAxisAlignment.end
@@ -4209,11 +4260,13 @@ class _ChatBubble extends ConsumerWidget {
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
                           Flexible(
-                            child: _RichMessageText(
-                              content: displayContent,
-                              isMe: isMe,
-                              richTextDelta: message.richTextDelta,
-                            ),
+                            child: leadCard != null
+                                ? ForwardedLeadCardView(lead: leadCard)
+                                : _RichMessageText(
+                                    content: displayContent,
+                                    isMe: isMe,
+                                    richTextDelta: message.richTextDelta,
+                                  ),
                           ),
                           const SizedBox(width: 8),
                           Text(

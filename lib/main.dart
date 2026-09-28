@@ -368,6 +368,21 @@ final routerProvider = Provider<GoRouter>((ref) {
           },
         ),
       ),
+      GoRoute(path: '/dev-crm/dashboard', builder: (context, state) => DeveloperCrmEntryApp(onExit: () => context.canPop() ? context.pop() : context.go('/chat'))),
+      GoRoute(path: '/dev-crm/clients', builder: (context, state) => DeveloperCrmEntryApp(onExit: () => context.canPop() ? context.pop() : context.go('/chat'))),
+      GoRoute(path: '/dev-crm/deliverables', builder: (context, state) => DeveloperCrmEntryApp(onExit: () => context.canPop() ? context.pop() : context.go('/chat'))),
+      GoRoute(path: '/dev-crm/tasks', builder: (context, state) => DeveloperCrmEntryApp(onExit: () => context.canPop() ? context.pop() : context.go('/chat'))),
+      GoRoute(path: '/dev-crm/pending', builder: (context, state) => DeveloperCrmEntryApp(onExit: () => context.canPop() ? context.pop() : context.go('/chat'))),
+      GoRoute(path: '/dev-crm/billing', builder: (context, state) => DeveloperCrmEntryApp(onExit: () => context.canPop() ? context.pop() : context.go('/chat'))),
+      GoRoute(path: '/dev-crm/team', builder: (context, state) => DeveloperCrmEntryApp(onExit: () => context.canPop() ? context.pop() : context.go('/chat'))),
+      GoRoute(path: '/dev-crm/settings', builder: (context, state) => DeveloperCrmEntryApp(onExit: () => context.canPop() ? context.pop() : context.go('/chat'))),
+      GoRoute(path: '/dev-crm/activity', builder: (context, state) => DeveloperCrmEntryApp(onExit: () => context.canPop() ? context.pop() : context.go('/chat'))),
+      GoRoute(path: '/dev-crm/unauthorized', builder: (context, state) => DeveloperCrmEntryApp(onExit: () => context.canPop() ? context.pop() : context.go('/chat'))),
+      GoRoute(path: '/dev-crm/change-password', builder: (context, state) => DeveloperCrmEntryApp(onExit: () => context.canPop() ? context.pop() : context.go('/chat'))),
+      GoRoute(path: '/dev-crm/clients/:id', builder: (context, state) => DeveloperCrmEntryApp(onExit: () => context.canPop() ? context.pop() : context.go('/chat'))),
+      GoRoute(path: '/dev-crm/work-items/:id/edit', builder: (context, state) => DeveloperCrmEntryApp(onExit: () => context.canPop() ? context.pop() : context.go('/chat'))),
+      GoRoute(path: '/dev-crm/tasks/:id', builder: (context, state) => DeveloperCrmEntryApp(onExit: () => context.canPop() ? context.pop() : context.go('/chat'))),
+
       GoRoute(
         path: '/tickets',
         builder: (context, state) {

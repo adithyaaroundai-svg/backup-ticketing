@@ -147,7 +147,7 @@ class _PendingBoardBodyState extends State<_PendingBoardBody> {
                     const DropdownMenuItem<int?>(value: null, child: Text('All assignees')),
                     for (final u in _assigneeOptions) DropdownMenuItem<int?>(value: u.id, child: Text(u.name)),
                   ],
-                  onChanged: (v) => prov.load(assignee: v),
+                  onChanged: (v) => prov.setAssigneeFilter(v),
                 ),
                 if (prov.statusFilter != 'active' || prov.assigneeFilter != null)
                   TextButton(

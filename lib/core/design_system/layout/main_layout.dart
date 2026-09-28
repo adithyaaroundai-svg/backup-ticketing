@@ -110,15 +110,15 @@ class _MainLayoutState extends ConsumerState<MainLayout> with WidgetsBindingObse
   @override
   void didUpdateWidget(MainLayout oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.currentPath != widget.currentPath) {
-      if (!widget.currentPath.startsWith('/chat/dm/')) {
+    if (oldWidget.currentPath != widget.currentPath &&
+        !widget.currentPath.startsWith('/chat/dm/')) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
         final c = _container;
-        if (c != null && !_isDisposed) {
-          if (c.read(currentOpenConversationProvider) != null) {
-            c.read(currentOpenConversationProvider.notifier).state = null;
-          }
+        if (c == null || _isDisposed) return;
+        if (c.read(currentOpenConversationProvider) != null) {
+          c.read(currentOpenConversationProvider.notifier).state = null;
         }
-      }
+      });
     }
   }
 

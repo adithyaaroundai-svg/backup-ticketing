@@ -39,6 +39,90 @@ class TicketsTableView extends ConsumerStatefulWidget {
   ConsumerState<TicketsTableView> createState() => _TicketsTableViewState();
 }
 
+const _knownStatusLabels = [
+  'Unclaimed',
+  'New',
+  'Open',
+  'In Progress',
+  'Paused',
+  'Call Back',
+  'Call Not Attended',
+  'Waiting',
+  "Won't Pay",
+  'Resolved',
+  'Bill Raised',
+  'Billed',
+  'Closed',
+  'Cancelled',
+  'On Hold',
+];
+
+String _ticketStatusLabel(String status, bool isClaimed) {
+  switch (status.toLowerCase()) {
+    case 'new':
+      return isClaimed ? 'In Progress' : 'Unclaimed';
+    case 'open':
+      return 'Open';
+    case 'inprogress':
+    case 'in_progress':
+    case 'in progress':
+      return 'In Progress';
+    case 'resolved':
+      return 'Resolved';
+    case 'cancelled':
+    case 'canceled':
+      return 'Cancelled';
+    case 'paused':
+      return 'Paused';
+    case 'callback':
+    case 'call_back':
+    case 'call back':
+      return 'Call Back';
+    case 'wontpay':
+    case 'wont_pay':
+    case "won't pay":
+      return "Won't Pay";
+    case 'callnotattended':
+    case 'call_not_attended':
+    case 'call not attended':
+      return 'Call Not Attended';
+    case 'closed':
+      return 'Closed';
+    case 'onhold':
+    case 'on_hold':
+    case 'on hold':
+      return 'On Hold';
+    case 'waitingforcustomer':
+    case 'waiting_for_customer':
+    case 'waiting for customer':
+      return 'Waiting';
+    case 'billraised':
+    case 'bill_raised':
+    case 'bill raised':
+      return 'Bill Raised';
+    case 'billprocessed':
+    case 'bill_processed':
+    case 'bill processed':
+      return 'Billed';
+    default:
+      return status;
+  }
+}
+
+List<String> _statusFilterLabels(List<Ticket> tickets) {
+  final present = <String>{
+    for (final ticket in tickets)
+      _ticketStatusLabel(ticket.status, ticket.assignedTo != null),
+  };
+  final labels = <String>[
+    for (final label in _knownStatusLabels)
+      if (present.contains(label)) label,
+  ];
+  final extras = present.where((label) => !_knownStatusLabels.contains(label)).toList()..sort();
+  labels.addAll(extras);
+  return labels;
+}
+
 class _TicketsTableViewState extends ConsumerState<TicketsTableView> {
 
   Widget _buildStatusFilterButton({
@@ -56,6 +140,7 @@ class _TicketsTableViewState extends ConsumerState<TicketsTableView> {
       onTap: () {
         setState(() {
           _taskStatusFilter = filterKey;
+          _statusFilter = null;
         });
       },
       borderRadius: BorderRadius.circular(6),
@@ -133,6 +218,7 @@ class _TicketsTableViewState extends ConsumerState<TicketsTableView> {
   DateTime? _newReportedDate;
   bool _isSavingNewTicket = false;
   String _searchQuery = '';
+  String? _statusFilter;
   String _taskStatusFilter = 'active';
 
   @override
@@ -388,6 +474,16 @@ class _TicketsTableViewState extends ConsumerState<TicketsTableView> {
       filteredTickets = filteredTickets.where((t) => t.assignedTo == dropdownValue).toList();
     }
 
+    final statusSource = List<Ticket>.from(filteredTickets);
+    final statusLabels = _statusFilterLabels(statusSource);
+    final selectedStatus =
+        statusLabels.contains(_statusFilter) ? _statusFilter : null;
+    if (selectedStatus != null) {
+      filteredTickets = filteredTickets.where((t) {
+        return _ticketStatusLabel(t.status, t.assignedTo != null) == selectedStatus;
+      }).toList();
+    }
+
     if (_searchQuery.isNotEmpty) {
       final query = _searchQuery.toLowerCase();
       filteredTickets = filteredTickets.where((ticket) {
@@ -571,6 +667,39 @@ class _TicketsTableViewState extends ConsumerState<TicketsTableView> {
                           ref.read(ticketAssigneeFilterProvider.notifier).setAgent(val);
                         }
                       },
+                    ),
+                  ),
+                ),
+                Container(
+                  height: 36,
+                  width: 180,
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  decoration: BoxDecoration(
+                    color: context.adaptiveSlate50,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: context.adaptiveBorder),
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<String?>(
+                      isExpanded: true,
+                      isDense: true,
+                      value: selectedStatus,
+                      hint: Text('All Statuses', style: TextStyle(fontSize: 13, color: context.adaptiveSlate400)),
+                      icon: Icon(LucideIcons.chevronDown, size: 16, color: context.adaptiveSlate400),
+                      style: TextStyle(fontSize: 13, color: context.adaptiveSlate700),
+                      items: [
+                        const DropdownMenuItem<String?>(
+                          value: null,
+                          child: Text('All Statuses'),
+                        ),
+                        ...statusLabels.map(
+                          (label) => DropdownMenuItem<String?>(
+                            value: label,
+                            child: Text(label, overflow: TextOverflow.ellipsis),
+                          ),
+                        ),
+                      ],
+                      onChanged: (val) => setState(() => _statusFilter = val),
                     ),
                   ),
                 ),

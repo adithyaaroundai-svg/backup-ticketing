@@ -70,7 +70,7 @@ class _ClientDetailBodyState extends State<_ClientDetailBody> with SingleTickerP
                 children: [
                   IconButton(
                     icon: const Icon(Icons.arrow_back),
-                    onPressed: () => context.canPop() ? context.pop() : context.go('/clients'),
+                    onPressed: () => context.canPop() ? context.pop() : context.go('/dev-crm/clients'),
                   ),
                   Expanded(
                     child: Column(

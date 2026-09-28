@@ -9,6 +9,9 @@ import '../../domain/entities/lead.dart';
 import '../widgets/edit_lead_dialog.dart';
 import '../widgets/follow_up_sidebar.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
+import '../../../chat/presentation/providers/chat_provider.dart';
+import '../../../chat/presentation/widgets/forwarded_lead_card.dart';
+import '../../../tickets/presentation/providers/ticket_provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class LeadsPage extends ConsumerStatefulWidget {
@@ -879,6 +882,14 @@ class _LeadCardState extends ConsumerState<_LeadCard> {
                       ),
                     ),
                     const SizedBox(width: 4),
+                    IconButton(
+                      tooltip: 'Forward lead',
+                      visualDensity: VisualDensity.compact,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                      icon: Icon(LucideIcons.forward, size: 16, color: context.adaptiveSlate500),
+                      onPressed: _showForwardDialog,
+                    ),
                     // WhatsApp Checkbox Pill
                     InkWell(
                       onTap: () {
@@ -1212,6 +1223,22 @@ class _LeadCardState extends ConsumerState<_LeadCard> {
                     width: double.infinity,
                     child: OutlinedButton.icon(
                       onPressed: () {
+                        Navigator.pop(context);
+                        _showForwardDialog();
+                      },
+                      icon: const Icon(LucideIcons.forward, size: 16),
+                      label: const Text('Forward to someone'),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: () {
                         widget.onDelete();
                         Navigator.pop(context);
                       },
@@ -1232,6 +1259,144 @@ class _LeadCardState extends ConsumerState<_LeadCard> {
           },
         );
       },
+    );
+  }
+
+  Future<void> _showForwardDialog() async {
+    final currentUser = ref.read(authProvider);
+    if (currentUser == null) return;
+
+    final picked = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (context) => _ForwardLeadDialog(currentUserId: currentUser.id),
+    );
+    if (picked == null || !mounted) return;
+
+    final receiverId = picked['id']?.toString();
+    if (receiverId == null || receiverId.isEmpty) return;
+    final recipientName = (picked['full_name'] ?? picked['username'] ?? 'them').toString();
+
+    try {
+      await ref.read(chatControllerProvider.notifier).sendMessage(
+            senderId: currentUser.id,
+            senderName: currentUser.fullName,
+            senderRole: currentUser.role,
+            senderAvatarUrl: currentUser.avatarUrl,
+            receiverId: receiverId,
+            content: encodeLeadCardMessage(widget.lead),
+            channel: 'dm',
+            isForwarded: true,
+          );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Lead forwarded to $recipientName')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Could not forward the lead'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    }
+  }
+}
+
+class _ForwardLeadDialog extends ConsumerStatefulWidget {
+  final String currentUserId;
+
+  const _ForwardLeadDialog({required this.currentUserId});
+
+  @override
+  ConsumerState<_ForwardLeadDialog> createState() => _ForwardLeadDialogState();
+}
+
+class _ForwardLeadDialogState extends ConsumerState<_ForwardLeadDialog> {
+  String _query = '';
+
+  @override
+  Widget build(BuildContext context) {
+    final agentsAsync = ref.watch(agentsListProvider);
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 420, maxHeight: 520),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Expanded(
+                    child: Text(
+                      'Forward lead',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.close),
+                  ),
+                ],
+              ),
+              Text(
+                'They will get this lead in their direct messages.',
+                style: TextStyle(fontSize: 12, color: context.adaptiveSlate500),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                decoration: const InputDecoration(
+                  isDense: true,
+                  hintText: 'Search person',
+                  prefixIcon: Icon(Icons.search, size: 18),
+                ),
+                onChanged: (value) => setState(() => _query = value.trim().toLowerCase()),
+              ),
+              const SizedBox(height: 8),
+              Flexible(
+                child: agentsAsync.when(
+                  data: (agents) {
+                    final people = agents.where((agent) {
+                      final id = agent['id']?.toString() ?? '';
+                      if (id.isEmpty || id == widget.currentUserId) return false;
+                      final name = '${agent['full_name'] ?? ''} ${agent['username'] ?? ''}'
+                          .toLowerCase();
+                      return _query.isEmpty || name.contains(_query);
+                    }).toList();
+                    if (people.isEmpty) {
+                      return const Center(child: Text('No matching people'));
+                    }
+                    return ListView.separated(
+                      shrinkWrap: true,
+                      itemCount: people.length,
+                      separatorBuilder: (_, _) => const Divider(height: 1),
+                      itemBuilder: (context, index) {
+                        final agent = people[index];
+                        final name = (agent['full_name'] ?? agent['username'] ?? 'Unknown').toString();
+                        return ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          title: Text(name),
+                          subtitle: Text(
+                            (agent['role'] ?? '').toString(),
+                            style: TextStyle(fontSize: 12, color: context.adaptiveSlate500),
+                          ),
+                          trailing: const Icon(LucideIcons.forward, size: 16),
+                          onTap: () => Navigator.of(context).pop(agent),
+                        );
+                      },
+                    );
+                  },
+                  loading: () => const Center(child: CircularProgressIndicator()),
+                  error: (err, _) => const Center(child: Text('Could not load people')),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

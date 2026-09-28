@@ -861,7 +861,7 @@ class ChatNewMessageEvent extends _$ChatNewMessageEvent {
     }
 
     _notifiedIds.add(message.id);
-    state = message;
+    Future(() => state = message);
   }
 
   void clear() => state = null;
@@ -881,7 +881,7 @@ class DmNewMessageEvent extends _$DmNewMessageEvent {
   void notify(ChatMessage message) {
     if (_notifiedIds.contains(message.id)) return;
     _notifiedIds.add(message.id);
-    state = message;
+    Future(() => state = message);
   }
 
   void clear() => state = null;
@@ -900,7 +900,7 @@ class CustomChannelNewMessageEvent extends _$CustomChannelNewMessageEvent {
   void notify(ChatMessage message) {
     if (_notifiedIds.contains(message.id)) return;
     _notifiedIds.add(message.id);
-    state = message;
+    Future(() => state = message);
   }
 
   void clear() => state = null;
@@ -1077,7 +1077,7 @@ class AllAroundTallyNewMessageEvent extends _$AllAroundTallyNewMessageEvent {
     }
 
     _notifiedIds.add(message.id);
-    state = message;
+    Future(() => state = message);
   }
 
   void clear() => state = null;

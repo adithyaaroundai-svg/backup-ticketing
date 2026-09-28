@@ -8,16 +8,10 @@
 /// - everyone else (`executive`, `developer`, `impl_engineer`) -> clients,
 ///   which was the app's `/` root/home view.
 String landingRouteFor(String role) {
-  switch (role) {
-    case 'accountant':
-      return '/billing';
-    case 'manager':
-      return '/dashboard';
-    case 'team_lead':
-      return '/team';
-    default:
-      return '/clients';
+  if (role == 'accountant') {
+    return '/dev-crm/billing';
   }
+  return '/dev-crm/tasks';
 }
 
 bool roleCanSeeDashboard(String role) => role == 'manager';

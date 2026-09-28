@@ -12,6 +12,7 @@ import '../../../auth/presentation/providers/auth_provider.dart';
 import '../../../chat/data/repositories/chat_repository.dart';
 import '../../../chat/presentation/providers/chat_provider.dart';
 import '../widgets/animated_create_ticket_fab.dart';
+import '../widgets/claim_time_pie_chart.dart';
 import '../widgets/create_ticket_dialog.dart';
 
 class SupportDashboardPage extends ConsumerStatefulWidget {
@@ -24,6 +25,7 @@ class SupportDashboardPage extends ConsumerStatefulWidget {
 class _SupportDashboardPageState extends ConsumerState<SupportDashboardPage> {
   DateTime? _startDate;
   DateTime? _endDate;
+  final ScrollController _pageScrollController = ScrollController();
 
   // Restricted agents check
   static const _allowedAroundTallyChannelIds = {
@@ -38,6 +40,12 @@ class _SupportDashboardPageState extends ConsumerState<SupportDashboardPage> {
   @override
   void initState() {
     super.initState();
+  }
+
+  @override
+  void dispose() {
+    _pageScrollController.dispose();
+    super.dispose();
   }
 
   Future<void> _selectDateRange() async {
@@ -257,71 +265,100 @@ class _SupportDashboardPageState extends ConsumerState<SupportDashboardPage> {
                         .compareTo(a.updatedAt ?? a.createdAt ?? DateTime(0))),
             );
 
-            return Column(
-              children: [
-                // Top stats row
-                LayoutBuilder(
-                  builder: (context, constraints) {
-                    final isMobile = constraints.maxWidth < 700;
-                    final actions = _buildTopActions(context, ref);
+            final showClaimChart = ClaimTimeAudience.showOnSupport(currentUser);
+            final statsHeader = LayoutBuilder(
+              builder: (context, constraints) {
+                final isMobile = constraints.maxWidth < 700;
+                final actions = _buildTopActions(context, ref);
 
-                    return Container(
-                      color: context.adaptiveCard,
-                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-                      child: isMobile
-                          ? Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                WelcomeHeader(
-                                  name: currentUser?.username ?? 'Support',
-                                  subtitle: 'Your support dashboard and ticket queue',
-                                ),
-                                const SizedBox(height: 12),
-                                actions,
-                                const SizedBox(height: 12),
-                                _QueueStatTiles(stats: queueStats),
-                              ],
-                            )
-                          : Row(
-                              crossAxisAlignment: CrossAxisAlignment.center,
-                              children: [
-                                Expanded(
-                                  flex: 2,
-                                  child: WelcomeHeader(
-                                    name: currentUser?.username ?? 'Support',
-                                    subtitle: 'Your support dashboard and ticket queue',
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  flex: 4,
-                                  child: _QueueStatTiles(stats: queueStats),
-                                ),
-                                const SizedBox(width: 8),
-                                actions,
-                              ],
+                return Container(
+                  color: context.adaptiveCard,
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                  child: isMobile
+                      ? Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            WelcomeHeader(
+                              name: currentUser?.username ?? 'Support',
+                              subtitle: 'Your support dashboard and ticket queue',
                             ),
-                    );
-                  },
+                            const SizedBox(height: 12),
+                            actions,
+                            const SizedBox(height: 12),
+                            _QueueStatTiles(stats: queueStats),
+                          ],
+                        )
+                      : Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            Expanded(
+                              flex: 2,
+                              child: WelcomeHeader(
+                                name: currentUser?.username ?? 'Support',
+                                subtitle: 'Your support dashboard and ticket queue',
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              flex: 4,
+                              child: _QueueStatTiles(stats: queueStats),
+                            ),
+                            const SizedBox(width: 8),
+                            actions,
+                          ],
+                        ),
+                );
+              },
+            );
+            final ticketTable = FocusScope(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: TicketsTableView(
+                  tickets: allCombinedTickets,
+                  showAllTickets: true,
+                  showOnlyMine: false,
+                  showOnlyUnclaimed: false,
+                  groupResolved: false,
+                  isUnclaimedTab: false,
                 ),
-                Divider(height: 1, color: Theme.of(context).dividerColor),
-                // Single Table View
-                Expanded(
-                  child: FocusScope(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: TicketsTableView(
-                        tickets: allCombinedTickets,
-                        showAllTickets: true,
-                        showOnlyMine: false,
-                        showOnlyUnclaimed: false,
-                        groupResolved: false,
-                        isUnclaimedTab: false,
-                      ),
+              ),
+            );
+
+            if (!showClaimChart) {
+              return Column(
+                children: [
+                  statsHeader,
+                  Divider(height: 1, color: Theme.of(context).dividerColor),
+                  Expanded(child: ticketTable),
+                ],
+              );
+            }
+
+            return LayoutBuilder(
+              builder: (context, constraints) {
+                return Scrollbar(
+                  controller: _pageScrollController,
+                  thumbVisibility: true,
+                  child: SingleChildScrollView(
+                    controller: _pageScrollController,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        statsHeader,
+                        Divider(height: 1, color: Theme.of(context).dividerColor),
+                        const Padding(
+                          padding: EdgeInsets.fromLTRB(16, 12, 16, 0),
+                          child: ClaimTimePieChart(),
+                        ),
+                        SizedBox(
+                          height: constraints.maxHeight,
+                          child: ticketTable,
+                        ),
+                      ],
                     ),
                   ),
-                ),
-              ],
+                );
+              },
             );
           },
           loading: () => const Center(child: CircularProgressIndicator()),

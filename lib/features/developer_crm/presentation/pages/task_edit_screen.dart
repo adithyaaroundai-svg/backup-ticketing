@@ -187,7 +187,7 @@ class _TaskEditBodyState extends State<_TaskEditBody> {
         title: Text('Task #${task.id}'),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
-          onPressed: () => context.canPop() ? context.pop() : context.go('/tasks'),
+          onPressed: () => context.canPop() ? context.pop() : context.go('/dev-crm/tasks'),
         ),
         actions: [
           IconButton(
@@ -208,7 +208,7 @@ class _TaskEditBodyState extends State<_TaskEditBody> {
               if (confirmed == true) {
                 final authProv = context.read<AuthProvider>();
                 await prov.delete(currentUserId: authProv.user?.id, currentUserName: authProv.user?.name);
-                if (context.mounted) context.go('/tasks');
+                if (context.mounted) context.go('/dev-crm/tasks');
               }
             },
           ),

@@ -14,6 +14,7 @@ import '../providers/app_settings_provider.dart';
 import '../../../chat/data/repositories/chat_repository.dart';
 import '../../../chat/presentation/providers/chat_provider.dart';
 import '../widgets/animated_create_ticket_fab.dart';
+import '../widgets/claim_time_pie_chart.dart';
 import '../widgets/create_ticket_dialog.dart';
 
 class AdminDashboardPage extends ConsumerStatefulWidget {
@@ -191,6 +192,10 @@ class _AdminDashboardPageState extends ConsumerState<AdminDashboardPage> {
                 ],
               ),
               const SizedBox(height: 16),
+              if (ClaimTimeAudience.showOnAdmin(user)) ...[
+                const ClaimTimePieChart(),
+                const SizedBox(height: 16),
+              ],
 
               // KPI Row: Ticket stats
               LayoutBuilder(

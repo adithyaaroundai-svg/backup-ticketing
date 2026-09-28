@@ -19,12 +19,12 @@ import 'pages/work_item_edit_screen.dart';
 import 'widgets/app_shell.dart';
 
 bool _roleAllowed(String role, String path) {
-  if (path.startsWith('/dashboard')) return roleCanSeeDashboard(role);
-  if (path.startsWith('/settings')) return roleCanSeeSettings(role);
-  if (path.startsWith('/billing')) return roleCanSeeBilling(role);
-  if (path.startsWith('/team')) return roleCanSeeTeam(role);
+  if (path.startsWith('/dev-crm/dashboard')) return roleCanSeeDashboard(role);
+  if (path.startsWith('/dev-crm/settings')) return roleCanSeeSettings(role);
+  if (path.startsWith('/dev-crm/billing')) return roleCanSeeBilling(role);
+  if (path.startsWith('/dev-crm/team')) return roleCanSeeTeam(role);
   if (roleIsAccountant(role)) {
-    const accountantAllowed = ['/billing', '/change-password', '/activity'];
+    const accountantAllowed = ['/dev-crm/billing', '/dev-crm/change-password', '/dev-crm/activity'];
     return accountantAllowed.any((p) => path == p || path.startsWith('$p/'));
   }
   return true;
@@ -35,20 +35,20 @@ GoRouter buildDevCrmRouter(AuthProvider auth, VoidCallback onExit) {
     initialLocation: '/',
     refreshListenable: auth,
     redirect: (context, state) {
-      final loc = state.matchedLocation;
+      final loc = state.uri.path;
       if (!auth.initialized) {
-        return loc == '/' ? null : null;
+        return null;
       }
       final loggedIn = auth.isLoggedIn;
-      final atChangePassword = loc == '/change-password';
+      final atChangePassword = loc == '/dev-crm/change-password';
 
       if (!loggedIn) {
-        return '/unauthorized';
+        return loc == '/dev-crm/unauthorized' ? null : '/dev-crm/unauthorized';
       }
       if (auth.mustChangePassword) {
-        return atChangePassword ? null : '/change-password';
+        return atChangePassword ? null : '/dev-crm/change-password';
       }
-      if (loc == '/' || loc == '/unauthorized') {
+      if (loc == '/' || loc == '/unauthorized' || loc == '/dev-crm/unauthorized' || loc == '/developer-crm') {
         return landingRouteFor(auth.user!.role);
       }
       if (!_roleAllowed(auth.user!.role, loc)) {
@@ -59,7 +59,7 @@ GoRouter buildDevCrmRouter(AuthProvider auth, VoidCallback onExit) {
     routes: [
       GoRoute(path: '/', builder: (context, state) => const Scaffold(body: Center(child: CircularProgressIndicator()))),
       GoRoute(
-        path: '/unauthorized', 
+        path: '/dev-crm/unauthorized', 
         builder: (context, state) => Scaffold(
           body: Center(
             child: Padding(
@@ -72,33 +72,33 @@ GoRouter buildDevCrmRouter(AuthProvider auth, VoidCallback onExit) {
           )
         )
       ),
-      GoRoute(path: '/change-password', builder: (context, state) => const ChangePasswordScreen()),
+      GoRoute(path: '/dev-crm/change-password', builder: (context, state) => const ChangePasswordScreen()),
       GoRoute(
-        path: '/clients/:id',
+        path: '/dev-crm/clients/:id',
         builder: (context, state) =>
             ClientDetailScreen(clientId: int.parse(state.pathParameters['id']!)),
       ),
       GoRoute(
-        path: '/work-items/:id/edit',
+        path: '/dev-crm/work-items/:id/edit',
         builder: (context, state) =>
             WorkItemEditScreen(workItemId: int.parse(state.pathParameters['id']!)),
       ),
       GoRoute(
-        path: '/tasks/:id',
+        path: '/dev-crm/tasks/:id',
         builder: (context, state) => TaskEditScreen(taskId: int.parse(state.pathParameters['id']!)),
       ),
       ShellRoute(
         builder: (context, state, child) => AppShell(onExit: onExit, child: child),
         routes: [
-          GoRoute(path: '/dashboard', builder: (context, state) => const DashboardScreen()),
-          GoRoute(path: '/clients', builder: (context, state) => const ClientsScreen()),
-          GoRoute(path: '/deliverables', builder: (context, state) => const DeliverablesScreen()),
-          GoRoute(path: '/tasks', builder: (context, state) => const TaskBoardScreen()),
-          GoRoute(path: '/pending', builder: (context, state) => const PendingBoardScreen()),
-          GoRoute(path: '/billing', builder: (context, state) => const BillingScreen()),
-          GoRoute(path: '/team', builder: (context, state) => const TeamScreen()),
-          GoRoute(path: '/settings', builder: (context, state) => const SettingsScreen()),
-          GoRoute(path: '/activity', builder: (context, state) => const ActivityScreen()),
+          GoRoute(path: '/dev-crm/dashboard', builder: (context, state) => const DashboardScreen()),
+          GoRoute(path: '/dev-crm/clients', builder: (context, state) => const ClientsScreen()),
+          GoRoute(path: '/dev-crm/deliverables', builder: (context, state) => const DeliverablesScreen()),
+          GoRoute(path: '/dev-crm/tasks', builder: (context, state) => const TaskBoardScreen()),
+          GoRoute(path: '/dev-crm/pending', builder: (context, state) => const PendingBoardScreen()),
+          GoRoute(path: '/dev-crm/billing', builder: (context, state) => const BillingScreen()),
+          GoRoute(path: '/dev-crm/team', builder: (context, state) => const TeamScreen()),
+          GoRoute(path: '/dev-crm/settings', builder: (context, state) => const SettingsScreen()),
+          GoRoute(path: '/dev-crm/activity', builder: (context, state) => const ActivityScreen()),
         ],
       ),
     ],

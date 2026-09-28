@@ -159,7 +159,7 @@ class _TaskBoardBodyState extends State<_TaskBoardBody> {
                     const DropdownMenuItem<int?>(value: null, child: Text('All assignees')),
                     for (final u in _assigneeOptions) DropdownMenuItem<int?>(value: u.id, child: Text(u.name)),
                   ],
-                  onChanged: (v) => prov.load(assignee: v),
+                  onChanged: (v) => prov.setAssigneeFilter(v),
                 ),
                 DropdownButton<int?>(
                   hint: const Text('All clients'),
@@ -169,7 +169,7 @@ class _TaskBoardBodyState extends State<_TaskBoardBody> {
                     for (final c in clientsProv.clients)
                       DropdownMenuItem<int?>(value: c.id, child: Text(c.name)),
                   ],
-                  onChanged: (v) => prov.load(client: v),
+                  onChanged: (v) => prov.setClientFilter(v),
                 ),
                 if (prov.statusFilter != 'active' || prov.assigneeFilter != null || prov.clientFilter != null)
                   TextButton(
