@@ -4119,7 +4119,9 @@ class _ChatBubble extends ConsumerWidget {
                 const SizedBox(width: 4),
                 Builder(
                   builder: (context) {
-                    final isRead = ReadReceiptsTracker.getReadBy(message.id).isNotEmpty;
+                    final partnerId = message.receiverId?.trim().toLowerCase();
+                    final isRead = partnerId != null &&
+                        ReadReceiptsTracker.getReadBy(message.id).contains(partnerId);
                     return Icon(
                       isRead ? Icons.done_all : Icons.check,
                       size: 14,
@@ -4286,8 +4288,9 @@ class _ChatBubble extends ConsumerWidget {
                             const SizedBox(width: 4),
                             Builder(
                               builder: (context) {
-                                final readBy = ReadReceiptsTracker.getReadBy(message.id);
-                                final isRead = readBy.isNotEmpty; // Since it's a DM, any read means partner read it
+                                final partnerId = message.receiverId?.trim().toLowerCase();
+                                final isRead = partnerId != null &&
+                                    ReadReceiptsTracker.getReadBy(message.id).contains(partnerId);
                                 return Icon(
                                   isRead ? Icons.done_all : Icons.check,
                                   size: 14,

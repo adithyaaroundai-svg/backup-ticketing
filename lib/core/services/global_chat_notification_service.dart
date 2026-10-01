@@ -61,6 +61,27 @@ class GlobalChatNotificationService {
     // Don't notify if it's a DM for someone else
     if (receiverId != null && receiverId != _currentUserId) return;
 
+    // Sales pipeline and new-lead posts stay inside the sales team.
+    const salesMemberIds = {
+      '14db36db-0cb9-44ef-8032-d9610b3bc797',
+      'b77b3738-4dfc-4515-a1fd-d6fb170423f4',
+      'd8aa6435-9e02-4bab-9acc-ae1f5f3d6a1c',
+      '5a06a8df-97f1-4dbf-bc13-9724a3c779c1',
+      'd9572a84-762b-4c8b-8ef5-7da0345e3ea8',
+      '0a5aeeb8-9544-4dc8-920f-e26c192b0dd3',
+      'f3b54de6-0372-4648-ad87-3e98089efc2d',
+    };
+    final channelName = (channel ?? '').toLowerCase();
+    final isSalesChannel = channelName == 'sales-channel' ||
+        channelName == 'sales-team' ||
+        channelName.contains('sales');
+    final isLeadNotice = content.contains('🎯 New Lead') ||
+        content.contains('[LeadID:');
+    final isSalesMember = _currentUserId != null && salesMemberIds.contains(_currentUserId);
+    if (receiverId == null && (isSalesChannel || isLeadNotice) && !isSalesMember) {
+      return;
+    }
+
     // If it's a custom channel, ensure the user is a member
     if (channel != null && 
         channel != 'support-chat' && 

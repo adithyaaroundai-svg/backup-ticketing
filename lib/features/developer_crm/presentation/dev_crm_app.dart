@@ -3,6 +3,8 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart' as riverpod;
 
+import '../../../core/design_system/theme/app_theme.dart';
+import '../../../core/design_system/theme/theme_provider.dart';
 import 'dev_crm_provider_scope.dart';
 import 'dev_crm_router.dart';
 import 'providers/auth_provider.dart';
@@ -34,10 +36,11 @@ class _DeveloperCrmEntryAppState extends riverpod.ConsumerState<DeveloperCrmEntr
           return MaterialApp.router(
             debugShowCheckedModeBanner: false,
             title: 'Project Tracker',
-            theme: ThemeData(
-              colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo),
-              useMaterial3: true,
-            ),
+            theme: AppTheme.lightTheme,
+            darkTheme: AppTheme.darkTheme,
+            themeMode: ref.watch(themeProvider) == AppThemeType.white
+                ? ThemeMode.light
+                : ThemeMode.dark,
             routerConfig: _router,
           );
         },

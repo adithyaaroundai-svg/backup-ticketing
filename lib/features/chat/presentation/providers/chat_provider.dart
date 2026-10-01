@@ -404,7 +404,9 @@ class DmStream extends _$DmStream {
   bool _alive = true;
   bool _acceptEvents = false;
   bool _catchingUp = false;
+  bool _syncingReceipts = false;
   Timer? _pollTimer;
+  Timer? _receiptTimer;
   Timer? _resubscribeTimer;
   final List<PostgresChangePayload> _eventBuffer = [];
   
@@ -416,11 +418,13 @@ class DmStream extends _$DmStream {
     _acceptEvents = false;
     _eventBuffer.clear();
     _pollTimer?.cancel();
+    _receiptTimer?.cancel();
     _resubscribeTimer?.cancel();
     ref.onDispose(() {
       _alive = false;
       _acceptEvents = false;
       _pollTimer?.cancel();
+      _receiptTimer?.cancel();
       _resubscribeTimer?.cancel();
       _channelSub?.unsubscribe();
       _receiptsSub?.unsubscribe();
@@ -477,6 +481,25 @@ class DmStream extends _$DmStream {
       final open = ref.read(currentOpenConversationProvider)?.trim().toLowerCase();
       if (open == null || open != chatPartnerId.trim().toLowerCase()) return;
       _catchUp();
+    });
+  }
+
+  bool get _isThisConversationOpen {
+    final open = ref.read(currentOpenConversationProvider)?.trim().toLowerCase();
+    return open != null && open == chatPartnerId.trim().toLowerCase();
+  }
+
+  void _startReceiptPolling() {
+    _receiptTimer?.cancel();
+    _receiptTimer = Timer.periodic(const Duration(seconds: 1), (_) async {
+      if (!_alive || !_acceptEvents || !_isThisConversationOpen) return;
+      final myId = ref.read(authProvider)?.id;
+      if (myId == null) return;
+      try {
+        await _syncReadReceipts(myId);
+      } catch (e) {
+        debugPrint('DM read-receipt sync failed: $e');
+      }
     });
   }
 
@@ -542,6 +565,7 @@ class DmStream extends _$DmStream {
         _handlePostgresEvent(payload);
       }
       _startPolling();
+      _startReceiptPolling();
       _catchUp();
     });
     
@@ -573,10 +597,35 @@ class DmStream extends _$DmStream {
       );
       if (!_alive) return;
       _mergeRemote(messages, myId);
+      await _syncReadReceipts(myId);
     } catch (e) {
       debugPrint('DM stream catch-up failed: $e');
     } finally {
       _catchingUp = false;
+    }
+  }
+
+  /// Pulls the other person's read receipts for messages that still show a
+  /// single tick, so the blue double tick updates without a full refresh.
+  Future<void> _syncReadReceipts(String myId) async {
+    if (!_alive || _syncingReceipts) return;
+    final messages = state.value ?? const <ChatMessage>[];
+    final myNorm = myId.trim().toLowerCase();
+    final partnerNorm = chatPartnerId.trim().toLowerCase();
+    final pendingIds = messages
+        .where((m) =>
+            !m.id.startsWith('temp_') &&
+            m.senderId.trim().toLowerCase() == myNorm &&
+            !ReadReceiptsTracker.getReadBy(m.id).contains(partnerNorm))
+        .map((m) => m.id)
+        .toList();
+    if (pendingIds.isEmpty) return;
+    _syncingReceipts = true;
+    try {
+      final receipts = await ref.read(chatRepositoryProvider).fetchReceiptsForMessages(pendingIds);
+      if (_alive) ReadReceiptsTracker.injectReceipts(receipts);
+    } finally {
+      _syncingReceipts = false;
     }
   }
 

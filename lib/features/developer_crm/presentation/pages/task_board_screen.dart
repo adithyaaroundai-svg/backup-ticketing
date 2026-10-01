@@ -10,6 +10,8 @@ import '../../domain/entities/user.dart';
 import '../providers/task_board_provider.dart';
 import '../providers/clients_provider.dart';
 import '../providers/auth_provider.dart';
+import '../../../../core/design_system/theme/app_colors.dart';
+import '../widgets/board_chrome.dart';
 import '../widgets/common.dart';
 import '../widgets/editable_task_table.dart';
 import '../widgets/task_form_dialog.dart';
@@ -116,59 +118,86 @@ class _TaskBoardBodyState extends State<_TaskBoardBody> {
       (grouped[key] ??= []).add(t);
     }
 
+    final emptyMessage = prov.statusFilter == 'completed'
+        ? 'No completed tasks found.'
+        : prov.statusFilter == 'cancelled'
+            ? 'No cancelled tasks found.'
+            : 'No active tasks for today.';
+
     return RefreshIndicator(
       onRefresh: () => prov.load(),
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(24, 20, 24, 28),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Wrap(
-              crossAxisAlignment: WrapCrossAlignment.center,
-              spacing: 12,
-              runSpacing: 8,
+            const BoardPageHeader(
+              title: "Today's Tasks",
+              subtitle: 'Work planned for today, grouped by date.',
+            ),
+            const SizedBox(height: 16),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final cards = [
+                  BoardStatusCard(
+                    label: 'Active',
+                    count: prov.activeTasksCount,
+                    selected: prov.statusFilter == 'active',
+                    color: AppColors.primary,
+                    icon: Icons.bolt_rounded,
+                    onTap: () => prov.setStatusFilter('active'),
+                  ),
+                  BoardStatusCard(
+                    label: 'Completed',
+                    count: prov.completedTasksCount,
+                    selected: prov.statusFilter == 'completed',
+                    color: AppColors.success,
+                    icon: Icons.check_circle_outline_rounded,
+                    onTap: () => prov.setStatusFilter('completed'),
+                  ),
+                  BoardStatusCard(
+                    label: 'Cancelled',
+                    count: prov.cancelledTasksCount,
+                    selected: prov.statusFilter == 'cancelled',
+                    color: AppColors.slate600,
+                    icon: Icons.cancel_outlined,
+                    onTap: () => prov.setStatusFilter('cancelled'),
+                  ),
+                ];
+                if (constraints.maxWidth < 720) {
+                  return Column(
+                    children: [
+                      for (var i = 0; i < cards.length; i++) ...[
+                        if (i > 0) const SizedBox(height: 8),
+                        cards[i],
+                      ],
+                    ],
+                  );
+                }
+                return Row(
+                  children: [
+                    for (var i = 0; i < cards.length; i++) ...[
+                      if (i > 0) const SizedBox(width: 12),
+                      Expanded(child: cards[i]),
+                    ],
+                  ],
+                );
+              },
+            ),
+            const SizedBox(height: 12),
+            BoardToolbar(
               children: [
-                const Text("Today's Tasks", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                SegmentedButton<String>(
-                  style: const ButtonStyle(visualDensity: VisualDensity.compact),
-                  segments: [
-                    ButtonSegment<String>(
-                      value: 'active',
-                      icon: const Icon(Icons.flash_on_rounded, size: 16),
-                      label: Text('Active (${prov.activeTasksCount})'),
-                    ),
-                    ButtonSegment<String>(
-                      value: 'completed',
-                      icon: const Icon(Icons.check_circle_rounded, size: 16),
-                      label: Text('Completed (${prov.completedTasksCount})'),
-                    ),
-                    ButtonSegment<String>(
-                      value: 'cancelled',
-                      icon: const Icon(Icons.cancel_rounded, size: 16),
-                      label: Text('Cancelled (${prov.cancelledTasksCount})'),
-                    ),
-                  ],
-                  selected: {prov.statusFilter},
-                  onSelectionChanged: (set) => prov.setStatusFilter(set.first),
-                ),
-                DropdownButton<int?>(
-                  hint: const Text('All assignees'),
+                BoardAssigneeFilter(
                   value: prov.assigneeFilter,
-                  items: [
-                    const DropdownMenuItem<int?>(value: null, child: Text('All assignees')),
-                    for (final u in _assigneeOptions) DropdownMenuItem<int?>(value: u.id, child: Text(u.name)),
-                  ],
-                  onChanged: (v) => prov.setAssigneeFilter(v),
+                  options: [for (final user in _assigneeOptions) (user.id, user.name)],
+                  onChanged: (id) {
+                    prov.setAssigneeFilter(id);
+                  },
                 ),
-                DropdownButton<int?>(
-                  hint: const Text('All clients'),
+                _SearchableClientFilter(
+                  clients: clientsProv.clients,
                   value: prov.clientFilter,
-                  items: [
-                    const DropdownMenuItem<int?>(value: null, child: Text('All clients')),
-                    for (final c in clientsProv.clients)
-                      DropdownMenuItem<int?>(value: c.id, child: Text(c.name)),
-                  ],
                   onChanged: (v) => prov.setClientFilter(v),
                 ),
                 if (prov.statusFilter != 'active' || prov.assigneeFilter != null || prov.clientFilter != null)
@@ -182,8 +211,8 @@ class _TaskBoardBodyState extends State<_TaskBoardBody> {
                 OutlinedButton.icon(
                   icon: _carryingForward
                       ? const SizedBox(height: 14, width: 14, child: CircularProgressIndicator(strokeWidth: 2))
-                      : const Icon(Icons.forward),
-                  label: const Text('Carry forward unfinished work'),
+                      : const Icon(Icons.forward, size: 18),
+                  label: const Text('Carry forward'),
                   onPressed: _carryingForward
                       ? null
                       : () async {
@@ -199,21 +228,21 @@ class _TaskBoardBodyState extends State<_TaskBoardBody> {
                         },
                 ),
                 FilledButton.icon(
-                  icon: const Icon(Icons.add),
+                  icon: const Icon(Icons.add, size: 18),
                   label: const Text('Add task'),
                   onPressed: () => _addTask(context, prov, clientsProv.clients),
                 ),
               ],
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
+            if (grouped.isEmpty) BoardEmptyState(message: emptyMessage),
             for (final entry in grouped.entries) ...[
-              Text(
-                entry.key == 'No date' ? 'No date' : fmtDate(entry.key),
-                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+              BoardDateHeader(
+                label: entry.key == 'No date' ? 'No date' : fmtDate(entry.key),
+                count: entry.value.length,
               ),
-              const SizedBox(height: 6),
-              Card(
-                clipBehavior: Clip.antiAlias,
+              const SizedBox(height: 8),
+              BoardTableCard(
                 child: EditableTaskTable(
                   tasks: entry.value,
                   onQuickUpdate: (id, {priority, status}) {
@@ -250,18 +279,6 @@ class _TaskBoardBodyState extends State<_TaskBoardBody> {
               ),
               const SizedBox(height: 20),
             ],
-            if (grouped.isEmpty)
-              Padding(
-                padding: const EdgeInsets.all(24),
-                child: Text(
-                  prov.statusFilter == 'completed'
-                      ? 'No completed tasks found.'
-                      : prov.statusFilter == 'cancelled'
-                          ? 'No cancelled tasks found.'
-                          : 'No active tasks for today.',
-                  style: const TextStyle(color: Colors.grey),
-                ),
-              ),
           ],
         ),
       ),
@@ -303,5 +320,185 @@ class _TaskBoardBodyState extends State<_TaskBoardBody> {
     } catch (e) {
       if (context.mounted) showSavedSnack(context, ok: false, message: e.toString());
     }
+  }
+}
+
+class _SearchableClientFilter extends StatefulWidget {
+  const _SearchableClientFilter({
+    required this.clients,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final List<Client> clients;
+  final int? value;
+  final ValueChanged<int?> onChanged;
+
+  @override
+  State<_SearchableClientFilter> createState() => _SearchableClientFilterState();
+}
+
+class _SearchableClientFilterState extends State<_SearchableClientFilter> {
+  final MenuController _menu = MenuController();
+
+  @override
+  Widget build(BuildContext context) {
+    Client? selected;
+    for (final client in widget.clients) {
+      if (client.id == widget.value) {
+        selected = client;
+        break;
+      }
+    }
+    final label = selected?.name ?? 'All clients';
+
+    return MenuAnchor(
+      controller: _menu,
+      style: const MenuStyle(
+        padding: WidgetStatePropertyAll(EdgeInsets.zero),
+      ),
+      menuChildren: [
+        _ClientFilterMenu(
+          clients: widget.clients,
+          selectedId: widget.value,
+          onSelected: (id) {
+            widget.onChanged(id);
+            _menu.close();
+          },
+        ),
+      ],
+      builder: (context, controller, child) {
+        return Material(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(8),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(8),
+            onTap: () => controller.isOpen ? controller.close() : controller.open(),
+            child: Container(
+              padding: const EdgeInsets.fromLTRB(10, 8, 4, 8),
+              decoration: BoxDecoration(
+                border: Border.all(color: AppColors.border),
+                borderRadius: BorderRadius.circular(8),
+                color: AppColors.slate50,
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.search, size: 16, color: Colors.grey.shade600),
+                  const SizedBox(width: 6),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 160),
+                    child: Text(
+                      label,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 14),
+                    ),
+                  ),
+                  Icon(Icons.arrow_drop_down, color: Colors.grey.shade700),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _ClientFilterMenu extends StatefulWidget {
+  const _ClientFilterMenu({
+    required this.clients,
+    required this.selectedId,
+    required this.onSelected,
+  });
+
+  final List<Client> clients;
+  final int? selectedId;
+  final ValueChanged<int?> onSelected;
+
+  @override
+  State<_ClientFilterMenu> createState() => _ClientFilterMenuState();
+}
+
+class _ClientFilterMenuState extends State<_ClientFilterMenu> {
+  final TextEditingController _search = TextEditingController();
+  String _query = '';
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final query = _query.trim().toLowerCase();
+    final matches = widget.clients.where((client) {
+      if (query.isEmpty) return true;
+      final name = client.name.toLowerCase();
+      final contact = client.contact?.toLowerCase() ?? '';
+      return name.contains(query) || contact.contains(query);
+    }).toList()
+      ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+
+    return SizedBox(
+      width: 280,
+      height: 340,
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(8, 8, 8, 4),
+            child: TextField(
+              controller: _search,
+              autofocus: true,
+              decoration: InputDecoration(
+                isDense: true,
+                hintText: 'Search clients',
+                prefixIcon: const Icon(Icons.search, size: 18),
+                suffixIcon: _query.isEmpty
+                    ? null
+                    : IconButton(
+                        tooltip: 'Clear search',
+                        icon: const Icon(Icons.clear, size: 16),
+                        onPressed: () {
+                          _search.clear();
+                          setState(() => _query = '');
+                        },
+                      ),
+                border: const OutlineInputBorder(),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+              ),
+              onChanged: (value) => setState(() => _query = value),
+            ),
+          ),
+          Expanded(
+            child: ListView(
+              padding: EdgeInsets.zero,
+              children: [
+                ListTile(
+                  dense: true,
+                  title: const Text('All clients'),
+                  selected: widget.selectedId == null,
+                  onTap: () => widget.onSelected(null),
+                ),
+                if (matches.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.all(16),
+                    child: Text('No clients found', style: TextStyle(color: Colors.grey)),
+                  )
+                else
+                  for (final client in matches)
+                    ListTile(
+                      dense: true,
+                      title: Text(client.name),
+                      selected: widget.selectedId == client.id,
+                      onTap: () => widget.onSelected(client.id),
+                    ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

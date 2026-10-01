@@ -84,8 +84,28 @@ serve(async (req) => {
           .neq('id', senderId)
           .not('fcm_token', 'is', null)
 
-        if (agents && agents.length > 0) {
-          for (const agent of agents) {
+        const salesMemberIds = new Set([
+          '14db36db-0cb9-44ef-8032-d9610b3bc797',
+          'b77b3738-4dfc-4515-a1fd-d6fb170423f4',
+          'd8aa6435-9e02-4bab-9acc-ae1f5f3d6a1c',
+          '5a06a8df-97f1-4dbf-bc13-9724a3c779c1',
+          'd9572a84-762b-4c8b-8ef5-7da0345e3ea8',
+          '0a5aeeb8-9544-4dc8-920f-e26c192b0dd3',
+          'f3b54de6-0372-4648-ad87-3e98089efc2d',
+        ])
+        const channelName = (channel || '').toLowerCase()
+        const isSalesChannel = channelName === 'sales-channel' ||
+          channelName === 'sales-team' ||
+          channelName.includes('sales')
+        const messageBody = String(content || '')
+        const isLeadNotice = messageBody.includes('🎯 New Lead') ||
+          messageBody.includes('[LeadID:')
+        const recipients = (isSalesChannel || isLeadNotice)
+          ? (agents || []).filter((agent) => salesMemberIds.has(agent.id))
+          : (agents || [])
+
+        if (recipients.length > 0) {
+          for (const agent of recipients) {
             if (agent.fcm_token) {
               messagesToSend.push({
                 title: `#${channel} • ${senderName}`,
@@ -93,7 +113,7 @@ serve(async (req) => {
                 data: {
                   type: 'channel',
                   channel: channel,
-                  link: `/chat`,
+                  link: isSalesChannel ? '/sales-channel' : `/chat`,
                 },
                 token: agent.fcm_token,
               })

@@ -7,6 +7,8 @@ import '../../domain/entities/user.dart';
 import '../providers/task_board_provider.dart';
 import '../providers/clients_provider.dart';
 import '../providers/auth_provider.dart';
+import '../../../../core/design_system/theme/app_colors.dart';
+import '../widgets/board_chrome.dart';
 import '../widgets/common.dart';
 import '../widgets/editable_task_table.dart';
 import '../widgets/task_form_dialog.dart';
@@ -104,50 +106,70 @@ class _PendingBoardBodyState extends State<_PendingBoardBody> {
       return ErrorBanner(message: prov.error!, onRetry: () => prov.load());
     }
 
+    final emptyMessage = prov.statusFilter == 'completed'
+        ? 'No completed pending tasks.'
+        : prov.statusFilter == 'cancelled'
+            ? 'No cancelled pending tasks.'
+            : 'No active pending tasks.';
+
     return RefreshIndicator(
       onRefresh: () => prov.load(),
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(24, 20, 24, 28),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Wrap(
-              crossAxisAlignment: WrapCrossAlignment.center,
-              spacing: 12,
-              runSpacing: 8,
+            const BoardPageHeader(
+              title: 'Pending Tasks',
+              subtitle: 'Work waiting to be scheduled onto a day.',
+            ),
+            const SizedBox(height: 16),
+            Row(
               children: [
-                const Text('Pending Tasks', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                SegmentedButton<String>(
-                  style: const ButtonStyle(visualDensity: VisualDensity.compact),
-                  segments: [
-                    ButtonSegment<String>(
-                      value: 'active',
-                      icon: const Icon(Icons.flash_on_rounded, size: 16),
-                      label: Text('Active (${prov.activeTasksCount})'),
-                    ),
-                    ButtonSegment<String>(
-                      value: 'completed',
-                      icon: const Icon(Icons.check_circle_rounded, size: 16),
-                      label: Text('Completed (${prov.completedTasksCount})'),
-                    ),
-                    ButtonSegment<String>(
-                      value: 'cancelled',
-                      icon: const Icon(Icons.cancel_rounded, size: 16),
-                      label: Text('Cancelled (${prov.cancelledTasksCount})'),
-                    ),
-                  ],
-                  selected: {prov.statusFilter},
-                  onSelectionChanged: (set) => prov.setStatusFilter(set.first),
+                Expanded(
+                  child: BoardStatusCard(
+                    label: 'Active',
+                    count: prov.activeTasksCount,
+                    selected: prov.statusFilter == 'active',
+                    color: AppColors.primary,
+                    icon: Icons.pending_actions_rounded,
+                    onTap: () => prov.setStatusFilter('active'),
+                  ),
                 ),
-                DropdownButton<int?>(
-                  hint: const Text('All assignees'),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: BoardStatusCard(
+                    label: 'Completed',
+                    count: prov.completedTasksCount,
+                    selected: prov.statusFilter == 'completed',
+                    color: AppColors.success,
+                    icon: Icons.check_circle_outline_rounded,
+                    onTap: () => prov.setStatusFilter('completed'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: BoardStatusCard(
+                    label: 'Cancelled',
+                    count: prov.cancelledTasksCount,
+                    selected: prov.statusFilter == 'cancelled',
+                    color: AppColors.slate600,
+                    icon: Icons.cancel_outlined,
+                    onTap: () => prov.setStatusFilter('cancelled'),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            BoardToolbar(
+              children: [
+                BoardAssigneeFilter(
                   value: prov.assigneeFilter,
-                  items: [
-                    const DropdownMenuItem<int?>(value: null, child: Text('All assignees')),
-                    for (final u in _assigneeOptions) DropdownMenuItem<int?>(value: u.id, child: Text(u.name)),
-                  ],
-                  onChanged: (v) => prov.setAssigneeFilter(v),
+                  options: [for (final user in _assigneeOptions) (user.id, user.name)],
+                  onChanged: (id) {
+                    prov.setAssigneeFilter(id);
+                  },
                 ),
                 if (prov.statusFilter != 'active' || prov.assigneeFilter != null)
                   TextButton(
@@ -158,22 +180,17 @@ class _PendingBoardBodyState extends State<_PendingBoardBody> {
                     child: const Text('Clear filters'),
                   ),
                 FilledButton.icon(
-                  icon: const Icon(Icons.add),
+                  icon: const Icon(Icons.add, size: 18),
                   label: const Text('Add pending task'),
                   onPressed: () => _addTask(context, prov, clientsProv.clients),
                 ),
               ],
             ),
-            const SizedBox(height: 16),
-            Card(
-              clipBehavior: Clip.antiAlias,
+            const SizedBox(height: 20),
+            BoardTableCard(
               child: EditableTaskTable(
+                emptyMessage: emptyMessage,
                 tasks: prov.filteredTasks,
-                emptyMessage: prov.statusFilter == 'completed'
-                    ? 'No completed pending tasks.'
-                    : prov.statusFilter == 'cancelled'
-                        ? 'No cancelled pending tasks.'
-                        : 'No active pending tasks.',
                 onQuickUpdate: (id, {priority, status}) {
                   final task = prov.filteredTasks.firstWhere((t) => t.id == id);
                   return _quickUpdate(prov, task, authProv, priority: priority, status: status);
