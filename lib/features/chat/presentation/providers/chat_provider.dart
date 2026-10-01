@@ -401,24 +401,117 @@ class DmStream extends _$DmStream {
   RealtimeChannel? _receiptsSub;
   bool _hasMore = true;
   bool _isLoadingMore = false;
+  bool _alive = true;
+  bool _acceptEvents = false;
+  bool _catchingUp = false;
+  Timer? _pollTimer;
+  Timer? _resubscribeTimer;
+  final List<PostgresChangePayload> _eventBuffer = [];
   
   bool get isLoadingMore => _isLoadingMore;
   bool get hasMore => _hasMore;
+
+  void _bindLifecycle() {
+    _alive = true;
+    _acceptEvents = false;
+    _eventBuffer.clear();
+    _pollTimer?.cancel();
+    _resubscribeTimer?.cancel();
+    ref.onDispose(() {
+      _alive = false;
+      _acceptEvents = false;
+      _pollTimer?.cancel();
+      _resubscribeTimer?.cancel();
+      _channelSub?.unsubscribe();
+      _receiptsSub?.unsubscribe();
+    });
+  }
+
+  void _listen(ChatRepository repository, String myId) {
+    _channelSub?.unsubscribe();
+    _receiptsSub?.unsubscribe();
+    _channelSub = repository.subscribeToMessages(
+      channelName: 'dm',
+      currentUserId: myId,
+      chatPartnerId: chatPartnerId,
+      onEvent: _handlePostgresEvent,
+      onStatus: _onChannelStatus,
+    );
+    _receiptsSub = repository.subscribeToReadReceipts(
+      channelName: 'dm',
+      currentUserId: myId,
+      chatPartnerId: chatPartnerId,
+      onEvent: _handleReadReceiptEvent,
+    );
+  }
+
+  void _onChannelStatus(RealtimeSubscribeStatus status, Object? error) {
+    if (!_alive) return;
+    if (status == RealtimeSubscribeStatus.subscribed) {
+      _resubscribeTimer?.cancel();
+      _resubscribeTimer = null;
+      _catchUp();
+      return;
+    }
+    if (status == RealtimeSubscribeStatus.channelError ||
+        status == RealtimeSubscribeStatus.timedOut) {
+      _scheduleResubscribe();
+    }
+  }
+
+  void _scheduleResubscribe() {
+    if (!_alive || _resubscribeTimer != null) return;
+    _resubscribeTimer = Timer(const Duration(seconds: 2), () {
+      _resubscribeTimer = null;
+      if (!_alive) return;
+      final myId = ref.read(authProvider)?.id;
+      if (myId == null) return;
+      _listen(ref.read(chatRepositoryProvider), myId);
+    });
+  }
+
+  void _startPolling() {
+    _pollTimer?.cancel();
+    _pollTimer = Timer.periodic(const Duration(seconds: 3), (_) {
+      if (!_alive) return;
+      final open = ref.read(currentOpenConversationProvider)?.trim().toLowerCase();
+      if (open == null || open != chatPartnerId.trim().toLowerCase()) return;
+      _catchUp();
+    });
+  }
+
+  bool _belongsToConversation(ChatMessage message, String myId) {
+    final normalizedMyId = myId.trim().toLowerCase();
+    final normalizedPartnerId = chatPartnerId.trim().toLowerCase();
+    final normalizedSenderId = message.senderId.trim().toLowerCase();
+    final normalizedReceiverId = message.receiverId?.trim().toLowerCase();
+    return (normalizedSenderId == normalizedMyId && normalizedReceiverId == normalizedPartnerId) ||
+        (normalizedSenderId == normalizedPartnerId && normalizedReceiverId == normalizedMyId);
+  }
+
+  void _rememberAndNotifyEngine(ChatMessage message) {
+    ref.read(dmConversationsProvider.notifier).observeRemoteMessage(message);
+  }
   
   @override
   FutureOr<List<ChatMessage>> build(String chatPartnerId) async {
+    _bindLifecycle();
     final repository = ref.watch(chatRepositoryProvider);
     final myId = ref.watch(authProvider)?.id;
     if (myId == null) return [];
 
     final cacheKey = '${myId}_$chatPartnerId';
     final currentCache = _dmCache[cacheKey] ?? [];
+
+    // Subscribe before the fetch so inserts that land during the query are buffered.
+    _listen(repository, myId);
     
     final messages = await repository.getPaginatedMessages(
       currentUserId: myId,
       chatPartnerId: chatPartnerId,
       limit: 30,
     );
+    if (!_alive) return messages;
 
     _hasMore = messages.length == 30;
 
@@ -437,24 +530,19 @@ class DmStream extends _$DmStream {
     
     _dmCache[cacheKey] = finalMessages;
     _dmHasMoreCache[cacheKey] = _hasMore;
-    
-    _channelSub = repository.subscribeToMessages(
-      channelName: 'dm',
-      currentUserId: myId,
-      chatPartnerId: chatPartnerId,
-      onEvent: _handlePostgresEvent,
-    );
 
-    _receiptsSub = repository.subscribeToReadReceipts(
-      channelName: 'dm',
-      currentUserId: myId,
-      chatPartnerId: chatPartnerId,
-      onEvent: _handleReadReceiptEvent,
-    );
-    
-    ref.onDispose(() {
-      _channelSub?.unsubscribe();
-      _receiptsSub?.unsubscribe();
+    // Riverpod commits the returned list after this future completes. Accept
+    // live events on the next event-loop turn so that commit cannot wipe them.
+    Future(() {
+      if (!_alive) return;
+      _acceptEvents = true;
+      final pending = List<PostgresChangePayload>.from(_eventBuffer);
+      _eventBuffer.clear();
+      for (final payload in pending) {
+        _handlePostgresEvent(payload);
+      }
+      _startPolling();
+      _catchUp();
     });
     
     return finalMessages;
@@ -465,57 +553,55 @@ class DmStream extends _$DmStream {
   }
 
   Future<void> softRefresh() async {
+    await _catchUp(reconnect: true);
+  }
+
+  Future<void> _catchUp({bool reconnect = false}) async {
+    if (!_alive || _catchingUp || !_acceptEvents) return;
     final myId = ref.read(authProvider)?.id;
     if (myId == null) return;
     final repository = ref.read(chatRepositoryProvider);
-    final currentList = state.value ?? [];
-    
-    // Reconnect subscriptions
-    _channelSub?.unsubscribe();
-    _receiptsSub?.unsubscribe();
-    _channelSub = repository.subscribeToMessages(
-      channelName: 'dm',
-      currentUserId: myId,
-      chatPartnerId: chatPartnerId,
-      onEvent: _handlePostgresEvent,
-    );
-    _receiptsSub = repository.subscribeToReadReceipts(
-      channelName: 'dm',
-      currentUserId: myId,
-      chatPartnerId: chatPartnerId,
-      onEvent: _handleReadReceiptEvent,
-    );
-    
-    // Fetch latest messages and append missing ones
-    final messages = await repository.getPaginatedMessages(
-      currentUserId: myId,
-      chatPartnerId: chatPartnerId,
-      limit: 30,
-    );
-    
-    if (currentList.isNotEmpty) {
-      final newMessages = messages.where((m) => !currentList.any((c) => c.id == m.id)).toList();
-      if (newMessages.isNotEmpty) {
-        final combined = [...currentList, ...newMessages];
-        combined.sort((a, b) {
-          final t = a.createdAt.toUtc().compareTo(b.createdAt.toUtc());
-          return t != 0 ? t : a.id.compareTo(b.id);
-        });
-        
-        final messageIds = combined.map((m) => m.id).toList();
-        final receipts = await repository.fetchReceiptsForMessages(messageIds);
-        ReadReceiptsTracker.injectReceipts(receipts);
-        
-        _updateState(combined);
+    _catchingUp = true;
+    try {
+      if (reconnect || _channelSub == null) {
+        _listen(repository, myId);
       }
-    } else {
-      if (messages.isNotEmpty) {
-        final messageIds = messages.map((m) => m.id).toList();
-        final receipts = await repository.fetchReceiptsForMessages(messageIds);
-        ReadReceiptsTracker.injectReceipts(receipts);
-        _updateState(messages);
+      final messages = await repository.getPaginatedMessages(
+        currentUserId: myId,
+        chatPartnerId: chatPartnerId,
+        limit: 30,
+      );
+      if (!_alive) return;
+      _mergeRemote(messages, myId);
+    } catch (e) {
+      debugPrint('DM stream catch-up failed: $e');
+    } finally {
+      _catchingUp = false;
+    }
+  }
+
+  void _mergeRemote(List<ChatMessage> incoming, String myId) {
+    if (!_alive) return;
+    final currentList = List<ChatMessage>.from(state.value ?? const <ChatMessage>[]);
+    var changed = false;
+    for (final message in incoming) {
+      if (!_belongsToConversation(message, myId)) continue;
+      final index = currentList.indexWhere((m) => m.id == message.id);
+      if (index == -1) {
+        currentList.add(message);
+        changed = true;
+        _rememberAndNotifyEngine(message);
+      } else if (currentList[index] != message) {
+        currentList[index] = message;
+        changed = true;
       }
     }
+    if (!changed) return;
+    currentList.sort((a, b) {
+      final t = a.createdAt.toUtc().compareTo(b.createdAt.toUtc());
+      return t != 0 ? t : a.id.compareTo(b.id);
+    });
+    _updateState(currentList);
   }
 
   void _updateState(List<ChatMessage> newList) {
@@ -539,43 +625,32 @@ class DmStream extends _$DmStream {
   }
 
   void _handlePostgresEvent(PostgresChangePayload payload) {
+    if (!_acceptEvents) {
+      _eventBuffer.add(payload);
+      return;
+    }
     final myId = ref.read(authProvider)?.id;
     if (myId == null) return;
 
-    if (payload.eventType == PostgresChangeEvent.insert) {
-      print('Postgres INSERT received for DM!');
-      final newMsg = ChatMessage.fromJson(payload.newRecord);
-      final normalizedMyId = myId.trim().toLowerCase();
-      final normalizedPartnerId = chatPartnerId.trim().toLowerCase();
-      final normalizedSenderId = newMsg.senderId.trim().toLowerCase();
-      final normalizedReceiverId = newMsg.receiverId?.trim().toLowerCase();
+    if (payload.eventType == PostgresChangeEvent.insert ||
+        payload.eventType == PostgresChangeEvent.update) {
+      print('Postgres ${payload.eventType} received for DM!');
+      final newMsg = ChatMessage.tryParseRecord(payload.newRecord);
+      if (newMsg == null || !_belongsToConversation(newMsg, myId)) return;
 
-      final isRelevant = (normalizedSenderId == normalizedMyId && normalizedReceiverId == normalizedPartnerId) ||
-                         (normalizedSenderId == normalizedPartnerId && normalizedReceiverId == normalizedMyId);
-      if (!isRelevant) return;
-      
-      final currentList = state.value ?? [];
-      if (!currentList.any((m) => m.id == newMsg.id)) {
-        _updateState([...currentList, newMsg]);
-      }
-    } else if (payload.eventType == PostgresChangeEvent.update) {
-      print('Postgres UPDATE received for DM! Record ID: ${payload.newRecord['id']}');
-      final updatedMsg = ChatMessage.fromJson(payload.newRecord);
-      final normalizedMyId = myId.trim().toLowerCase();
-      final normalizedPartnerId = chatPartnerId.trim().toLowerCase();
-      final normalizedSenderId = updatedMsg.senderId.trim().toLowerCase();
-      final normalizedReceiverId = updatedMsg.receiverId?.trim().toLowerCase();
-
-      final isRelevant = (normalizedSenderId == normalizedMyId && normalizedReceiverId == normalizedPartnerId) ||
-                         (normalizedSenderId == normalizedPartnerId && normalizedReceiverId == normalizedMyId);
-      if (!isRelevant) return;
-      
-      final currentList = state.value ?? [];
-      final index = currentList.indexWhere((m) => m.id == updatedMsg.id);
-      if (index != -1) {
-        final newList = List<ChatMessage>.from(currentList);
-        newList[index] = updatedMsg;
-        _updateState(newList);
+      final currentList = List<ChatMessage>.from(state.value ?? const <ChatMessage>[]);
+      final index = currentList.indexWhere((m) => m.id == newMsg.id);
+      if (index == -1) {
+        currentList.add(newMsg);
+        currentList.sort((a, b) {
+          final t = a.createdAt.toUtc().compareTo(b.createdAt.toUtc());
+          return t != 0 ? t : a.id.compareTo(b.id);
+        });
+        _updateState(currentList);
+        _rememberAndNotifyEngine(newMsg);
+      } else if (currentList[index] != newMsg) {
+        currentList[index] = newMsg;
+        _updateState(currentList);
       }
     } else if (payload.eventType == PostgresChangeEvent.delete) {
       final deletedId = payload.oldRecord['id'] as String?;
@@ -1965,7 +2040,12 @@ class DmConversationEngine extends Notifier<Map<String, DmConversationState>> {
   RealtimeChannel? _msgSub;
   RealtimeChannel? _rcptSub;
   bool _isBootstrapping = true;
+  bool _disposed = false;
+  bool _syncing = false;
+  Timer? _pollTimer;
+  Timer? _resubscribeTimer;
   final List<PostgresChangePayload> _realtimeBuffer = [];
+  final List<ChatMessage> _pendingObserved = [];
   final Set<String> _pendingConversationReads = {};
   final Set<String> _seenMessageIds = {};
 
@@ -1985,8 +2065,13 @@ class DmConversationEngine extends Notifier<Map<String, DmConversationState>> {
   Map<String, DmConversationState> build() {
     // Watch authProvider so that when the user logs out/in, this engine is destroyed and recreated.
     ref.watch(authProvider);
+    _disposed = false;
+    _isBootstrapping = true;
 
     ref.onDispose(() {
+      _disposed = true;
+      _pollTimer?.cancel();
+      _resubscribeTimer?.cancel();
       _msgSub?.unsubscribe();
       _rcptSub?.unsubscribe();
     });
@@ -2009,9 +2094,12 @@ class DmConversationEngine extends Notifier<Map<String, DmConversationState>> {
     final cacheService = _ref.read(chatCacheServiceProvider);
 
     // 1. Start realtime subscriptions immediately before or in parallel with bootstrap
+    _msgSub?.unsubscribe();
+    _rcptSub?.unsubscribe();
     _msgSub = repository.subscribeToDmEngineMessages(
       currentUserId: currentUserId,
       onEvent: (payload) => _handleMsgEvent(payload, currentUserId),
+      onStatus: (status, error) => _onEngineStatus(status, currentUserId),
     );
     _rcptSub = repository.subscribeToDmEngineReadReceipts(
       currentUserId: currentUserId,
@@ -2067,7 +2155,9 @@ class DmConversationEngine extends Notifier<Map<String, DmConversationState>> {
 
     // 3. Complete bootstrap / delta sync from Supabase
     try {
+      if (_disposed) return;
       final bootstrapData = await repository.fetchDmConversationsBootstrap(currentUserId);
+      if (_disposed) return;
       final nextState = Map<String, DmConversationState>.from(state);
 
       for (final entry in bootstrapData.entries) {
@@ -2075,8 +2165,12 @@ class DmConversationEngine extends Notifier<Map<String, DmConversationState>> {
         final data = entry.value;
         final lastMsg = data['last_message'] as ChatMessage?;
         final unreadIds = data['unread_message_ids'] as Set<String>? ?? {};
+        final fetchedIds = data['message_ids'] as Set<String>? ?? {};
         final totalCount = data['total_message_count'] as int? ?? 0;
 
+        for (final id in fetchedIds) {
+          _seenMessageIds.add(id);
+        }
         if (lastMsg != null) _seenMessageIds.add(lastMsg.id);
         for (final id in unreadIds) {
           _seenMessageIds.add(id);
@@ -2137,15 +2231,35 @@ class DmConversationEngine extends Notifier<Map<String, DmConversationState>> {
       }
       _pendingConversationReads.clear();
     }
+
+    if (_pendingObserved.isNotEmpty) {
+      final pending = List<ChatMessage>.from(_pendingObserved);
+      _pendingObserved.clear();
+      for (final message in pending) {
+        _ingest(message, currentUserId, notify: true);
+      }
+    }
+
+    if (_disposed) return;
+    _startPolling();
+    reconcileRecent();
   }
 
   Future<void> refresh() async {
     final authUser = _ref.read(authProvider);
-    if (authUser == null) return;
+    if (authUser == null || _disposed || _isBootstrapping) return;
+    var spins = 0;
+    while (_syncing && spins < 20) {
+      await Future.delayed(const Duration(milliseconds: 100));
+      spins++;
+    }
+    if (_syncing || _disposed) return;
     final currentUserId = authUser.id;
     final repository = _ref.read(chatRepositoryProvider);
+    _syncing = true;
     try {
       final bootstrapData = await repository.fetchDmConversationsBootstrap(currentUserId);
+      if (_disposed) return;
       final nextState = Map<String, DmConversationState>.from(state);
 
       for (final entry in bootstrapData.entries) {
@@ -2153,21 +2267,31 @@ class DmConversationEngine extends Notifier<Map<String, DmConversationState>> {
         final data = entry.value;
         final lastMsg = data['last_message'] as ChatMessage?;
         final unreadIds = data['unread_message_ids'] as Set<String>? ?? {};
+        final fetchedIds = data['message_ids'] as Set<String>? ?? {};
         final totalCount = data['total_message_count'] as int? ?? 0;
 
+        for (final id in fetchedIds) {
+          _seenMessageIds.add(id);
+        }
         if (lastMsg != null) _seenMessageIds.add(lastMsg.id);
         for (final id in unreadIds) {
           _seenMessageIds.add(id);
         }
 
         final isOpen = (_ref.read(currentOpenConversationProvider)?.trim().toLowerCase()) == partnerId;
-        final finalUnreadIds = isOpen ? <String>{} : unreadIds;
+        final existing = nextState[partnerId];
+        final preserved = <String>{};
+        if (!isOpen && existing != null) {
+          for (final id in existing.unreadMessageIds) {
+            if (!fetchedIds.contains(id)) preserved.add(id);
+          }
+        }
+        final finalUnreadIds = isOpen ? <String>{} : {...unreadIds, ...preserved};
         
         if (isOpen && unreadIds.isNotEmpty) {
           ReadReceiptsTracker.markMultipleAsRead(unreadIds.toList(), currentUserId);
         }
         
-        final existing = nextState[partnerId];
         if (existing == null) {
           nextState[partnerId] = DmConversationState(
             partnerId: partnerId,
@@ -2191,6 +2315,8 @@ class DmConversationEngine extends Notifier<Map<String, DmConversationState>> {
       _commit(nextState);
     } catch (e) {
       debugPrint('Error refreshing DM conversations: $e');
+    } finally {
+      _syncing = false;
     }
   }
 
@@ -2214,99 +2340,12 @@ class DmConversationEngine extends Notifier<Map<String, DmConversationState>> {
 
   void _processMsgPayload(PostgresChangePayload payload, String currentUserId) {
     if (payload.eventType == PostgresChangeEvent.insert || payload.eventType == PostgresChangeEvent.update) {
-      final msg = ChatMessage.fromJson(payload.newRecord);
-      
-      if (msg.receiverId == null || msg.receiverId!.isEmpty) return;
-      
-      final normalizedMyId = currentUserId.trim().toLowerCase();
-      final normalizedSenderId = msg.senderId.trim().toLowerCase();
-      final normalizedReceiverId = msg.receiverId!.trim().toLowerCase();
-
-      final isRelevant = (normalizedSenderId == normalizedMyId || normalizedReceiverId == normalizedMyId);
-      if (!isRelevant) return;
-
-      final partnerId = normalizedSenderId == normalizedMyId ? normalizedReceiverId : normalizedSenderId;
-      if (partnerId == normalizedMyId) return;
-
-      print('DmConversationEngine: Processing Msg Payload for partner $partnerId');
-
-      final isOpen = (_ref.read(currentOpenConversationProvider)?.trim().toLowerCase()) == partnerId;
-      final isInsert = payload.eventType == PostgresChangeEvent.insert;
-      final isIncoming = normalizedSenderId != normalizedMyId;
-      
-      if (isInsert) {
-        final alreadySeen = _seenMessageIds.contains(msg.id);
-        _seenMessageIds.add(msg.id);
-        
-        // Fire notification toast if this is an incoming message and conversation isn't open
-        if (isIncoming && !isOpen && !alreadySeen) {
-          _ref.read(dmNewMessageEventProvider.notifier).notify(msg);
-          
-          // Check for @mentions for special sound
-          final myFullName = _ref.read(authProvider)?.fullName ?? '';
-          final hasMention = myFullName.isNotEmpty && 
-              msg.content.contains('@$myFullName');
-          
-          if (hasMention) {
-            ChatSoundService.playMentionPing();
-          } else {
-            ChatSoundService.playPing();
-          }
-        }
-      }
-
-      final currentMap = state;
-      final existing = currentMap[partnerId];
-
-      DmConversationState updatedConv;
-      if (existing == null) {
-        final shouldMarkUnread = isIncoming && !isOpen;
-        final unreadIds = shouldMarkUnread ? {msg.id} : <String>{};
-        
-        updatedConv = DmConversationState(
-          partnerId: partnerId,
-          lastMessage: msg,
-          unreadCount: unreadIds.length,
-          isOpen: isOpen,
-          unreadMessageIds: unreadIds,
-          totalMessageCount: 1,
-        );
-      } else {
-        ChatMessage? nextLastMessage = existing.lastMessage;
-        if (nextLastMessage == null || msg.createdAt.isAfter(nextLastMessage.createdAt) || msg.createdAt.isAtSameMomentAs(nextLastMessage.createdAt) || msg.id == nextLastMessage.id) {
-          nextLastMessage = msg;
-        }
-
-        final unreadIds = Set<String>.from(existing.unreadMessageIds);
-        int nextTotalCount = existing.totalMessageCount;
-        if (isInsert) {
-          nextTotalCount += 1;
-          if (isIncoming) {
-            if (!isOpen) {
-              unreadIds.add(msg.id);
-            }
-          }
-        }
-
-        updatedConv = existing.copyWith(
-          lastMessage: nextLastMessage,
-          unreadCount: isOpen ? 0 : unreadIds.length,
-          unreadMessageIds: isOpen ? const {} : unreadIds,
-          isOpen: isOpen,
-          totalMessageCount: nextTotalCount,
-        );
-      }
-
-      final nextMap = Map<String, DmConversationState>.from(currentMap);
-      nextMap[partnerId] = updatedConv;
-      _commit(nextMap);
-
-      if (isOpen && isIncoming && isInsert) {
-        ReadReceiptsTracker.markMultipleAsRead([msg.id], currentUserId);
-      }
+      final msg = ChatMessage.tryParseRecord(payload.newRecord);
+      if (msg == null) return;
+      _ingest(msg, currentUserId, notify: true);
     } else if (payload.eventType == PostgresChangeEvent.delete) {
-      final deletedId = payload.oldRecord['id'] as String?;
-      if (deletedId != null) {
+      final deletedId = payload.oldRecord['id']?.toString();
+      if (deletedId != null && deletedId.isNotEmpty) {
         _seenMessageIds.remove(deletedId);
         final currentMap = state;
         for (final entry in currentMap.entries) {
@@ -2433,6 +2472,193 @@ class DmConversationEngine extends Notifier<Map<String, DmConversationState>> {
       if (idsToMarkRead.isNotEmpty) {
         ReadReceiptsTracker.markMultipleAsRead(idsToMarkRead.toList(), myId);
       }
+    }
+  }
+
+  void observeRemoteMessage(ChatMessage message) {
+    final authUser = _ref.read(authProvider);
+    if (authUser == null || _disposed) return;
+    if (_isBootstrapping) {
+      _pendingObserved.add(message);
+      return;
+    }
+    _ingest(message, authUser.id, notify: true);
+  }
+
+  void _startPolling() {
+    _pollTimer?.cancel();
+    _pollTimer = Timer.periodic(const Duration(seconds: 3), (_) {
+      reconcileRecent();
+    });
+  }
+
+  void _onEngineStatus(RealtimeSubscribeStatus status, String currentUserId) {
+    if (_disposed) return;
+    if (status == RealtimeSubscribeStatus.subscribed) {
+      _resubscribeTimer?.cancel();
+      _resubscribeTimer = null;
+      if (!_isBootstrapping) reconcileRecent();
+      return;
+    }
+    if (status == RealtimeSubscribeStatus.channelError ||
+        status == RealtimeSubscribeStatus.timedOut) {
+      if (_resubscribeTimer != null) return;
+      _resubscribeTimer = Timer(const Duration(seconds: 2), () {
+        _resubscribeTimer = null;
+        if (_disposed) return;
+        final repository = _ref.read(chatRepositoryProvider);
+        _msgSub?.unsubscribe();
+        _msgSub = repository.subscribeToDmEngineMessages(
+          currentUserId: currentUserId,
+          onEvent: (payload) => _handleMsgEvent(payload, currentUserId),
+          onStatus: (nextStatus, error) => _onEngineStatus(nextStatus, currentUserId),
+        );
+      });
+    }
+  }
+
+  Future<void> reconcileRecent() async {
+    if (_disposed || _isBootstrapping || _syncing) return;
+    final authUser = _ref.read(authProvider);
+    if (authUser == null) return;
+    _syncing = true;
+    try {
+      final repository = _ref.read(chatRepositoryProvider);
+      final recent = await repository.fetchRecentDmMessages(authUser.id);
+      if (_disposed) return;
+      for (final message in recent) {
+        _ingest(message, authUser.id, notify: true);
+      }
+
+      final myId = authUser.id.trim().toLowerCase();
+      final incomingIds = recent
+          .where((m) => m.senderId.trim().toLowerCase() != myId)
+          .map((m) => m.id)
+          .toList();
+      if (incomingIds.isEmpty) return;
+      final receipts = await repository.fetchReceiptsForMessages(incomingIds);
+      if (_disposed) return;
+      ReadReceiptsTracker.injectReceipts(receipts);
+      _clearUnreadCoveredByReceipts(receipts, myId);
+    } catch (e) {
+      debugPrint('DM unread reconcile failed: $e');
+    } finally {
+      _syncing = false;
+    }
+  }
+
+  void _clearUnreadCoveredByReceipts(Map<String, Set<String>> receipts, String myId) {
+    final currentMap = state;
+    final nextMap = Map<String, DmConversationState>.from(currentMap);
+    var changed = false;
+    for (final entry in currentMap.entries) {
+      if (entry.value.unreadMessageIds.isEmpty) continue;
+      final nextUnread = Set<String>.from(entry.value.unreadMessageIds);
+      final before = nextUnread.length;
+      nextUnread.removeWhere((id) => receipts[id]?.contains(myId) ?? false);
+      if (nextUnread.length == before) continue;
+      nextMap[entry.key] = entry.value.copyWith(
+        unreadCount: entry.value.isOpen ? 0 : nextUnread.length,
+        unreadMessageIds: entry.value.isOpen ? const {} : nextUnread,
+        lastReadAt: DateTime.now().toUtc(),
+      );
+      changed = true;
+    }
+    if (changed) _commit(nextMap);
+  }
+
+  void _ingest(ChatMessage msg, String currentUserId, {required bool notify}) {
+    if (msg.receiverId == null || msg.receiverId!.isEmpty) return;
+
+    final normalizedMyId = currentUserId.trim().toLowerCase();
+    final normalizedSenderId = msg.senderId.trim().toLowerCase();
+    final normalizedReceiverId = msg.receiverId!.trim().toLowerCase();
+
+    final isRelevant = normalizedSenderId == normalizedMyId || normalizedReceiverId == normalizedMyId;
+    if (!isRelevant) return;
+
+    final partnerId = normalizedSenderId == normalizedMyId ? normalizedReceiverId : normalizedSenderId;
+    if (partnerId == normalizedMyId) return;
+
+    final isNew = _seenMessageIds.add(msg.id);
+    final isOpen = (_ref.read(currentOpenConversationProvider)?.trim().toLowerCase()) == partnerId;
+    final isIncoming = normalizedSenderId != normalizedMyId;
+    final alreadyRead = ReadReceiptsTracker.getReadBy(msg.id).contains(normalizedMyId);
+
+    final currentMap = state;
+    final existing = currentMap[partnerId];
+
+    if (!isNew && existing != null) {
+      final last = existing.lastMessage;
+      final shouldReplaceLast = last == null ||
+          msg.id == last.id ||
+          !msg.createdAt.isBefore(last.createdAt);
+      if (shouldReplaceLast && last != msg) {
+        final nextMap = Map<String, DmConversationState>.from(currentMap);
+        nextMap[partnerId] = existing.copyWith(
+          lastMessage: msg,
+          isOpen: isOpen,
+        );
+        _commit(nextMap);
+      }
+      return;
+    }
+
+    final age = DateTime.now().toUtc().difference(msg.createdAt.toUtc()).abs();
+    final isFresh = age < const Duration(minutes: 2);
+    if (notify && isNew && isIncoming && !isOpen && isFresh) {
+      _ref.read(dmNewMessageEventProvider.notifier).notify(msg);
+      final myFullName = _ref.read(authProvider)?.fullName ?? '';
+      final hasMention = myFullName.isNotEmpty && msg.content.contains('@$myFullName');
+      if (hasMention) {
+        ChatSoundService.playMentionPing();
+      } else {
+        ChatSoundService.playPing();
+      }
+    }
+
+    final DmConversationState updatedConv;
+    if (existing == null) {
+      final shouldMarkUnread = isNew && isIncoming && !isOpen && !alreadyRead;
+      final unreadIds = shouldMarkUnread ? {msg.id} : <String>{};
+      updatedConv = DmConversationState(
+        partnerId: partnerId,
+        lastMessage: msg,
+        unreadCount: unreadIds.length,
+        isOpen: isOpen,
+        unreadMessageIds: unreadIds,
+        totalMessageCount: 1,
+      );
+    } else {
+      ChatMessage? nextLastMessage = existing.lastMessage;
+      if (nextLastMessage == null ||
+          !msg.createdAt.isBefore(nextLastMessage.createdAt) ||
+          msg.id == nextLastMessage.id) {
+        nextLastMessage = msg;
+      }
+
+      final unreadIds = Set<String>.from(existing.unreadMessageIds);
+      if (isOpen) {
+        unreadIds.clear();
+      } else if (isNew && isIncoming && !alreadyRead) {
+        unreadIds.add(msg.id);
+      }
+
+      updatedConv = existing.copyWith(
+        lastMessage: nextLastMessage,
+        unreadCount: unreadIds.length,
+        unreadMessageIds: unreadIds,
+        isOpen: isOpen,
+        totalMessageCount: isNew ? existing.totalMessageCount + 1 : existing.totalMessageCount,
+      );
+    }
+
+    final nextMap = Map<String, DmConversationState>.from(currentMap);
+    nextMap[partnerId] = updatedConv;
+    _commit(nextMap);
+
+    if (isOpen && isIncoming && isNew && !alreadyRead) {
+      ReadReceiptsTracker.markMultipleAsRead([msg.id], currentUserId);
     }
   }
 

@@ -302,7 +302,25 @@ class _PrivateLeadsPageState extends ConsumerState<PrivateLeadsPage> {
                 skipLoadingOnReload: true,
                 skipLoadingOnRefresh: true,
                 data: (leads) {
-                  var columns = ['New Lead', 'Contacted', 'Qualified', 'Negotiation'];
+                  final columns = switch (_selectedFilter) {
+                    'Won' => ['Won'],
+                    'Lost' => ['Lost'],
+                    'Pending' => ['New Lead', 'Contacted', 'Qualified', 'Negotiation'],
+                    _ => ['New Lead', 'Contacted', 'Qualified', 'Negotiation', 'Won', 'Lost'],
+                  };
+
+                  List<Lead> leadsFor(String status) {
+                    return leads.where((d) {
+                      final stage = d.status.toLowerCase();
+                      if (status == 'New Lead' &&
+                          (stage == 'pending' || stage == 'new' || stage == 'new lead')) {
+                        return true;
+                      }
+                      if (status == 'Won') return stage == 'won' || stage == 'win';
+                      if (status == 'Lost') return stage == 'lost' || stage == 'loss';
+                      return d.status == status;
+                    }).toList();
+                  }
 
                   return Padding(
                     padding: EdgeInsets.symmetric(horizontal: isMobile ? 8.0 : 24.0),
@@ -317,13 +335,10 @@ class _PrivateLeadsPageState extends ConsumerState<PrivateLeadsPage> {
                                   child: Row(
                                     crossAxisAlignment: CrossAxisAlignment.stretch,
                                     children: columns.map((status) {
-                                      final statusLeads = leads.where((d) {
-                                        if (status == 'New Lead' && (d.status == 'pending' || d.status == 'New')) return true;
-                                        return d.status == status;
-                                      }).toList();
+                                      final statusLeads = leadsFor(status);
 
                                       return SizedBox(
-                                        width: 160,
+                                        width: columns.length == 1 ? 360 : 180,
                                         child: _KanbanColumn(
                                           status: status,
                                           leads: statusLeads,
@@ -352,10 +367,7 @@ class _PrivateLeadsPageState extends ConsumerState<PrivateLeadsPage> {
                               : Row(
                                   crossAxisAlignment: CrossAxisAlignment.stretch,
                                   children: columns.map((status) {
-                                    final statusLeads = leads.where((d) {
-                                      if (status == 'New Lead' && (d.status == 'pending' || d.status == 'New')) return true;
-                                      return d.status == status;
-                                    }).toList();
+                                    final statusLeads = leadsFor(status);
 
                                     return Expanded(
                                       child: _KanbanColumn(

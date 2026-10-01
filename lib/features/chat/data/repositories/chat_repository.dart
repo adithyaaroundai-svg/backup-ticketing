@@ -135,6 +135,7 @@ class ChatRepository {
     String? currentUserId,
     String? chatPartnerId,
     required void Function(PostgresChangePayload payload) onEvent,
+    void Function(RealtimeSubscribeStatus status, Object? error)? onStatus,
   }) {
     final uniqueId = DateTime.now().millisecondsSinceEpoch;
     final realtimeChannelName = chatPartnerId != null
@@ -154,6 +155,7 @@ class ChatRepository {
           .subscribe((status, [error]) {
             print('Realtime subscribeToMessages ($realtimeChannelName) status: $status');
             if (error != null) print('Realtime error: $error');
+            onStatus?.call(status, error);
           });
     } else {
       return channelBuilder
@@ -171,6 +173,7 @@ class ChatRepository {
           .subscribe((status, [error]) {
             print('Realtime subscribeToMessages ($realtimeChannelName) status: $status');
             if (error != null) print('Realtime error: $error');
+            onStatus?.call(status, error);
           });
     }
   }
@@ -484,11 +487,13 @@ class ChatRepository {
         conversations[partnerId] = {
           'last_message': msg,
           'unread_message_ids': <String>{},
+          'message_ids': <String>{},
           'total_message_count': 0,
         };
       }
 
       final conv = conversations[partnerId]!;
+      (conv['message_ids'] as Set<String>).add(msg.id);
       conv['total_message_count'] = (conv['total_message_count'] as int) + 1;
 
       final lastMsg = conv['last_message'] as ChatMessage;
@@ -507,9 +512,36 @@ class ChatRepository {
     return conversations;
   }
 
+  /// Newest direct messages involving [currentUserId], oldest first.
+  /// Used to fill gaps when a realtime event is missed.
+  Future<List<ChatMessage>> fetchRecentDmMessages(
+    String currentUserId, {
+    int limit = 80,
+  }) async {
+    final data = await _client
+        .from('chat_messages')
+        .select('id, sender_id, receiver_id, sender_name, sender_role, sender_avatar_url, content, created_at, is_deleted, reactions, reply_to_message_id, reply_to_sender_name, reply_to_content, file_url, file_name, file_type, channel, is_forwarded, is_edited, edited_at')
+        .not('receiver_id', 'is', null)
+        .or('sender_id.eq.$currentUserId,receiver_id.eq.$currentUserId')
+        .order('created_at', ascending: false)
+        .limit(limit);
+
+    final messages = <ChatMessage>[];
+    for (final row in data) {
+      final msg = ChatMessage.tryParseRecord(row);
+      if (msg != null) messages.add(msg);
+    }
+    messages.sort((a, b) {
+      final t = a.createdAt.toUtc().compareTo(b.createdAt.toUtc());
+      return t != 0 ? t : a.id.compareTo(b.id);
+    });
+    return messages;
+  }
+
   RealtimeChannel subscribeToDmEngineMessages({
     required String currentUserId,
     required void Function(PostgresChangePayload payload) onEvent,
+    void Function(RealtimeSubscribeStatus status, Object? error)? onStatus,
   }) {
     final uniqueId = DateTime.now().millisecondsSinceEpoch;
     final channelName = 'dm_engine_msg_${currentUserId}_$uniqueId';
@@ -524,12 +556,14 @@ class ChatRepository {
         .subscribe((status, [error]) {
           print('Realtime subscribeToDmEngineMessages ($channelName) status: $status');
           if (error != null) print('Realtime error: $error');
+          onStatus?.call(status, error);
         });
   }
 
   RealtimeChannel subscribeToDmEngineReadReceipts({
     required String currentUserId,
     required void Function(PostgresChangePayload payload) onEvent,
+    void Function(RealtimeSubscribeStatus status, Object? error)? onStatus,
   }) {
     final uniqueId = DateTime.now().millisecondsSinceEpoch;
     final channelName = 'dm_engine_rcpt_${currentUserId}_$uniqueId';
@@ -544,6 +578,7 @@ class ChatRepository {
         .subscribe((status, [error]) {
           print('Realtime subscribeToDmEngineReadReceipts ($channelName) status: $status');
           if (error != null) print('Realtime error: $error');
+          onStatus?.call(status, error);
         });
   }
 }

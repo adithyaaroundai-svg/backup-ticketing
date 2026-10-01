@@ -848,7 +848,7 @@ class _DirectMessagePageState extends ConsumerState<DirectMessagePage> {
         final currentUser = ref.read(authProvider);
         if (currentUser != null && mounted) {
           final newest = next.value.last;
-          if (newest.senderId != currentUser.id) {
+          if (newest.senderId.trim().toLowerCase() != currentUser.id.trim().toLowerCase()) {
             WidgetsBinding.instance.addPostFrameCallback((_) {
               if (mounted && (ModalRoute.of(context)?.isCurrent ?? false)) {
                 _markConversationAsRead();

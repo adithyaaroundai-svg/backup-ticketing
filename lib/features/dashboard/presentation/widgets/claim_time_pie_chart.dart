@@ -187,6 +187,39 @@ Future<List<_TicketSnap>> _fetchAllStatuses() async {
   return all;
 }
 
+final allTimingTicketsProvider = StreamProvider<List<_TicketSnap>>((ref) async* {
+  while (true) {
+    try {
+      yield await _fetchAllTimings();
+    } catch (_) {}
+    await Future<void>.delayed(const Duration(seconds: 45));
+  }
+});
+
+Future<List<_TicketSnap>> _fetchAllTimings() async {
+  final supabase = Supabase.instance.client;
+  final all = <_TicketSnap>[];
+  const pageSize = 1000;
+  var from = 0;
+  while (true) {
+    final rows = await supabase
+        .from('tickets')
+        .select(
+          'id, ticket_number, title, status, created_at, completed_at, updated_at, assignment_history',
+        )
+        .order('created_at', ascending: false)
+        .range(from, from + pageSize - 1);
+    final page = List<Map<String, dynamic>>.from(rows as List);
+    for (final row in page) {
+      final ticket = _TicketSnap.fromRow(row);
+      if (ticket != null) all.add(ticket);
+    }
+    if (page.length < pageSize || from >= 20000) break;
+    from += pageSize;
+  }
+  return all;
+}
+
 final claimTimeTicketsProvider = StreamProvider<List<_TicketSnap>>((ref) {
   final supabase = Supabase.instance.client;
   return supabase
@@ -349,45 +382,72 @@ class _ClaimTimePieChartState extends ConsumerState<ClaimTimePieChart>
   Widget build(BuildContext context) {
     final ticketsAsync = ref.watch(claimTimeTicketsProvider);
     final statusAsync = ref.watch(allStatusTicketsProvider);
+    final timingAsync = ref.watch(allTimingTicketsProvider);
     final now = DateTime.now();
 
     return ticketsAsync.when(
       data: (tickets) {
         final statusTickets = statusAsync.asData?.value ?? tickets;
-        final charts = [
-          _claimChart(tickets, now),
-          _resolveChart(tickets, now),
-          _statusChart(statusTickets, complete: statusAsync.hasValue),
-        ];
+        final claim = _PieCard(
+          model: _claimChart(tickets, now),
+          pulse: _pulse,
+          showLive: true,
+          onSlice: _openSlice,
+        );
+        final resolve = _PieCard(
+          model: _resolveChart(tickets, now),
+          pulse: _pulse,
+          showLive: false,
+          onSlice: _openSlice,
+        );
+        final status = _PieCard(
+          model: _statusChart(statusTickets, complete: statusAsync.hasValue),
+          pulse: _pulse,
+          showLive: false,
+          onSlice: _openSlice,
+        );
+        final timing = _AllTimeTimingCard(
+          timings: timingAsync,
+          onOpen: (ticket) => context.push('/ticket/${ticket.id}'),
+        );
         return LayoutBuilder(
           builder: (context, constraints) {
             final stacked = constraints.maxWidth < 980;
-            final cards = [
-              for (final chart in charts)
-                _PieCard(
-                  model: chart,
-                  pulse: _pulse,
-                  showLive: chart.title == 'Time to claim',
-                  onSlice: _openSlice,
-                ),
-            ];
             if (stacked) {
               return Column(
                 children: [
-                  for (var i = 0; i < cards.length; i++) ...[
-                    if (i > 0) const SizedBox(height: 12),
-                    cards[i],
-                  ],
+                  claim,
+                  const SizedBox(height: 12),
+                  resolve,
+                  const SizedBox(height: 12),
+                  timing,
+                  const SizedBox(height: 12),
+                  status,
                 ],
               );
             }
             return Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                for (var i = 0; i < cards.length; i++) ...[
-                  if (i > 0) const SizedBox(width: 12),
-                  Expanded(child: cards[i]),
-                ],
+                Expanded(
+                  flex: 2,
+                  child: Column(
+                    children: [
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(child: claim),
+                          const SizedBox(width: 12),
+                          Expanded(child: resolve),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      timing,
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(child: status),
               ],
             );
           },
@@ -709,6 +769,295 @@ class _LegendRow extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _TicketTiming {
+  final _TicketSnap ticket;
+  final Duration? claim;
+  final Duration? resolve;
+
+  const _TicketTiming({
+    required this.ticket,
+    required this.claim,
+    required this.resolve,
+  });
+}
+
+class _TimingSummary {
+  final Duration? avgClaim;
+  final int claimedCount;
+  final Duration? avgResolve;
+  final int resolvedCount;
+  final List<_TicketTiming> tickets;
+
+  const _TimingSummary({
+    required this.avgClaim,
+    required this.claimedCount,
+    required this.avgResolve,
+    required this.resolvedCount,
+    required this.tickets,
+  });
+}
+
+_TimingSummary _timingSummary(List<_TicketSnap> tickets) {
+  var claimSum = Duration.zero;
+  var claimCount = 0;
+  var resolveSum = Duration.zero;
+  var resolveCount = 0;
+  final rows = <_TicketTiming>[];
+
+  for (final ticket in tickets) {
+    if (ticket.cancelled) continue;
+    Duration? claim;
+    final claimedAt = ticket.firstClaimedAt;
+    if (claimedAt != null) {
+      var wait = claimedAt.difference(ticket.createdAt);
+      if (wait.isNegative) wait = Duration.zero;
+      claim = wait;
+      claimSum += wait;
+      claimCount++;
+    }
+    Duration? resolve;
+    final resolvedAt = ticket.resolvedAt;
+    if (resolvedAt != null) {
+      var duration = resolvedAt.difference(ticket.createdAt);
+      if (duration.isNegative) duration = Duration.zero;
+      resolve = duration;
+      resolveSum += duration;
+      resolveCount++;
+    }
+    if (claim != null || resolve != null) {
+      rows.add(_TicketTiming(ticket: ticket, claim: claim, resolve: resolve));
+    }
+  }
+
+  rows.sort((a, b) => b.ticket.createdAt.compareTo(a.ticket.createdAt));
+  return _TimingSummary(
+    avgClaim: claimCount == 0 ? null : claimSum ~/ claimCount,
+    claimedCount: claimCount,
+    avgResolve: resolveCount == 0 ? null : resolveSum ~/ resolveCount,
+    resolvedCount: resolveCount,
+    tickets: rows,
+  );
+}
+
+class _AllTimeTimingCard extends StatelessWidget {
+  final AsyncValue<List<_TicketSnap>> timings;
+  final ValueChanged<_TicketSnap> onOpen;
+
+  const _AllTimeTimingCard({
+    required this.timings,
+    required this.onOpen,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final titleColor = isDark ? Colors.white : AppColors.slate900;
+    final muted = isDark ? Colors.white70 : AppColors.slate500;
+    final loaded = timings.asData?.value;
+    final summary = loaded == null ? null : _timingSummary(loaded);
+
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'All-time timing',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: titleColor,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            loaded == null
+                ? 'Loading claim and resolve times for every ticket'
+                : 'Average across every ticket, then each ticket',
+            style: TextStyle(fontSize: 12, color: muted),
+          ),
+          const SizedBox(height: 12),
+          if (summary == null)
+            const SizedBox(
+              height: 72,
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else ...[
+            Row(
+              children: [
+                Expanded(
+                  child: _AverageTile(
+                    label: 'Avg claim',
+                    value: summary.avgClaim == null
+                        ? '—'
+                        : _formatDuration(summary.avgClaim!),
+                    caption: '${summary.claimedCount} claimed',
+                    color: AppColors.primaryLight,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _AverageTile(
+                    label: 'Avg resolve',
+                    value: summary.avgResolve == null
+                        ? '—'
+                        : _formatDuration(summary.avgResolve!),
+                    caption: '${summary.resolvedCount} resolved',
+                    color: AppColors.success,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            Text(
+              'Individual ticket times',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: titleColor,
+              ),
+            ),
+            const SizedBox(height: 6),
+            if (summary.tickets.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                child: Text('No claim or resolve times yet', style: TextStyle(color: muted)),
+              )
+            else
+              SizedBox(
+                height: summary.tickets.length < 4
+                    ? summary.tickets.length * 52
+                    : 208,
+                child: ListView.separated(
+                  itemCount: summary.tickets.length,
+                  separatorBuilder: (_, _) => Divider(
+                    height: 1,
+                    color: isDark ? Colors.white12 : AppColors.slate200,
+                  ),
+                  itemBuilder: (context, index) {
+                    final row = summary.tickets[index];
+                    return InkWell(
+                      onTap: () => onOpen(row.ticket),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    '${row.ticket.label}  ${row.ticket.title}',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                      color: titleColor,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    row.ticket.status,
+                                    style: TextStyle(fontSize: 11, color: muted),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            _TimeChip(
+                              label: 'Claim',
+                              value: row.claim == null
+                                  ? 'Unclaimed'
+                                  : _formatDuration(row.claim!),
+                            ),
+                            const SizedBox(width: 8),
+                            _TimeChip(
+                              label: 'Resolve',
+                              value: row.resolve == null
+                                  ? 'Open'
+                                  : _formatDuration(row.resolve!),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _AverageTile extends StatelessWidget {
+  final String label;
+  final String value;
+  final String caption;
+  final Color color;
+
+  const _AverageTile({
+    required this.label,
+    required this.value,
+    required this.caption,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final titleColor = isDark ? Colors.white : AppColors.slate900;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: isDark ? 0.16 : 0.08),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: TextStyle(fontSize: 12, color: color, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 2),
+          Text(
+            value,
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: titleColor),
+          ),
+          Text(caption, style: TextStyle(fontSize: 11, color: context.adaptiveSlate500)),
+        ],
+      ),
+    );
+  }
+}
+
+class _TimeChip extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _TimeChip({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    final muted = context.adaptiveSlate500;
+    final titleColor = context.isDarkMode ? Colors.white : AppColors.slate800;
+    return SizedBox(
+      width: 72,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Text(label, style: TextStyle(fontSize: 10, color: muted)),
+          Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: titleColor),
+          ),
+        ],
       ),
     );
   }
