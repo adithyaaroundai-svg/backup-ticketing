@@ -36,6 +36,7 @@ class TicketCardWithAmc extends ConsumerWidget {
   final bool forceClaimButton;
   final bool showRaisedByBubble;
   final bool emphasizeUnclaimedEdge;
+  final Customer? customer;
   const TicketCardWithAmc({
     super.key,
     required this.ticket,
@@ -44,6 +45,7 @@ class TicketCardWithAmc extends ConsumerWidget {
     this.forceClaimButton = false,
     this.showRaisedByBubble = false,
     this.emphasizeUnclaimedEdge = false,
+    this.customer,
   });
 
   @override
@@ -63,6 +65,7 @@ class TicketCardWithAmc extends ConsumerWidget {
       forceClaimButton: forceClaimButton,
       showRaisedByBubble: showRaisedByBubble,
       emphasizeUnclaimedEdge: emphasizeUnclaimedEdge,
+      customer: customer,
     );
   }
 }
@@ -74,6 +77,7 @@ class _TicketCardWithAmcBody extends ConsumerWidget {
   final bool forceClaimButton;
   final bool showRaisedByBubble;
   final bool emphasizeUnclaimedEdge;
+  final Customer? customer;
 
   const _TicketCardWithAmcBody({
     required this.ticket,
@@ -82,11 +86,14 @@ class _TicketCardWithAmcBody extends ConsumerWidget {
     this.forceClaimButton = false,
     this.showRaisedByBubble = false,
     this.emphasizeUnclaimedEdge = false,
+    this.customer,
   });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final customerAsync = ref.watch(ticketCustomerProvider(ticket.customerId));
+    final customerAsync = customer != null
+        ? AsyncData<Map<String, dynamic>?>(customer!.toJson())
+        : ref.watch(ticketCustomerProvider(ticket.customerId));
     final agentsAsync = ref.watch(agentsListProvider);
     final isCustomerLoading = customerAsync.isLoading;
     final advancedSettings = ref

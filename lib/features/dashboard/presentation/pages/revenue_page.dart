@@ -589,7 +589,7 @@ class _FiltersCard extends StatelessWidget {
                           padding: EdgeInsets.only(top: i == 0 ? 0 : 12),
                           child: i + 1 < children.length
                               ? Row(children: children.sublist(i, i + 2))
-                              : children[i],
+                              : Row(children: [children[i]]),
                         ),
                     ],
                   );

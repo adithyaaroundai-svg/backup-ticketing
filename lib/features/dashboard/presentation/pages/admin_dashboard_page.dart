@@ -8,10 +8,10 @@ import '../../../../core/design_system/design_system.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
 import '../../../tickets/presentation/providers/ticket_provider.dart';
 import '../../../tickets/domain/entities/ticket.dart';
+import '../../../customers/domain/entities/customer.dart';
 import '../widgets/ticket_card_with_amc.dart';
 import '../../../customers/presentation/providers/customer_provider.dart';
 import '../providers/app_settings_provider.dart';
-import '../../../chat/data/repositories/chat_repository.dart';
 import '../../../chat/presentation/providers/chat_provider.dart';
 import '../widgets/animated_create_ticket_fab.dart';
 import '../widgets/claim_time_pie_chart.dart';
@@ -26,6 +26,8 @@ class AdminDashboardPage extends ConsumerStatefulWidget {
 
 class _AdminDashboardPageState extends ConsumerState<AdminDashboardPage> {
   int _selectedTab = 0; // 0: New/Open, 1: In Progress, 2: Resolved/Closed
+  int _ticketLimit = 15;
+  bool _showMobilePerformanceCharts = false;
 
   // Restricted agents check
   static const _allowedAroundTallyChannelIds = {
@@ -107,6 +109,15 @@ class _AdminDashboardPageState extends ConsumerState<AdminDashboardPage> {
         .watch(appSettingsProvider)
         .maybeWhen(data: (value) => value, orElse: () => null);
 
+    final isMobile = MediaQuery.sizeOf(context).width < 768;
+
+    final customerMap = <String, Customer>{};
+    if (customersAsync.hasValue && customersAsync.value != null) {
+      for (final c in customersAsync.value!) {
+        customerMap[c.id] = c;
+      }
+    }
+
     return MainLayout(
       currentPath: '/admin',
       child: Scaffold(
@@ -115,7 +126,15 @@ class _AdminDashboardPageState extends ConsumerState<AdminDashboardPage> {
           onPressed: _showCreateTicketDialog,
         ),
         body: SingleChildScrollView(
-          padding: const EdgeInsets.only(left: 24, right: 24, top: 24, bottom: 100),
+          physics: const AlwaysScrollableScrollPhysics(
+            parent: BouncingScrollPhysics(),
+          ),
+          padding: EdgeInsets.only(
+            left: isMobile ? 12 : 24,
+            right: isMobile ? 12 : 24,
+            top: isMobile ? 16 : 24,
+            bottom: 100,
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -193,8 +212,65 @@ class _AdminDashboardPageState extends ConsumerState<AdminDashboardPage> {
               ),
               const SizedBox(height: 16),
               if (ClaimTimeAudience.showOnAdmin(user)) ...[
-                const ClaimTimePieChart(),
-                const SizedBox(height: 16),
+                if (isMobile) ...[
+                  AppCard(
+                    onTap: () {
+                      setState(() {
+                        _showMobilePerformanceCharts = !_showMobilePerformanceCharts;
+                      });
+                    },
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: AppColors.accent.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Icon(LucideIcons.pieChart, size: 20, color: AppColors.accent),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Response & Claim Metrics',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: Theme.of(context).textTheme.titleSmall?.color ?? Theme.of(context).colorScheme.onSurface,
+                                ),
+                              ),
+                              Text(
+                                _showMobilePerformanceCharts
+                                    ? 'Tap to collapse charts'
+                                    : 'Tap to expand 4 live performance charts',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Theme.of(context).textTheme.bodySmall?.color ?? Theme.of(context).colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Icon(
+                          _showMobilePerformanceCharts ? LucideIcons.chevronUp : LucideIcons.chevronDown,
+                          size: 20,
+                          color: AppColors.slate400,
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (_showMobilePerformanceCharts) ...[
+                    const SizedBox(height: 12),
+                    const ClaimTimePieChart(),
+                  ],
+                  const SizedBox(height: 16),
+                ] else ...[
+                  const ClaimTimePieChart(),
+                  const SizedBox(height: 16),
+                ],
               ],
 
               // KPI Row: Ticket stats
@@ -204,12 +280,105 @@ class _AdminDashboardPageState extends ConsumerState<AdminDashboardPage> {
                   final crossAxisCount = isWide
                       ? 3
                       : (constraints.maxWidth > 700 ? 2 : 1);
-                  // When the layout collapses to fewer columns the cards need
-                  // additional vertical space, otherwise the fixed
-                  // mainAxisExtent would clip the KPI content and trigger the
-                  // yellow/black overflow warning banner. Give compact grids a
-                  // touch more height so the text + chip fit comfortably.
                   final tileHeight = 175.0;
+
+                  final kpiLiveQueue = AppCard(
+                    child: ticketStatsAsync.when(
+                      data: (stats) {
+                        final open = stats['Open'] ?? 0;
+                        final inProgress = stats['In Progress'] ?? 0;
+                        final total = open + inProgress;
+
+                        return _KpiTile(
+                          label: 'Live Queue',
+                          primaryValue: total.toString(),
+                          secondaryLabel: 'Open / In Progress',
+                          secondaryValue: '$open / $inProgress',
+                          icon: LucideIcons.inbox,
+                          accentColor: AppColors.info,
+                        );
+                      },
+                      loading: () => const _KpiLoading(),
+                      error: (err, _) =>
+                          _KpiError(message: 'Ticket stats error'),
+                    ),
+                  );
+
+                  final kpiAmcCoverage = AppCard(
+                    child: amcStatsAsync.when(
+                      data: (stats) {
+                        final active = stats['active'] ?? 0;
+                        final expired = stats['expired'] ?? 0;
+                        return _KpiTile(
+                          label: 'AMC Coverage',
+                          primaryValue: active.toString(),
+                          secondaryLabel: 'Expired',
+                          secondaryValue: expired.toString(),
+                          icon: LucideIcons.shield,
+                          accentColor: AppColors.success,
+                        );
+                      },
+                      loading: () => const _KpiLoading(),
+                      error: (err, _) =>
+                          _KpiError(message: 'AMC stats error'),
+                    ),
+                  );
+
+                  final kpiTodayFlow = AppCard(
+                    child: ticketsAsync.when(
+                      skipLoadingOnReload: true,
+                      skipLoadingOnRefresh: true,
+                      data: (tickets) {
+                        final now = DateTime.now();
+                        var createdToday = 0;
+                        var resolvedToday = 0;
+
+                        for (final t in tickets) {
+                          final created = t.createdAt;
+                          if (created != null &&
+                              created.year == now.year &&
+                              created.month == now.month &&
+                              created.day == now.day) {
+                            createdToday++;
+                          }
+
+                          if (t.status == 'Resolved') {
+                            final updated = t.updatedAt;
+                            if (updated != null &&
+                                updated.year == now.year &&
+                                updated.month == now.month &&
+                                updated.day == now.day) {
+                              resolvedToday++;
+                            }
+                          }
+                        }
+
+                        return _KpiTile(
+                          label: 'Today\'s Flow',
+                          primaryValue: '$createdToday new',
+                          secondaryLabel: 'Resolved today',
+                          secondaryValue: resolvedToday.toString(),
+                          icon: LucideIcons.activity,
+                          accentColor: AppColors.accent,
+                        );
+                      },
+                      loading: () => const _KpiLoading(),
+                      error: (err, _) =>
+                          _KpiError(message: 'Today stats error'),
+                    ),
+                  );
+
+                  if (crossAxisCount == 1) {
+                    return Column(
+                      children: [
+                        SizedBox(height: tileHeight, width: double.infinity, child: kpiLiveQueue),
+                        const SizedBox(height: 12),
+                        SizedBox(height: tileHeight, width: double.infinity, child: kpiAmcCoverage),
+                        const SizedBox(height: 12),
+                        SizedBox(height: tileHeight, width: double.infinity, child: kpiTodayFlow),
+                      ],
+                    );
+                  }
 
                   return GridView(
                     shrinkWrap: true,
@@ -221,87 +390,9 @@ class _AdminDashboardPageState extends ConsumerState<AdminDashboardPage> {
                       mainAxisExtent: tileHeight,
                     ),
                     children: [
-                      AppCard(
-                        child: ticketStatsAsync.when(
-                          data: (stats) {
-                            final open = stats['Open'] ?? 0;
-                            final inProgress = stats['In Progress'] ?? 0;
-                            final total = open + inProgress;
-
-                            return _KpiTile(
-                              label: 'Live Queue',
-                              primaryValue: total.toString(),
-                              secondaryLabel: 'Open / In Progress',
-                              secondaryValue: '$open / $inProgress',
-                              icon: LucideIcons.inbox,
-                              accentColor: AppColors.info,
-                            );
-                          },
-                          loading: () => const _KpiLoading(),
-                          error: (err, _) =>
-                              _KpiError(message: 'Ticket stats error'),
-                        ),
-                      ),
-                      AppCard(
-                        child: amcStatsAsync.when(
-                          data: (stats) {
-                            final active = stats['active'] ?? 0;
-                            final expired = stats['expired'] ?? 0;
-                            return _KpiTile(
-                              label: 'AMC Coverage',
-                              primaryValue: active.toString(),
-                              secondaryLabel: 'Expired',
-                              secondaryValue: expired.toString(),
-                              icon: LucideIcons.shield,
-                              accentColor: AppColors.success,
-                            );
-                          },
-                          loading: () => const _KpiLoading(),
-                          error: (err, _) =>
-                              _KpiError(message: 'AMC stats error'),
-                        ),
-                      ),
-                      AppCard(
-                        child: ticketsAsync.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
-                          data: (tickets) {
-                            final now = DateTime.now();
-                            var createdToday = 0;
-                            var resolvedToday = 0;
-
-                            for (final t in tickets) {
-                              final created = t.createdAt;
-                              if (created != null &&
-                                  created.year == now.year &&
-                                  created.month == now.month &&
-                                  created.day == now.day) {
-                                createdToday++;
-                              }
-
-                              if (t.status == 'Resolved') {
-                                final updated = t.updatedAt;
-                                if (updated != null &&
-                                    updated.year == now.year &&
-                                    updated.month == now.month &&
-                                    updated.day == now.day) {
-                                  resolvedToday++;
-                                }
-                              }
-                            }
-
-                            return _KpiTile(
-                              label: 'Today\'s Flow',
-                              primaryValue: '$createdToday new',
-                              secondaryLabel: 'Resolved today',
-                              secondaryValue: resolvedToday.toString(),
-                              icon: LucideIcons.activity,
-                              accentColor: AppColors.accent,
-                            );
-                          },
-                          loading: () => const _KpiLoading(),
-                          error: (err, _) =>
-                              _KpiError(message: 'Today stats error'),
-                        ),
-                      ),
+                      kpiLiveQueue,
+                      kpiAmcCoverage,
+                      kpiTodayFlow,
                     ],
                   );
                 },
@@ -562,13 +653,23 @@ class _AdminDashboardPageState extends ConsumerState<AdminDashboardPage> {
                         ),
                       const SizedBox(height: 24),
                       if (enableBoardView) ...[
-                        Text(
-                          'Ticket Board',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                            color: Theme.of(context).textTheme.titleMedium?.color ?? Theme.of(context).colorScheme.onSurface,
-                          ),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'Ticket Board',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: Theme.of(context).textTheme.titleMedium?.color ?? Theme.of(context).colorScheme.onSurface,
+                              ),
+                            ),
+                            TextButton.icon(
+                              onPressed: () => context.push('/tickets'),
+                              icon: const Icon(LucideIcons.externalLink, size: 14),
+                              label: const Text('View All in Hub', style: TextStyle(fontSize: 12)),
+                            ),
+                          ],
                         ),
                         const SizedBox(height: 12),
                         // Custom Tab Bar
@@ -622,10 +723,51 @@ class _AdminDashboardPageState extends ConsumerState<AdminDashboardPage> {
                             ];
                           }
 
-                          return activeTickets.map((ticket) => Padding(
-                                padding: const EdgeInsets.only(bottom: 12.0),
-                                child: TicketCardWithAmc(ticket: ticket),
-                              ));
+                          final visibleLimit = isMobile ? _ticketLimit : (_ticketLimit * 2);
+                          final visibleTickets = activeTickets.take(visibleLimit).toList();
+                          final hasMore = activeTickets.length > visibleTickets.length;
+
+                          return [
+                            ...visibleTickets.map((ticket) => Padding(
+                                  padding: const EdgeInsets.only(bottom: 12.0),
+                                  child: TicketCardWithAmc(
+                                    ticket: ticket,
+                                    customer: customerMap[ticket.customerId],
+                                  ),
+                                )),
+                            if (hasMore)
+                              Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 8.0),
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: OutlinedButton(
+                                        onPressed: () {
+                                          setState(() {
+                                            _ticketLimit += 15;
+                                          });
+                                        },
+                                        style: OutlinedButton.styleFrom(
+                                          padding: const EdgeInsets.symmetric(vertical: 12),
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(8),
+                                          ),
+                                        ),
+                                        child: Text(
+                                          'Show More (${visibleTickets.length} of ${activeTickets.length})',
+                                          style: const TextStyle(fontWeight: FontWeight.w600),
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    TextButton(
+                                      onPressed: () => context.push('/tickets'),
+                                      child: const Text('Open Hub'),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                          ];
                         })(),
                         const SizedBox(height: 32),
                       ],
@@ -633,22 +775,31 @@ class _AdminDashboardPageState extends ConsumerState<AdminDashboardPage> {
 
                       // Live Ticket Board (Sorted by Response Time)
                       Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text(
-                            'Live Ticket Grid',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                              color: Theme.of(context).textTheme.titleMedium?.color ?? Theme.of(context).colorScheme.onSurface,
-                            ),
+                          Row(
+                            children: [
+                              Text(
+                                'Live Ticket Grid',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: Theme.of(context).textTheme.titleMedium?.color ?? Theme.of(context).colorScheme.onSurface,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                '(Active · By Urgency)',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Theme.of(context).textTheme.bodySmall?.color ?? Theme.of(context).colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                            ],
                           ),
-                          const SizedBox(width: 8),
-                          Text(
-                            '(Sorted by Urgency)',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Theme.of(context).textTheme.bodySmall?.color ?? Theme.of(context).colorScheme.onSurfaceVariant,
-                            ),
+                          TextButton(
+                            onPressed: () => context.push('/tickets'),
+                            child: const Text('All in Hub', style: TextStyle(fontSize: 12)),
                           ),
                         ],
                       ),
@@ -656,9 +807,14 @@ class _AdminDashboardPageState extends ConsumerState<AdminDashboardPage> {
 
                       LayoutBuilder(
                         builder: (context, constraints) {
-                          // Sort tickets by response time due date
-                          final sortedTickets = List.of(tickets);
-                          sortedTickets.sort((a, b) {
+                          // Sort tickets by response time due date and filter out resolved/closed
+                          final urgentTickets = tickets.where((t) => !const [
+                            'Resolved',
+                            'Closed',
+                            'BillProcessed',
+                          ].contains(t.status)).toList();
+
+                          urgentTickets.sort((a, b) {
                             if (a.slaDue != null && b.slaDue != null) {
                               return a.slaDue!.compareTo(b.slaDue!);
                             }
@@ -669,21 +825,81 @@ class _AdminDashboardPageState extends ConsumerState<AdminDashboardPage> {
                             );
                           });
 
+                          if (urgentTickets.isEmpty) {
+                            return Padding(
+                              padding: const EdgeInsets.all(24.0),
+                              child: Center(
+                                child: Text(
+                                  'No active urgent tickets',
+                                  style: TextStyle(
+                                    color: Theme.of(context).textTheme.bodyMedium?.color ?? Theme.of(context).colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
+                              ),
+                            );
+                          }
+
                           final isWide = constraints.maxWidth > 900;
                           final crossAxisCount = isWide ? 2 : 1;
-                          final totalSpacing =
-                              16.0 * (crossAxisCount > 1 ? crossAxisCount - 1 : 0);
-                          final itemWidth =
-                              (constraints.maxWidth - totalSpacing) / crossAxisCount;
+                          final maxDisplay = isMobile ? 8 : (isWide ? 20 : 12);
+                          final displayTickets = urgentTickets.take(maxDisplay).toList();
+                          final hasMoreUrgent = urgentTickets.length > displayTickets.length;
 
-                          return Wrap(
-                            spacing: 16,
-                            runSpacing: 16,
+                          if (crossAxisCount == 1) {
+                            return Column(
+                              children: [
+                                for (final ticket in displayTickets)
+                                  Padding(
+                                    padding: const EdgeInsets.only(bottom: 12),
+                                    child: TicketCardWithAmc(
+                                      ticket: ticket,
+                                      customer: customerMap[ticket.customerId],
+                                    ),
+                                  ),
+                                if (hasMoreUrgent)
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(vertical: 8),
+                                    child: Center(
+                                      child: OutlinedButton.icon(
+                                        icon: const Icon(LucideIcons.listFilter, size: 14),
+                                        label: Text('View all ${urgentTickets.length} active tickets in Hub'),
+                                        onPressed: () => context.push('/tickets'),
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            );
+                          }
+
+                          final totalSpacing = 16.0 * (crossAxisCount - 1);
+                          final itemWidth = (constraints.maxWidth - totalSpacing) / crossAxisCount;
+
+                          return Column(
                             children: [
-                              for (final ticket in sortedTickets)
-                                SizedBox(
-                                  width: itemWidth,
-                                  child: TicketCardWithAmc(ticket: ticket),
+                              Wrap(
+                                spacing: 16,
+                                runSpacing: 16,
+                                children: [
+                                  for (final ticket in displayTickets)
+                                    SizedBox(
+                                      width: itemWidth,
+                                      child: TicketCardWithAmc(
+                                        ticket: ticket,
+                                        customer: customerMap[ticket.customerId],
+                                      ),
+                                    ),
+                                ],
+                              ),
+                              if (hasMoreUrgent)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 16),
+                                  child: Center(
+                                    child: OutlinedButton.icon(
+                                      icon: const Icon(LucideIcons.listFilter, size: 14),
+                                      label: Text('View all ${urgentTickets.length} active tickets in Hub'),
+                                      onPressed: () => context.push('/tickets'),
+                                    ),
+                                  ),
                                 ),
                             ],
                           );
