@@ -2835,6 +2835,7 @@ class _ChannelsList extends ConsumerStatefulWidget {
 
 class _ChannelsListState extends ConsumerState<_ChannelsList> {
   Timer? _timer;
+  bool _showAllDms = false;
 
   @override
   void initState() {
@@ -3534,25 +3535,51 @@ class _ChannelsListState extends ConsumerState<_ChannelsList> {
                     return nameA.compareTo(nameB);
                   });
 
-                return ListView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  padding: EdgeInsets.zero,
-                  itemCount: sortedAgents.length,
-                  itemBuilder: (context, index) {
-                    final agent = sortedAgents[index];
-                    final agentId = agent['id']?.toString() ?? '';
-                    return _SidebarDmTile(
-                      key: ValueKey(agentId),
-                      agent: agent,
-                      index: index,
-                      currentPath: widget.currentPath,
-                      isMobile: isMobile,
-                      isLight: isLight,
-                      textColor70: textColor70,
-                      activeBgColor: activeBgColor,
-                    );
-                  },
+                final agentsToShow = _showAllDms ? sortedAgents : sortedAgents.take(5).toList();
+
+                return Column(
+                  children: [
+                    ListView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      padding: EdgeInsets.zero,
+                      itemCount: agentsToShow.length,
+                      itemBuilder: (context, index) {
+                        final agent = agentsToShow[index];
+                        final agentId = agent['id']?.toString() ?? '';
+                        return _SidebarDmTile(
+                          key: ValueKey(agentId),
+                          agent: agent,
+                          index: index,
+                          currentPath: widget.currentPath,
+                          isMobile: isMobile,
+                          isLight: isLight,
+                          textColor70: textColor70,
+                          activeBgColor: activeBgColor,
+                        );
+                      },
+                    ),
+                    if (sortedAgents.length > 5)
+                      InkWell(
+                        onTap: () {
+                          setState(() {
+                            _showAllDms = !_showAllDms;
+                          });
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          alignment: Alignment.center,
+                          child: Text(
+                            _showAllDms ? 'Show less' : 'Show more',
+                            style: TextStyle(
+                              color: textColor54,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
                 );
               },
               loading: () => Center(
