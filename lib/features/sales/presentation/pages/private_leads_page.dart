@@ -189,7 +189,7 @@ class _PrivateLeadsPageState extends ConsumerState<PrivateLeadsPage> {
                           onPressed: () {
                             showDialog(
                               context: context,
-                              builder: (_) => const CreateLeadDialog(isPrivatePipeline: true),
+                              builder: (_) => const CreateLeadDialog(pipelineType: 'private'),
                             );
                           },
                           style: ElevatedButton.styleFrom(

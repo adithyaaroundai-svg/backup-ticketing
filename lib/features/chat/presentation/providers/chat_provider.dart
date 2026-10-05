@@ -239,6 +239,20 @@ class ChatStream extends _$ChatStream {
               ref.read(customChannelNewMessageEventProvider.notifier).notify(newMsg);
               ChatSoundService.playPing();
             }
+          } else if (channel == 'mobile-app-sales') {
+            final currentUser = ref.read(authProvider);
+            final fullName = currentUser?.fullName.toLowerCase() ?? '';
+            final username = currentUser?.username.toLowerCase() ?? '';
+            final isMobileAppSalesMember = currentUser?.isMarketingAI == true ||
+                fullName.contains('parvathy') || username.contains('parvathy') ||
+                fullName.contains('parvathi') || username.contains('parvathi') ||
+                fullName.contains('sidharth') || username.contains('sidharth') ||
+                fullName.contains('rinsiya') || username.contains('rinsiya') ||
+                fullName.contains('athira') || username.contains('athira');
+            if (isMobileAppSalesMember) {
+              ref.read(customChannelNewMessageEventProvider.notifier).notify(newMsg);
+              ChatSoundService.playPing();
+            }
           } else {
             // This is a custom channel message from someone else
             // Only notify if current user is actually a member of this channel

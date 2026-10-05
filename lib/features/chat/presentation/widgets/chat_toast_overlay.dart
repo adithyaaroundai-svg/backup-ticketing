@@ -53,7 +53,9 @@ class ChatToastOverlay extends ConsumerWidget {
         !currentPath.startsWith('/channel/${customChannelNewMessage.channel}') &&
         !((customChannelNewMessage.channel == 'sales-channel' ||
                 customChannelNewMessage.channel == 'sales-team') &&
-            currentPath.startsWith('/sales-channel'))) {
+            currentPath.startsWith('/sales-channel')) &&
+        !(customChannelNewMessage.channel == 'mobile-app-sales' &&
+            currentPath.startsWith('/mobile-app-sales'))) {
       activeToast = _ChatToast(
         key: ValueKey(customChannelNewMessage.id),
         message: customChannelNewMessage,
@@ -63,6 +65,8 @@ class ChatToastOverlay extends ConsumerWidget {
           if (customChannelNewMessage.channel == 'sales-channel' ||
               customChannelNewMessage.channel == 'sales-team') {
             context.push('/sales-channel');
+          } else if (customChannelNewMessage.channel == 'mobile-app-sales') {
+            context.push('/mobile-app-sales');
           } else {
             context.push('/channel/${customChannelNewMessage.channel}');
           }
@@ -268,6 +272,8 @@ class _ChatToastCard extends ConsumerWidget {
       String? foundName;
       if (message.channel == 'sales-channel' || message.channel == 'sales-team') {
         foundName = 'Product-sales';
+      } else if (message.channel == 'mobile-app-sales') {
+        foundName = 'Mobile-App-Sales';
       } else {
         for (final ch in channelsList) {
           if (ch.id == message.channel) {

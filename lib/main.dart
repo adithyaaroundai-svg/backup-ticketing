@@ -10,6 +10,7 @@ import 'features/dashboard/presentation/pages/agent_dashboard_page.dart';
 import 'features/dashboard/presentation/pages/admin_dashboard_page.dart';
 import 'features/chat/presentation/pages/global_chat_page.dart';
 import 'features/chat/presentation/pages/sales_chat_page.dart';
+import 'features/chat/presentation/pages/mobile_app_sales_page.dart';
 import 'features/chat/presentation/pages/all_aroundtally_chat_page.dart';
 import 'features/chat/presentation/pages/custom_channel_chat_page.dart';
 import 'features/customer_channel/presentation/pages/customer_channel_page.dart';
@@ -200,7 +201,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       }
 
       if (authState?.isMarketingAI == true) {
-        if (!state.matchedLocation.startsWith('/sales-channel') && !state.matchedLocation.startsWith('/profile')) {
+        if (!state.matchedLocation.startsWith('/sales-channel') && !state.matchedLocation.startsWith('/mobile-app-sales') && !state.matchedLocation.startsWith('/profile')) {
           return _getHomeRouteForAgent(authState);
         }
       }
@@ -293,6 +294,23 @@ final routerProvider = Provider<GoRouter>((ref) {
         final userId = authState?.id ?? '';
         final isMarketingAI = authState?.isMarketingAI ?? false;
         if (!allowedSalesChannelIds.contains(userId) && !isMarketingAI) {
+          if (!isLoggedIn) return '/login';
+          return _getHomeRouteForAgent(authState);
+        }
+      }
+
+      if (state.matchedLocation.startsWith('/mobile-app-sales')) {
+        final isMarketingAI = authState?.isMarketingAI ?? false;
+        final fullName = authState?.fullName.toLowerCase() ?? '';
+        final username = authState?.username.toLowerCase() ?? '';
+        final isAllowed = isMarketingAI || 
+           fullName.contains('parvathy') || username.contains('parvathy') ||
+           fullName.contains('parvathi') || username.contains('parvathi') ||
+           fullName.contains('sidharth') || username.contains('sidharth') ||
+           fullName.contains('rinsiya') || username.contains('rinsiya') ||
+           fullName.contains('athira') || username.contains('athira');
+        
+        if (!isAllowed) {
           if (!isLoggedIn) return '/login';
           return _getHomeRouteForAgent(authState);
         }
@@ -539,6 +557,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/sales-channel',
         builder: (context, state) => const SalesChatPage(),
+      ),
+      GoRoute(
+        path: '/mobile-app-sales',
+        builder: (context, state) => const MobileAppSalesPage(),
       ),
       GoRoute(
         path: '/channel/all-aroundtally',

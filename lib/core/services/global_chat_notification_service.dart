@@ -74,12 +74,17 @@ class GlobalChatNotificationService {
     final channelName = (channel ?? '').toLowerCase();
     final isSalesChannel = channelName == 'sales-channel' ||
         channelName == 'sales-team' ||
-        channelName.contains('sales');
+        (channelName.contains('sales') && channelName != 'mobile-app-sales');
     final isLeadNotice = content.contains('🎯 New Lead') ||
         content.contains('[LeadID:');
     final isSalesMember = _currentUserId != null && salesMemberIds.contains(_currentUserId);
     if (receiverId == null && (isSalesChannel || isLeadNotice) && !isSalesMember) {
       return;
+    }
+
+    if (channelName == 'mobile-app-sales') {
+      // For mobile-app-sales, we can't reliably check name from here easily as we only have _currentUserId
+      // We will allow it to proceed, and the UI layer (chat_provider) will filter out the toast if they aren't actually a member.
     }
 
     // If it's a custom channel, ensure the user is a member

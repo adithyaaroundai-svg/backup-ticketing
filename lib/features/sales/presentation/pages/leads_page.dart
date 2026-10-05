@@ -16,7 +16,12 @@ import 'package:google_fonts/google_fonts.dart';
 
 class LeadsPage extends ConsumerStatefulWidget {
   final bool isEmbedded;
-  const LeadsPage({super.key, this.isEmbedded = false});
+  final String pipelineType;
+  const LeadsPage({
+    super.key, 
+    this.isEmbedded = false,
+    this.pipelineType = 'global',
+  });
 
   @override
   ConsumerState<LeadsPage> createState() => _LeadsPageState();
@@ -28,7 +33,9 @@ class _LeadsPageState extends ConsumerState<LeadsPage> {
 
   @override
   Widget build(BuildContext context) {
-    final leadsAsync = ref.watch(leadsStreamProvider);
+    final leadsAsync = widget.pipelineType == 'mobile-app-sales' 
+        ? ref.watch(mobileAppLeadsProvider)
+        : ref.watch(leadsStreamProvider);
 
     // Listen to controller errors
     ref.listen(leadControllerProvider, (prev, next) {

@@ -621,16 +621,17 @@ class _TopNav extends ConsumerWidget {
 
     // Main navigation items (left side)
     final isSalesChannel = currentPath.startsWith('/sales-channel');
+    final isMobileAppSalesChannel = currentPath.startsWith('/mobile-app-sales');
     final mainNavItems = <Widget>[
-      if (isSalesChannel) ...[
+      if (isSalesChannel || isMobileAppSalesChannel) ...[
         if (!isMarketingAI)
           _TopNavItem(
-          label: 'Sales Chat',
+          label: isMobileAppSalesChannel ? 'Mobile App Sales Chat' : 'Sales Chat',
           icon: LucideIcons.messageCircle,
-          path: '/sales-channel?tab=0',
+          path: isMobileAppSalesChannel ? '/mobile-app-sales?tab=0' : '/sales-channel?tab=0',
           isActive:
-              currentPath == '/sales-channel' ||
-              currentPath.contains('/sales-channel') &&
+              currentPath == (isMobileAppSalesChannel ? '/mobile-app-sales' : '/sales-channel') ||
+              currentPath.contains(isMobileAppSalesChannel ? '/mobile-app-sales' : '/sales-channel') &&
                   (GoRouterState.of(context).uri.queryParameters['tab'] ??
                           '0') ==
                       '0',
@@ -639,9 +640,9 @@ class _TopNav extends ConsumerWidget {
         _TopNavItem(
           label: 'Pipeline',
           icon: LucideIcons.layers,
-          path: '/sales-channel?tab=2',
+          path: isMobileAppSalesChannel ? '/mobile-app-sales?tab=2' : '/sales-channel?tab=2',
           isActive:
-              currentPath.contains('/sales-channel') &&
+              currentPath.contains(isMobileAppSalesChannel ? '/mobile-app-sales' : '/sales-channel') &&
               (GoRouterState.of(context).uri.queryParameters['tab'] ?? '') ==
                   '2',
         ),
@@ -1342,6 +1343,8 @@ class _GlobalSearchDialogState extends ConsumerState<_GlobalSearchDialog> {
                                             context.push('/chat?highlightMsgId=${m.id}');
                                           } else if (m.channel == 'sales-team') {
                                             context.push('/sales-channel?highlightMsgId=${m.id}');
+                                          } else if (m.channel == 'mobile-app-sales') {
+                                            context.push('/mobile-app-sales?highlightMsgId=${m.id}');
                                           } else if (m.channel == 'all-aroundtally') {
                                             context.push('/channel/all-aroundtally?highlightMsgId=${m.id}');
                                           } else if (m.channel == 'dm') {
@@ -2133,6 +2136,7 @@ class _BottomNav extends ConsumerWidget {
         : const Color(0xFF1A1D21);
     
     final isSalesChannel = currentPath.startsWith('/sales-channel');
+    final isMobileAppSalesChannel = currentPath.startsWith('/mobile-app-sales');
 
     final unselectedColor = isLight ? Colors.black54 : Colors.white.withValues(alpha: 0.6);
     final selectedColor = isLight 
@@ -2146,12 +2150,12 @@ class _BottomNav extends ConsumerWidget {
           selectedIcon: Icon(LucideIcons.home, color: selectedColor),
           label: 'Home',
         ),
-      if (isSalesChannel) ...[
+      if (isSalesChannel || isMobileAppSalesChannel) ...[
         if (!isMarketingAI)
           NavigationDestination(
             icon: Icon(LucideIcons.messageCircle, color: unselectedColor),
             selectedIcon: Icon(LucideIcons.messageCircle, color: selectedColor),
-            label: 'Sales Chat',
+            label: isMobileAppSalesChannel ? 'Mobile App Sales' : 'Sales Chat',
           ),
         NavigationDestination(
           icon: Icon(LucideIcons.layers, color: unselectedColor),
@@ -2175,7 +2179,7 @@ class _BottomNav extends ConsumerWidget {
           label: 'Chat',
         ),
       ],
-      if (!isSalesChannel && !isMarketingAI)
+      if (!isSalesChannel && !isMobileAppSalesChannel && !isMarketingAI)
         NavigationDestination(
           icon: Icon(LucideIcons.search, color: unselectedColor),
           selectedIcon: Icon(LucideIcons.search, color: selectedColor),
@@ -2190,9 +2194,14 @@ class _BottomNav extends ConsumerWidget {
     ];
     
     final navRoutes = isMarketingAI 
-        ? ['/sales-channel?tab=2']
-        : isSalesChannel
-            ? ['/mobile-home', '/sales-channel?tab=0', '/sales-channel?tab=2', '__more__']
+        ? (isMobileAppSalesChannel ? ['/mobile-app-sales?tab=2'] : ['/sales-channel?tab=2'])
+        : (isSalesChannel || isMobileAppSalesChannel)
+            ? [
+                '/mobile-home', 
+                isMobileAppSalesChannel ? '/mobile-app-sales?tab=0' : '/sales-channel?tab=0', 
+                isMobileAppSalesChannel ? '/mobile-app-sales?tab=2' : '/sales-channel?tab=2', 
+                '__more__'
+              ]
             : ['/mobile-home', '/chat', '__search__', '__more__'];
     
     int selectedIndex = 0;
@@ -2200,7 +2209,7 @@ class _BottomNav extends ConsumerWidget {
       selectedIndex = 0;
     } else if (currentPath == '/mobile-home') {
       selectedIndex = 0;
-    } else if (isSalesChannel) {
+    } else if (isSalesChannel || isMobileAppSalesChannel) {
       final tab = GoRouterState.of(context).uri.queryParameters['tab'] ?? '0';
       if (tab == '0') selectedIndex = 1;
       else if (tab == '2') selectedIndex = 2;
@@ -2880,6 +2889,14 @@ class _ChannelsListState extends ConsumerState<_ChannelsList> {
     final canAccessSalesChannel =
         (allowedSalesChannelIds.contains(currentUser?.id ?? '') && !isRestrictedAgent) ||
         (currentUser?.isMarketingAI == true);
+    final fullName = currentUser?.fullName.toLowerCase() ?? '';
+    final username = currentUser?.username.toLowerCase() ?? '';
+    final canAccessMobileAppSalesChannel = currentUser?.isMarketingAI == true ||
+        fullName.contains('parvathy') || username.contains('parvathy') ||
+        fullName.contains('parvathi') || username.contains('parvathi') ||
+        fullName.contains('sidharth') || username.contains('sidharth') ||
+        fullName.contains('rinsiya') || username.contains('rinsiya') ||
+        fullName.contains('athira') || username.contains('athira');
     final canAccessDealsTracker =
         currentUser?.id == '0a5aeeb8-9544-4dc8-920f-e26c192b0dd3';
     final canAccessPrivateLeads =
@@ -3132,6 +3149,52 @@ class _ChannelsListState extends ConsumerState<_ChannelsList> {
                             : textColor70,
                         fontSize: 13,
                         fontWeight: currentPath.startsWith('/sales-channel')
+                            ? FontWeight.w600
+                            : FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          
+        // Mobile App Sales Channel
+        if (canAccessMobileAppSalesChannel)
+          Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: () => context.go('/mobile-app-sales'),
+              child: Container(
+                margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: currentPath.startsWith('/mobile-app-sales')
+                      ? activeBgColor
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      LucideIcons.hash,
+                      size: 16,
+                      color: currentPath.startsWith('/mobile-app-sales')
+                          ? textColorPrimary
+                          : textColor54,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Mobile-App-Sales',
+                      style: TextStyle(
+                        color: currentPath.startsWith('/mobile-app-sales')
+                            ? textColorPrimary
+                            : textColor70,
+                        fontSize: 13,
+                        fontWeight: currentPath.startsWith('/mobile-app-sales')
                             ? FontWeight.w600
                             : FontWeight.w500,
                       ),

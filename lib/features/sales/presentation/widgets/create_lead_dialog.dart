@@ -15,11 +15,11 @@ import '../providers/lead_provider.dart';
 import 'lead_success_celebration.dart';
 
 class CreateLeadDialog extends ConsumerStatefulWidget {
-  final bool isPrivatePipeline;
+  final String pipelineType;
 
   const CreateLeadDialog({
     super.key,
-    this.isPrivatePipeline = false,
+    this.pipelineType = 'global',
   });
 
   @override
@@ -142,15 +142,17 @@ class _CreateLeadDialogState extends ConsumerState<CreateLeadDialog> {
         'product': _selectedProduct,
         'demo_needed': 'Yes',
         'created_by': currentUser?.id,
-        'pipeline_type': widget.isPrivatePipeline ? 'private' : 'global',
+        'pipeline_type': widget.pipelineType,
         'created_at': DateTime.now().toUtc().toIso8601String(),
       };
 
       await Supabase.instance.client.from('leads').insert(leadData);
 
       // Invalidate the leads provider so the pipeline updates
-      if (widget.isPrivatePipeline) {
+      if (widget.pipelineType == 'private') {
         container.invalidate(privateLeadsProvider);
+      } else if (widget.pipelineType == 'mobile-app-sales') {
+        container.invalidate(mobileAppLeadsProvider);
       } else {
         container.invalidate(leadsProvider);
       }
@@ -189,19 +191,20 @@ class _CreateLeadDialogState extends ConsumerState<CreateLeadDialog> {
       }
 
       // Send to chat after closing (only if it's NOT a private pipeline lead)
-      if (!widget.isPrivatePipeline &&
+      if (widget.pipelineType != 'private' &&
           senderId != null &&
           senderName != null &&
           senderRole != null) {
         try {
-          // Send to sales-channel
+          // Send to channel
+          final channelName = widget.pipelineType == 'mobile-app-sales' ? 'mobile-app-sales' : 'sales-channel';
           await container.read(chatControllerProvider.notifier).sendMessage(
                 senderId: senderId,
                 senderName: senderName,
                 senderRole: senderRole,
                 content: chatContent,
                 senderAvatarUrl: senderAvatarUrl,
-                channel: 'sales-channel',
+                channel: channelName,
               );
         } catch (error) {
           messenger?.showSnackBar(

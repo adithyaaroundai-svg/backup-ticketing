@@ -46,6 +46,18 @@ final privateLeadsProvider = FutureProvider<List<Lead>>((ref) async {
   return (data as List).map((json) => Lead.fromJson(json)).toList();
 });
 
+final mobileAppLeadsProvider = FutureProvider<List<Lead>>((ref) async {
+  final client = Supabase.instance.client;
+  
+  final data = await client
+      .from('leads')
+      .select()
+      .eq('pipeline_type', 'mobile-app-sales')
+      .order('created_at', ascending: false);
+      
+  return (data as List).map((json) => Lead.fromJson(json)).toList();
+});
+
 // Keep backward-compatible stream alias
 final leadsStreamProvider = leadsProvider;
 
@@ -90,6 +102,7 @@ class LeadController extends AsyncNotifier<void> {
       // Refresh the leads list after update
       ref.invalidate(leadsProvider);
       ref.invalidate(privateLeadsProvider);
+      ref.invalidate(mobileAppLeadsProvider);
     } catch (e, st) {
       state = AsyncError(e, st);
     }
@@ -111,6 +124,7 @@ class LeadController extends AsyncNotifier<void> {
       // Refresh the leads list after update
       ref.invalidate(leadsProvider);
       ref.invalidate(privateLeadsProvider);
+      ref.invalidate(mobileAppLeadsProvider);
     } catch (e, st) {
       state = AsyncError(e, st);
       rethrow;
@@ -125,6 +139,7 @@ class LeadController extends AsyncNotifier<void> {
       // Refresh the leads list after delete
       ref.invalidate(leadsProvider);
       ref.invalidate(privateLeadsProvider);
+      ref.invalidate(mobileAppLeadsProvider);
     } catch (e, st) {
       state = AsyncError(e, st);
     }
