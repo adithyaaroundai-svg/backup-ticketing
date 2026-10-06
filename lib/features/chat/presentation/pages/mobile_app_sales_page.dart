@@ -384,6 +384,7 @@ class _MobileAppSalesPageState extends ConsumerState<MobileAppSalesPage> {
         final lower = name.toLowerCase();
         return lower.contains('parvathy') ||
             lower.contains('parvathi') ||
+            lower.contains('anjali') ||
                lower.contains('sidharth') ||
                lower.contains('rinsiya') ||
                lower.contains('athira') ||

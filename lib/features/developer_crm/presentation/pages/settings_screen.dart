@@ -88,7 +88,7 @@ class _SettingsBodyState extends State<_SettingsBody> {
               TextButton.icon(
                 icon: const Icon(Icons.history),
                 label: const Text('Activity log'),
-                onPressed: () => context.push('/activity'),
+                onPressed: () => context.push('/dev-crm/activity'),
               ),
             ],
           ),

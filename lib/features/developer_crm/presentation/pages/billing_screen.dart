@@ -145,11 +145,15 @@ class _BillingBodyState extends State<_BillingBody> {
                         rows: [
                           for (final t in g.tasks)
                             DataRow(
-                              onSelectChanged: (_) => context.push('/tasks/${t.id}'),
+                              onSelectChanged: (_) => context.push('/dev-crm/tasks/${t.id}'),
                               cells: [
                                 DataCell(ConstrainedBox(
                                   constraints: const BoxConstraints(maxWidth: 220),
-                                  child: Text(t.description, overflow: TextOverflow.ellipsis, maxLines: 2),
+                                  child: Tooltip(
+                                    message: t.description,
+                                    waitDuration: const Duration(milliseconds: 250),
+                                    child: Text(t.description, overflow: TextOverflow.ellipsis, maxLines: 1),
+                                  ),
                                 )),
                                 DataCell(StatusChip(status: t.status)),
                                 DataCell(Text(fmtMoney(t.billAmount))),

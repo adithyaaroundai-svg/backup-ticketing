@@ -306,6 +306,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         final isAllowed = isMarketingAI || 
            fullName.contains('parvathy') || username.contains('parvathy') ||
            fullName.contains('parvathi') || username.contains('parvathi') ||
+           fullName.contains('anjali') || username.contains('anjali') ||
            fullName.contains('sidharth') || username.contains('sidharth') ||
            fullName.contains('rinsiya') || username.contains('rinsiya') ||
            fullName.contains('athira') || username.contains('athira');
@@ -400,6 +401,8 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/dev-crm/clients/:id', builder: (context, state) => DeveloperCrmEntryApp(onExit: () => context.canPop() ? context.pop() : context.go('/chat'))),
       GoRoute(path: '/dev-crm/work-items/:id/edit', builder: (context, state) => DeveloperCrmEntryApp(onExit: () => context.canPop() ? context.pop() : context.go('/chat'))),
       GoRoute(path: '/dev-crm/tasks/:id', builder: (context, state) => DeveloperCrmEntryApp(onExit: () => context.canPop() ? context.pop() : context.go('/chat'))),
+      GoRoute(path: '/tasks/:id', redirect: (context, state) => '/dev-crm/tasks/${state.pathParameters['id']}'),
+      GoRoute(path: '/clients/:id', redirect: (context, state) => '/dev-crm/clients/${state.pathParameters['id']}'),
 
       GoRoute(
         path: '/tickets',

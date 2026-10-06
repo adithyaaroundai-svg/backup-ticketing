@@ -105,7 +105,11 @@ class _TeamBodyState extends State<_TeamBody> {
                         ListTile(
                           contentPadding: EdgeInsets.zero,
                           dense: true,
-                          title: Text(t.description, maxLines: 2, overflow: TextOverflow.ellipsis),
+                          title: Tooltip(
+                            message: t.description,
+                            waitDuration: const Duration(milliseconds: 250),
+                            child: Text(t.description, maxLines: 1, overflow: TextOverflow.ellipsis),
+                          ),
                           subtitle: Text('${t.client ?? '-'} \u2022 ${taskStatusLabel(t.status)}'),
                           trailing: Row(
                             mainAxisSize: MainAxisSize.min,
@@ -118,7 +122,7 @@ class _TeamBodyState extends State<_TeamBody> {
                               Text(fmtDuration(t.liveSeconds())),
                             ],
                           ),
-                          onTap: () => context.push('/tasks/${t.id}'),
+                          onTap: () => context.push('/dev-crm/tasks/${t.id}'),
                         ),
                   ],
                 ),

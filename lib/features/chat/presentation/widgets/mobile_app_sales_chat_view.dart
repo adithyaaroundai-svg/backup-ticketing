@@ -297,6 +297,7 @@ class _MobileAppSalesChatViewState extends ConsumerState<MobileAppSalesChatView>
           final lower = name.toLowerCase();
           return lower.contains('parvathy') ||
               lower.contains('parvathi') ||
+              lower.contains('anjali') ||
                  lower.contains('sidharth') ||
                  lower.contains('rinsiya') ||
                  lower.contains('athira') ||

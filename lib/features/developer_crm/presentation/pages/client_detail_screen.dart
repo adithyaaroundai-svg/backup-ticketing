@@ -390,7 +390,7 @@ class _WorkItemCard extends StatelessWidget {
                   ),
                 IconButton(
                   icon: const Icon(Icons.edit, size: 20),
-                  onPressed: () => context.push('/work-items/${item.id}/edit'),
+                  onPressed: () => context.push('/dev-crm/work-items/${item.id}/edit'),
                 ),
                 IconButton(
                   icon: const Icon(Icons.delete_outline, size: 20),

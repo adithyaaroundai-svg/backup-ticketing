@@ -19,13 +19,14 @@ import 'pages/work_item_edit_screen.dart';
 import 'widgets/app_shell.dart';
 
 bool _roleAllowed(String role, String path) {
-  if (path.startsWith('/dev-crm/dashboard')) return roleCanSeeDashboard(role);
-  if (path.startsWith('/dev-crm/settings')) return roleCanSeeSettings(role);
-  if (path.startsWith('/dev-crm/billing')) return roleCanSeeBilling(role);
-  if (path.startsWith('/dev-crm/team')) return roleCanSeeTeam(role);
+  final normalized = path.startsWith('/dev-crm') ? path : '/dev-crm$path';
+  if (normalized.startsWith('/dev-crm/dashboard')) return roleCanSeeDashboard(role);
+  if (normalized.startsWith('/dev-crm/settings')) return roleCanSeeSettings(role);
+  if (normalized.startsWith('/dev-crm/billing')) return roleCanSeeBilling(role);
+  if (normalized.startsWith('/dev-crm/team')) return roleCanSeeTeam(role);
   if (roleIsAccountant(role)) {
     const accountantAllowed = ['/dev-crm/billing', '/dev-crm/change-password', '/dev-crm/activity'];
-    return accountantAllowed.any((p) => path == p || path.startsWith('$p/'));
+    return accountantAllowed.any((p) => normalized == p || normalized.startsWith('$p/'));
   }
   return true;
 }
@@ -79,7 +80,17 @@ GoRouter buildDevCrmRouter(AuthProvider auth, VoidCallback onExit) {
             ClientDetailScreen(clientId: int.parse(state.pathParameters['id']!)),
       ),
       GoRoute(
+        path: '/clients/:id',
+        builder: (context, state) =>
+            ClientDetailScreen(clientId: int.parse(state.pathParameters['id']!)),
+      ),
+      GoRoute(
         path: '/dev-crm/work-items/:id/edit',
+        builder: (context, state) =>
+            WorkItemEditScreen(workItemId: int.parse(state.pathParameters['id']!)),
+      ),
+      GoRoute(
+        path: '/work-items/:id/edit',
         builder: (context, state) =>
             WorkItemEditScreen(workItemId: int.parse(state.pathParameters['id']!)),
       ),
@@ -87,18 +98,31 @@ GoRouter buildDevCrmRouter(AuthProvider auth, VoidCallback onExit) {
         path: '/dev-crm/tasks/:id',
         builder: (context, state) => TaskEditScreen(taskId: int.parse(state.pathParameters['id']!)),
       ),
+      GoRoute(
+        path: '/tasks/:id',
+        builder: (context, state) => TaskEditScreen(taskId: int.parse(state.pathParameters['id']!)),
+      ),
       ShellRoute(
         builder: (context, state, child) => AppShell(onExit: onExit, child: child),
         routes: [
           GoRoute(path: '/dev-crm/dashboard', builder: (context, state) => const DashboardScreen()),
+          GoRoute(path: '/dashboard', redirect: (context, state) => '/dev-crm/dashboard'),
           GoRoute(path: '/dev-crm/clients', builder: (context, state) => const ClientsScreen()),
+          GoRoute(path: '/clients', redirect: (context, state) => '/dev-crm/clients'),
           GoRoute(path: '/dev-crm/deliverables', builder: (context, state) => const DeliverablesScreen()),
+          GoRoute(path: '/deliverables', redirect: (context, state) => '/dev-crm/deliverables'),
           GoRoute(path: '/dev-crm/tasks', builder: (context, state) => const TaskBoardScreen()),
+          GoRoute(path: '/tasks', redirect: (context, state) => '/dev-crm/tasks'),
           GoRoute(path: '/dev-crm/pending', builder: (context, state) => const PendingBoardScreen()),
+          GoRoute(path: '/pending', redirect: (context, state) => '/dev-crm/pending'),
           GoRoute(path: '/dev-crm/billing', builder: (context, state) => const BillingScreen()),
+          GoRoute(path: '/billing', redirect: (context, state) => '/dev-crm/billing'),
           GoRoute(path: '/dev-crm/team', builder: (context, state) => const TeamScreen()),
+          GoRoute(path: '/team', redirect: (context, state) => '/dev-crm/team'),
           GoRoute(path: '/dev-crm/settings', builder: (context, state) => const SettingsScreen()),
+          GoRoute(path: '/settings', redirect: (context, state) => '/dev-crm/settings'),
           GoRoute(path: '/dev-crm/activity', builder: (context, state) => const ActivityScreen()),
+          GoRoute(path: '/activity', redirect: (context, state) => '/dev-crm/activity'),
         ],
       ),
     ],

@@ -246,6 +246,7 @@ class ChatStream extends _$ChatStream {
             final isMobileAppSalesMember = currentUser?.isMarketingAI == true ||
                 fullName.contains('parvathy') || username.contains('parvathy') ||
                 fullName.contains('parvathi') || username.contains('parvathi') ||
+                fullName.contains('anjali') || username.contains('anjali') ||
                 fullName.contains('sidharth') || username.contains('sidharth') ||
                 fullName.contains('rinsiya') || username.contains('rinsiya') ||
                 fullName.contains('athira') || username.contains('athira');

@@ -141,7 +141,7 @@ class _EditableTaskTableState extends State<EditableTaskTable> {
                     // Client Rows
                     for (var i = 0; i < displayTasks.length; i++)
                       InkWell(
-                        onTap: () => context.push('/tasks/${displayTasks[i].id}'),
+                        onTap: () => context.push('/dev-crm/tasks/${displayTasks[i].id}'),
                         child: Container(
                           height: rowHeight,
                           padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -152,7 +152,7 @@ class _EditableTaskTableState extends State<EditableTaskTable> {
                             child: Text(
                               displayTasks[i].client ?? '-',
                               style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: AppColors.slate800),
-                              maxLines: 2,
+                              maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
@@ -243,12 +243,16 @@ class _EditableTaskTableState extends State<EditableTaskTable> {
             border: const Border(bottom: BorderSide(color: AppColors.border, width: 0.6)),
             children: [
               InkWell(
-                onTap: () => context.push('/tasks/${displayTasks[i].id}'),
-                child: Text(
-                  displayTasks[i].description,
-                  overflow: TextOverflow.ellipsis,
-                  maxLines: 2,
-                  style: const TextStyle(fontSize: 13, color: AppColors.slate700),
+                onTap: () => context.push('/dev-crm/tasks/${displayTasks[i].id}'),
+                child: Tooltip(
+                  message: displayTasks[i].description,
+                  waitDuration: const Duration(milliseconds: 250),
+                  child: Text(
+                    displayTasks[i].description,
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
+                    style: const TextStyle(fontSize: 13, color: AppColors.slate700),
+                  ),
                 ),
               ),
               _PriorityDropdown(
@@ -263,11 +267,15 @@ class _EditableTaskTableState extends State<EditableTaskTable> {
                 displayTasks[i].expectedFinish == null ? '-' : fmtDate(displayTasks[i].expectedFinish),
                 style: const TextStyle(fontSize: 13, color: AppColors.slate700),
               ),
-              Text(
-                displayTasks[i].assignees.map((a) => a.name ?? '#${a.id}').join(', '),
-                overflow: TextOverflow.ellipsis,
-                maxLines: 2,
-                style: const TextStyle(fontSize: 13, color: AppColors.slate700),
+              Tooltip(
+                message: displayTasks[i].assignees.map((a) => a.name ?? '#${a.id}').join(', '),
+                waitDuration: const Duration(milliseconds: 250),
+                child: Text(
+                  displayTasks[i].assignees.map((a) => a.name ?? '#${a.id}').join(', '),
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                  style: const TextStyle(fontSize: 13, color: AppColors.slate700),
+                ),
               ),
               Text(
                 fmtDuration(displayTasks[i].liveSeconds()),

@@ -192,7 +192,7 @@ class _ClientsBodyState extends State<_ClientsBody> {
                     ),
                     for (var i = 0; i < clients.length; i++)
                       InkWell(
-                        onTap: () => context.push('/clients/${clients[i].id}'),
+                        onTap: () => context.push('/dev-crm/clients/${clients[i].id}'),
                         child: _ClientLine(
                           header: false,
                           shaded: i.isOdd,

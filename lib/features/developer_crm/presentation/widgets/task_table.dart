@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../core/design_system/theme/app_colors.dart';
 import '../../core/time_utils.dart';
 import '../../domain/entities/task.dart';
 import 'common.dart';
@@ -45,18 +46,44 @@ class _TaskTableState extends State<TaskTable> {
     });
   }
 
+  Widget _fit(Widget child) {
+    return FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft, child: child);
+  }
+
+  Widget _headerFor(TaskColumn column) {
+    return TaskTableColumnHeader(
+      column: column,
+      state: _filterState,
+      onStateChanged: _updateFilterState,
+      allTasks: widget.tasks,
+    );
+  }
+
+  List<double> _columnWidths(double available) {
+    const mins = <double>[260, 110, 130, 120, 180, 100];
+    const flex = <int>[5, 0, 0, 0, 2, 0];
+    final minSum = mins.fold<double>(0, (sum, width) => sum + width);
+    final flexTotal = flex.fold<int>(0, (sum, value) => sum + value);
+    final width = available.isFinite ? available : minSum;
+    if (width <= minSum || flexTotal == 0) return mins;
+    final extra = width - minSum;
+    return [
+      for (var i = 0; i < mins.length; i++) mins[i] + extra * (flex[i] / flexTotal),
+    ];
+  }
+
   @override
   Widget build(BuildContext context) {
     if (widget.tasks.isEmpty) {
-      return Padding(
-        padding: const EdgeInsets.all(24),
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
         child: Text(widget.emptyMessage, style: const TextStyle(color: Colors.grey)),
       );
     }
 
     final displayTasks = _filterState.apply(widget.tasks);
     final theme = Theme.of(context);
-    final borderColor = theme.dividerColor.withValues(alpha: 0.6);
 
     const double headingHeight = 56.0;
     const double rowHeight = 52.0;
@@ -94,15 +121,10 @@ class _TaskTableState extends State<TaskTable> {
             ),
           )
         else if (!widget.showClient)
-          Scrollbar(
-            controller: _scrollController,
-            thumbVisibility: true,
-            trackVisibility: true,
-            child: SingleChildScrollView(
-              controller: _scrollController,
-              scrollDirection: Axis.horizontal,
-              child: _buildRightTable(context, headingHeight, rowHeight, displayTasks),
-            ),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              return _buildRightTable(context, headingHeight, rowHeight, displayTasks, constraints.maxWidth);
+            },
           )
         else
           Row(
@@ -113,8 +135,8 @@ class _TaskTableState extends State<TaskTable> {
                 width: clientColumnWidth,
                 decoration: BoxDecoration(
                   color: theme.colorScheme.surface,
-                  border: Border(
-                    right: BorderSide(color: borderColor, width: 1.5),
+                  border: const Border(
+                    right: BorderSide(color: AppColors.border, width: 1),
                   ),
                 ),
                 child: Column(
@@ -124,8 +146,9 @@ class _TaskTableState extends State<TaskTable> {
                       height: headingHeight,
                       padding: const EdgeInsets.symmetric(horizontal: 12),
                       alignment: Alignment.centerLeft,
-                      decoration: BoxDecoration(
-                        border: Border(bottom: BorderSide(color: borderColor, width: 1.0)),
+                      decoration: const BoxDecoration(
+                        color: AppColors.slate100,
+                        border: Border(bottom: BorderSide(color: AppColors.border)),
                       ),
                       child: TaskTableColumnHeader(
                         column: TaskColumn.client,
@@ -134,22 +157,23 @@ class _TaskTableState extends State<TaskTable> {
                         allTasks: widget.tasks,
                       ),
                     ),
-                    for (final t in displayTasks)
+                    for (var i = 0; i < displayTasks.length; i++)
                       InkWell(
-                        onTap: () => context.push('/tasks/${t.id}'),
+                        onTap: () => context.push('/dev-crm/tasks/${displayTasks[i].id}'),
                         child: Container(
                           height: rowHeight,
                           padding: const EdgeInsets.symmetric(horizontal: 16),
                           alignment: Alignment.centerLeft,
                           decoration: BoxDecoration(
-                            border: Border(bottom: BorderSide(color: borderColor.withValues(alpha: 0.5))),
+                            color: i.isOdd ? AppColors.slate50 : Colors.white,
+                            border: const Border(bottom: BorderSide(color: AppColors.border, width: 0.6)),
                           ),
                           child: Tooltip(
-                            message: t.client ?? '-',
+                            message: displayTasks[i].client ?? '-',
                             child: Text(
-                              t.client ?? '-',
-                              style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13),
-                              maxLines: 2,
+                              displayTasks[i].client ?? '-',
+                              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: AppColors.slate800),
+                              maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
@@ -158,17 +182,18 @@ class _TaskTableState extends State<TaskTable> {
                   ],
                 ),
               ),
-              // Horizontally Scrollable Remaining Columns
+              // Expanded remaining columns that fill the rest of the available width
               Expanded(
-                child: Scrollbar(
-                  controller: _scrollController,
-                  thumbVisibility: true,
-                  trackVisibility: true,
-                  child: SingleChildScrollView(
-                    controller: _scrollController,
-                    scrollDirection: Axis.horizontal,
-                    child: _buildRightTable(context, headingHeight, rowHeight, displayTasks),
-                  ),
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    return _buildRightTable(
+                      context,
+                      headingHeight,
+                      rowHeight,
+                      displayTasks,
+                      constraints.maxWidth,
+                    );
+                  },
                 ),
               ),
             ],
@@ -177,80 +202,122 @@ class _TaskTableState extends State<TaskTable> {
     );
   }
 
-  Widget _buildRightTable(BuildContext context, double headingHeight, double rowHeight, List<Task> displayTasks) {
-    return DataTable(
-      horizontalMargin: 16,
-      columnSpacing: 24,
-      headingRowHeight: headingHeight,
-      dataRowMinHeight: rowHeight,
-      dataRowMaxHeight: rowHeight,
-      columns: [
-        DataColumn(
-          label: TaskTableColumnHeader(
-            column: TaskColumn.description,
-            state: _filterState,
-            onStateChanged: _updateFilterState,
-            allTasks: widget.tasks,
-          ),
+  Widget _buildRightTable(
+    BuildContext context,
+    double headingHeight,
+    double rowHeight,
+    List<Task> displayTasks,
+    double availableWidth,
+  ) {
+    final widths = _columnWidths(availableWidth);
+    final tableWidth = widths.fold<double>(0, (sum, width) => sum + width);
+    final table = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _TableBand(
+          height: headingHeight,
+          widths: widths,
+          color: AppColors.slate100,
+          border: const Border(bottom: BorderSide(color: AppColors.border)),
+          children: [
+            _fit(_headerFor(TaskColumn.description)),
+            _fit(_headerFor(TaskColumn.priority)),
+            _fit(_headerFor(TaskColumn.status)),
+            _fit(_headerFor(TaskColumn.due)),
+            _fit(_headerFor(TaskColumn.assignees)),
+            _fit(_headerFor(TaskColumn.time)),
+          ],
         ),
-        DataColumn(
-          label: TaskTableColumnHeader(
-            column: TaskColumn.priority,
-            state: _filterState,
-            onStateChanged: _updateFilterState,
-            allTasks: widget.tasks,
-          ),
-        ),
-        DataColumn(
-          label: TaskTableColumnHeader(
-            column: TaskColumn.status,
-            state: _filterState,
-            onStateChanged: _updateFilterState,
-            allTasks: widget.tasks,
-          ),
-        ),
-        DataColumn(
-          label: TaskTableColumnHeader(
-            column: TaskColumn.due,
-            state: _filterState,
-            onStateChanged: _updateFilterState,
-            allTasks: widget.tasks,
-          ),
-        ),
-        DataColumn(
-          label: TaskTableColumnHeader(
-            column: TaskColumn.assignees,
-            state: _filterState,
-            onStateChanged: _updateFilterState,
-            allTasks: widget.tasks,
-          ),
-        ),
-        DataColumn(
-          label: TaskTableColumnHeader(
-            column: TaskColumn.time,
-            state: _filterState,
-            onStateChanged: _updateFilterState,
-            allTasks: widget.tasks,
-          ),
-        ),
-      ],
-      rows: [
-        for (final t in displayTasks)
-          DataRow(
-            onSelectChanged: (_) => context.push('/tasks/${t.id}'),
-            cells: [
-              DataCell(ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 240, minWidth: 160),
-                child: Text(t.description, overflow: TextOverflow.ellipsis, maxLines: 2),
-              )),
-              DataCell(PriorityChip(priority: t.priority)),
-              DataCell(StatusChip(status: t.status)),
-              DataCell(Text(t.expectedFinish == null ? '-' : fmtDate(t.expectedFinish))),
-              DataCell(Text(t.assignees.map((a) => a.name ?? '#${a.id}').join(', '))),
-              DataCell(Text(fmtDuration(t.liveSeconds()))),
-            ],
+        for (var i = 0; i < displayTasks.length; i++)
+          InkWell(
+            onTap: () => context.push('/dev-crm/tasks/${displayTasks[i].id}'),
+            child: _TableBand(
+              height: rowHeight,
+              widths: widths,
+              color: i.isOdd ? AppColors.slate50 : Colors.white,
+              border: const Border(bottom: BorderSide(color: AppColors.border, width: 0.6)),
+              children: [
+                Tooltip(
+                  message: displayTasks[i].description,
+                  waitDuration: const Duration(milliseconds: 250),
+                  child: Text(
+                    displayTasks[i].description,
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
+                    style: const TextStyle(fontSize: 13, color: AppColors.slate700),
+                  ),
+                ),
+                PriorityChip(priority: displayTasks[i].priority),
+                StatusChip(status: displayTasks[i].status),
+                Text(
+                  displayTasks[i].expectedFinish == null ? '-' : fmtDate(displayTasks[i].expectedFinish),
+                  style: const TextStyle(fontSize: 13, color: AppColors.slate700),
+                ),
+                Tooltip(
+                  message: displayTasks[i].assignees.map((a) => a.name ?? '#${a.id}').join(', '),
+                  waitDuration: const Duration(milliseconds: 250),
+                  child: Text(
+                    displayTasks[i].assignees.map((a) => a.name ?? '#${a.id}').join(', '),
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
+                    style: const TextStyle(fontSize: 13, color: AppColors.slate700),
+                  ),
+                ),
+                Text(
+                  fmtDuration(displayTasks[i].liveSeconds()),
+                  style: const TextStyle(fontSize: 13, color: AppColors.slate700),
+                ),
+              ],
+            ),
           ),
       ],
+    );
+
+    if (availableWidth.isFinite && availableWidth + 1 >= tableWidth) return table;
+    return Scrollbar(
+      controller: _scrollController,
+      thumbVisibility: true,
+      child: SingleChildScrollView(
+        controller: _scrollController,
+        scrollDirection: Axis.horizontal,
+        child: SizedBox(width: tableWidth, child: table),
+      ),
+    );
+  }
+}
+
+class _TableBand extends StatelessWidget {
+  const _TableBand({
+    required this.height,
+    required this.widths,
+    required this.children,
+    required this.color,
+    required this.border,
+  });
+
+  final double height;
+  final List<double> widths;
+  final List<Widget> children;
+  final Color color;
+  final Border border;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: height,
+      decoration: BoxDecoration(color: color, border: border),
+      child: Row(
+        children: [
+          for (var i = 0; i < children.length; i++)
+            SizedBox(
+              width: widths[i],
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: Align(alignment: Alignment.centerLeft, child: children[i]),
+              ),
+            ),
+        ],
+      ),
     );
   }
 }

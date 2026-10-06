@@ -301,7 +301,16 @@ class _SidebarTaskTile extends StatelessWidget {
     if (dueToday) color = const Color(0xFFFDBA74);
     return ListTile(
       dense: true,
-      title: Text(label, style: TextStyle(fontSize: 13, color: color)),
+      title: Tooltip(
+        message: task.description,
+        waitDuration: const Duration(milliseconds: 250),
+        child: Text(
+          label,
+          style: TextStyle(fontSize: 13, color: color),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+      ),
       subtitle: Text(
         [
           if (task.client != null) task.client!,
@@ -315,7 +324,7 @@ class _SidebarTaskTile extends StatelessWidget {
         ].join(' \u2022 '),
         style: const TextStyle(fontSize: 11, color: Colors.white54),
       ),
-      onTap: () => context.push('/tasks/${task.id}'),
+      onTap: () => context.push('/dev-crm/tasks/${task.id}'),
     );
   }
 }
