@@ -309,7 +309,8 @@ final routerProvider = Provider<GoRouter>((ref) {
            fullName.contains('anjali') || username.contains('anjali') ||
            fullName.contains('sidharth') || username.contains('sidharth') ||
            fullName.contains('rinsiya') || username.contains('rinsiya') ||
-           fullName.contains('athira') || username.contains('athira');
+           fullName.contains('athira') || username.contains('athira') ||
+           fullName.contains('vismaya') || username.contains('vismaya');
         
         if (!isAllowed) {
           if (!isLoggedIn) return '/login';

@@ -92,6 +92,7 @@ serve(async (req) => {
           'd9572a84-762b-4c8b-8ef5-7da0345e3ea8',
           '0a5aeeb8-9544-4dc8-920f-e26c192b0dd3',
           'f3b54de6-0372-4648-ad87-3e98089efc2d',
+          'f398fe3a-ea5f-4f98-9720-b3e32e798a63', // Vismaya
         ])
         const channelName = (channel || '').toLowerCase()
         const isSalesChannel = channelName === 'sales-channel' ||

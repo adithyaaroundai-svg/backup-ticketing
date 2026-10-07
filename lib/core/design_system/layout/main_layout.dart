@@ -2897,7 +2897,8 @@ class _ChannelsListState extends ConsumerState<_ChannelsList> {
         fullName.contains('anjali') || username.contains('anjali') ||
         fullName.contains('sidharth') || username.contains('sidharth') ||
         fullName.contains('rinsiya') || username.contains('rinsiya') ||
-        fullName.contains('athira') || username.contains('athira');
+        fullName.contains('athira') || username.contains('athira') ||
+        fullName.contains('vismaya') || username.contains('vismaya');
     final canAccessDealsTracker =
         currentUser?.id == '0a5aeeb8-9544-4dc8-920f-e26c192b0dd3';
     final canAccessPrivateLeads =

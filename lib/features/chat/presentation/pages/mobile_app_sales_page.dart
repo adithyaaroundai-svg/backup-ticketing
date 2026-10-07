@@ -388,6 +388,7 @@ class _MobileAppSalesPageState extends ConsumerState<MobileAppSalesPage> {
                lower.contains('sidharth') ||
                lower.contains('rinsiya') ||
                lower.contains('athira') ||
+               lower.contains('vismaya') ||
                lower.contains('marketing ai');
       };
       

@@ -249,7 +249,8 @@ class ChatStream extends _$ChatStream {
                 fullName.contains('anjali') || username.contains('anjali') ||
                 fullName.contains('sidharth') || username.contains('sidharth') ||
                 fullName.contains('rinsiya') || username.contains('rinsiya') ||
-                fullName.contains('athira') || username.contains('athira');
+                fullName.contains('athira') || username.contains('athira') ||
+                fullName.contains('vismaya') || username.contains('vismaya');
             if (isMobileAppSalesMember) {
               ref.read(customChannelNewMessageEventProvider.notifier).notify(newMsg);
               ChatSoundService.playPing();
