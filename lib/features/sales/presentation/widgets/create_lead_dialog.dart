@@ -126,6 +126,13 @@ class _CreateLeadDialogState extends ConsumerState<CreateLeadDialog> {
               ? 'STP - ${_stpNameController.text.trim()}'
               : _selectedSource);
 
+      String targetPipelineType = widget.pipelineType;
+      if (_selectedProduct != null &&
+          _selectedProduct!.trim().toLowerCase().contains('mobile app') &&
+          targetPipelineType != 'private') {
+        targetPipelineType = 'mobile-app-sales';
+      }
+
       final leadData = {
         'customer_name': _customerNameController.text.trim().isNotEmpty
             ? _customerNameController.text.trim()
@@ -142,19 +149,17 @@ class _CreateLeadDialogState extends ConsumerState<CreateLeadDialog> {
         'product': _selectedProduct,
         'demo_needed': 'Yes',
         'created_by': currentUser?.id,
-        'pipeline_type': widget.pipelineType,
+        'pipeline_type': targetPipelineType,
         'created_at': DateTime.now().toUtc().toIso8601String(),
       };
 
       await Supabase.instance.client.from('leads').insert(leadData);
 
-      // Invalidate the leads provider so the pipeline updates
-      if (widget.pipelineType == 'private') {
+      // Invalidate the leads providers so the pipeline updates
+      container.invalidate(leadsProvider);
+      container.invalidate(mobileAppLeadsProvider);
+      if (targetPipelineType == 'private') {
         container.invalidate(privateLeadsProvider);
-      } else if (widget.pipelineType == 'mobile-app-sales') {
-        container.invalidate(mobileAppLeadsProvider);
-      } else {
-        container.invalidate(leadsProvider);
       }
 
       // Prepare chat content — embed lead ID so the chat bubble can show live status
@@ -191,13 +196,13 @@ class _CreateLeadDialogState extends ConsumerState<CreateLeadDialog> {
       }
 
       // Send to chat after closing (only if it's NOT a private pipeline lead)
-      if (widget.pipelineType != 'private' &&
+      if (targetPipelineType != 'private' &&
           senderId != null &&
           senderName != null &&
           senderRole != null) {
         try {
           // Send to channel
-          final channelName = widget.pipelineType == 'mobile-app-sales' ? 'mobile-app-sales' : 'sales-channel';
+          final channelName = targetPipelineType == 'mobile-app-sales' ? 'mobile-app-sales' : 'sales-channel';
           await container.read(chatControllerProvider.notifier).sendMessage(
                 senderId: senderId,
                 senderName: senderName,
