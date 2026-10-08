@@ -4,7 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'local_notification_service.dart';
-import '../../features/chat/presentation/providers/custom_channel_provider.dart';
+import '../../features/auth/presentation/providers/auth_provider.dart';
 import 'web_notification_helper.dart';
 
 class GlobalChatNotificationService {
@@ -83,14 +83,29 @@ class GlobalChatNotificationService {
     }
 
     if (channelName == 'mobile-app-sales') {
-      // For mobile-app-sales, we can't reliably check name from here easily as we only have _currentUserId
-      // We will allow it to proceed, and the UI layer (chat_provider) will filter out the toast if they aren't actually a member.
+      final currentUser = ref.read(authProvider);
+      final fullName = currentUser?.fullName.toLowerCase() ?? '';
+      final username = currentUser?.username.toLowerCase() ?? '';
+      final isAllowed = currentUser?.isMarketingAI == true ||
+          fullName.contains('parvathy') || username.contains('parvathy') ||
+          fullName.contains('parvathi') || username.contains('parvathi') ||
+          fullName.contains('anjali') || username.contains('anjali') ||
+          fullName.contains('sidharth') || username.contains('sidharth') ||
+          fullName.contains('rinsiya') || username.contains('rinsiya') ||
+          fullName.contains('athira') || username.contains('athira') ||
+          fullName.contains('vismaya') || username.contains('vismaya');
+      if (!isAllowed) return;
     }
 
-    // If it's a custom channel, ensure the user is a member
+    String channelTitle = channel != null ? '#$channel' : '';
+
+    // If it's a custom channel / group chat, ensure the user is an active member or creator
     if (channel != null && 
         channel != 'support-chat' && 
         channel != 'all-aroundtally' && 
+        channel != 'sales-channel' && 
+        channel != 'sales-team' && 
+        channel != 'mobile-app-sales' && 
         channel != 'dm') {
       try {
         final isUuid = RegExp(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$').hasMatch(channel);
@@ -98,30 +113,37 @@ class GlobalChatNotificationService {
         if (isUuid) {
           response = await Supabase.instance.client
               .from('custom_channels')
-              .select('id, is_private, created_by, channel_members(user_id)')
+              .select('id, name, is_private, created_by, channel_members(user_id)')
               .eq('id', channel)
               .maybeSingle();
         } else {
           response = await Supabase.instance.client
               .from('custom_channels')
-              .select('id, is_private, created_by, channel_members(user_id)')
+              .select('id, name, is_private, created_by, channel_members(user_id)')
               .eq('name', channel)
               .maybeSingle();
         }
             
-        if (response != null) {
-          final isPrivate = response['is_private'] as bool? ?? false;
-          if (isPrivate) {
-            final createdBy = response['created_by'];
-            if (createdBy != _currentUserId) {
-              final members = response['channel_members'] as List<dynamic>? ?? [];
-              final isMember = members.any((m) => m['user_id'] == _currentUserId);
-              if (!isMember) return;
-            }
-          }
+        if (response == null) {
+          // If channel not found in custom_channels and not a known public channel, don't notify
+          return;
+        }
+
+        final members = response['channel_members'] as List<dynamic>? ?? [];
+        final isMember = members.any((m) => m['user_id'] == _currentUserId);
+        final isCreator = response['created_by'] == _currentUserId;
+
+        if (!isMember && !isCreator) {
+          return; // Only group members should get notifications
+        }
+
+        final customName = response['name']?.toString();
+        if (customName != null && customName.isNotEmpty) {
+          channelTitle = '#$customName';
         }
       } catch (e) {
         debugPrint('GlobalChatNotificationService channel check error: $e');
+        return;
       }
     }
 
@@ -144,7 +166,7 @@ class GlobalChatNotificationService {
     });
 
     final msgPreview = content.startsWith('__CALL_') ? 'Started a call' : content;
-    final title = 'New message from $senderName';
+    final title = channelTitle.isNotEmpty ? '$channelTitle • $senderName' : 'New message from $senderName';
 
     // Show Push Notification
     if (kIsWeb) {

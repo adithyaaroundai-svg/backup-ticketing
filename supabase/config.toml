@@ -14,3 +14,9 @@ entrypoint = "./functions/zoho_call_webhook/index.ts"
 enabled = true
 verify_jwt = false
 entrypoint = "./functions/meta-capi/index.ts"
+
+[functions.send_fcm]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/send_fcm/index.ts"
+

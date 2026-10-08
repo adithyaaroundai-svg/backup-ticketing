@@ -1937,6 +1937,25 @@ class _LeadChatCard extends ConsumerWidget {
 
   const _LeadChatCard({required this.message, required this.showSender});
 
+  bool _canChangeStatus(String currentUserName, String currentClaimedBy) {
+    if (currentClaimedBy.isEmpty) return true;
+    final userLower = currentUserName.toLowerCase();
+    
+    final isRestrictedUser = userLower.contains('parvathi') || 
+                             userLower.contains('parvathy') || 
+                             userLower.contains('vismaya');
+    
+    if (isRestrictedUser) {
+      final claimedLower = currentClaimedBy.toLowerCase();
+      if (!claimedLower.contains(userLower) && !userLower.contains(claimedLower)) {
+        return false;
+      }
+    }
+    
+    return true;
+  }
+
+
   // Extract [LeadID:uuid] tag from message content
   static String? _extractLeadId(String content) {
     final match = RegExp(r'\[LeadID:([^\]]+)\]').firstMatch(content);
@@ -2007,6 +2026,11 @@ class _LeadChatCard extends ConsumerWidget {
     final isDark = context.isDarkMode;
     final timeStr = DateFormat('h:mm a').format(message.createdAt.toLocal()) + (message.isEdited ? ' (edited)' : '');
 
+    final currentUser = ref.watch(authProvider);
+    final currentUserName = currentUser?.fullName?.isNotEmpty == true 
+        ? currentUser!.fullName! 
+        : (currentUser?.username ?? 'Unknown');
+
     final leadId = _extractLeadId(message.content);
     final displayText = _displayContent(message.content);
     final lines = _parseLines(displayText);
@@ -2020,12 +2044,17 @@ class _LeadChatCard extends ConsumerWidget {
 
     // Look up live status from leadsProvider if we have a lead ID
     String liveStatus = lines['Status'] ?? 'New Lead';
+    String liveOwner = owner;
+    String liveClaimedBy = '';
+    
     if (leadId != null) {
       final leadsAsync = ref.watch(leadsProvider);
       leadsAsync.whenData((leads) {
         for (final l in leads) {
           if (l.id == leadId) {
             liveStatus = l.status;
+            liveOwner = l.owner ?? liveOwner;
+            liveClaimedBy = l.claimedBy ?? '';
             break;
           }
         }
@@ -2035,6 +2064,8 @@ class _LeadChatCard extends ConsumerWidget {
       for (final l in leads) {
         if (l.id == leadId) {
           liveStatus = l.status;
+          liveOwner = l.owner ?? liveOwner;
+          liveClaimedBy = l.claimedBy ?? '';
           break;
         }
       }
@@ -2108,21 +2139,50 @@ class _LeadChatCard extends ConsumerWidget {
                             ),
                           ),
                           // Live status badge
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                            decoration: BoxDecoration(
-                              color: statusColor.withValues(alpha: 0.15),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: statusColor.withValues(alpha: 0.4)),
-                            ),
-                            child: Text(
-                              statusLabel,
-                              style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700,
-                                color: statusColor,
-                              ),
-                            ),
+                          Builder(
+                            builder: (context) {
+                              Widget badge = Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: statusColor.withValues(alpha: 0.15),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(color: statusColor.withValues(alpha: 0.4)),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      statusLabel,
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w700,
+                                        color: statusColor,
+                                      ),
+                                    ),
+                                    if (_canChangeStatus(currentUserName, liveClaimedBy) && leadId != null) ...[
+                                      const SizedBox(width: 4),
+                                      Icon(Icons.arrow_drop_down, size: 14, color: statusColor),
+                                    ]
+                                  ],
+                                ),
+                              );
+
+                              if (_canChangeStatus(currentUserName, liveClaimedBy) && leadId != null) {
+                                badge = PopupMenuButton<String>(
+                                  initialValue: liveStatus,
+                                  tooltip: 'Change Status',
+                                  padding: EdgeInsets.zero,
+                                  onSelected: (newStatus) {
+                                    ref.read(leadControllerProvider.notifier).updateLeadDetails(leadId, {'status': newStatus});
+                                  },
+                                  itemBuilder: (context) => [
+                                    'New Lead', 'Contacted', 'Qualified', 'Proposal', 'Negotiation', 'Won', 'Lost'
+                                  ].map((s) => PopupMenuItem(value: s, child: Text(s, style: const TextStyle(fontSize: 13)))).toList(),
+                                  child: badge,
+                                );
+                              }
+                              return badge;
+                            },
                           ),
                         ],
                       ),
@@ -2160,18 +2220,48 @@ class _LeadChatCard extends ConsumerWidget {
                             _InfoRow(icon: LucideIcons.box, text: product, isDark: isDark),
                           if (source != null && source.isNotEmpty)
                             _InfoRow(icon: LucideIcons.globe, text: source, isDark: isDark),
-                          _InfoRow(icon: LucideIcons.user, text: owner, isDark: isDark),
-                          // Timestamp
-                          const SizedBox(height: 6),
-                          Align(
-                            alignment: Alignment.centerRight,
-                            child: Text(
-                              timeStr,
-                              style: TextStyle(
-                                fontSize: 10,
-                                color: isDark ? Colors.white38 : AppColors.slate400,
+                          if (liveOwner.isNotEmpty)
+                            _InfoRow(icon: LucideIcons.user, text: liveOwner, isDark: isDark),
+                          
+                          // Timestamp and Claim
+                          const SizedBox(height: 10),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              if (liveClaimedBy.isEmpty && leadId != null)
+                                AnimatedClaimButton(
+                                  isDark: isDark,
+                                  onPressed: () {
+                                    ref.read(leadControllerProvider.notifier).updateLeadDetails(leadId, {'claimed_by': currentUserName});
+                                  },
+                                )
+                              else if (liveClaimedBy.isNotEmpty)
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(LucideIcons.userCheck, size: 14, color: isDark ? Colors.green.shade400 : Colors.green.shade600),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      'Claimed by $liveClaimedBy',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w600,
+                                        color: isDark ? Colors.green.shade400 : Colors.green.shade700,
+                                      ),
+                                    ),
+                                  ],
+                                )
+                              else
+                                const SizedBox.shrink(),
+                                
+                              Text(
+                                timeStr,
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: isDark ? Colors.white38 : AppColors.slate400,
+                                ),
                               ),
-                            ),
+                            ],
                           ),
                         ],
                       ),
@@ -2213,6 +2303,112 @@ class _InfoRow extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class AnimatedClaimButton extends StatefulWidget {
+  final VoidCallback onPressed;
+  final bool isDark;
+
+  const AnimatedClaimButton({super.key, required this.onPressed, required this.isDark});
+
+  @override
+  State<AnimatedClaimButton> createState() => _AnimatedClaimButtonState();
+}
+
+class _AnimatedClaimButtonState extends State<AnimatedClaimButton> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _scaleAnimation;
+  late Animation<double> _glowAnimation;
+  bool _isHovered = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1500),
+    )..repeat(reverse: true);
+    
+    _scaleAnimation = Tween<double>(begin: 1.0, end: 1.04).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+    );
+    _glowAnimation = Tween<double>(begin: 2.0, end: 8.0).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final primaryColor = widget.isDark ? Colors.blue.shade400 : Colors.blue.shade600;
+    
+    return MouseRegion(
+      onEnter: (_) => setState(() => _isHovered = true),
+      onExit: (_) => setState(() => _isHovered = false),
+      child: GestureDetector(
+        onTapDown: (_) => _controller.stop(),
+        onTapUp: (_) {
+          _controller.repeat(reverse: true);
+          widget.onPressed();
+        },
+        onTapCancel: () => _controller.repeat(reverse: true),
+        child: AnimatedBuilder(
+          animation: _controller,
+          builder: (context, child) {
+            return Transform.scale(
+              scale: _isHovered ? 1.05 : _scaleAnimation.value,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      primaryColor,
+                      widget.isDark ? Colors.blue.shade600 : Colors.blue.shade400,
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(
+                      color: primaryColor.withValues(alpha: 0.4),
+                      blurRadius: _isHovered ? 12.0 : _glowAnimation.value,
+                      spreadRadius: _isHovered ? 1.0 : (_glowAnimation.value / 4),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      LucideIcons.userPlus,
+                      size: 14,
+                      color: Colors.white,
+                    ),
+                    const SizedBox(width: 6),
+                    const Text(
+                      'Claim Lead',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        ),
       ),
     );
   }
