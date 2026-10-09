@@ -2229,11 +2229,31 @@ class _LeadChatCard extends ConsumerWidget {
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               if (liveClaimedBy.isEmpty && leadId != null)
-                                AnimatedClaimButton(
-                                  isDark: isDark,
-                                  onPressed: () {
-                                    ref.read(leadControllerProvider.notifier).updateLeadDetails(leadId, {'claimed_by': currentUserName});
+                                ElevatedButton.icon(
+                                  onPressed: () async {
+                                    print('Claim button clicked for lead: $leadId');
+                                    try {
+                                      await ref.read(leadControllerProvider.notifier).updateLeadDetails(leadId, {'claimed_by': currentUserName});
+                                      print('Claim successful for lead: $leadId');
+                                    } catch (e) {
+                                      print('Error claiming lead: $e');
+                                      if (context.mounted) {
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          SnackBar(content: Text('Failed to claim lead: $e')),
+                                        );
+                                      }
+                                    }
                                   },
+                                  icon: const Icon(LucideIcons.mousePointerClick, size: 14),
+                                  label: const Text('Claim Lead'),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: isDark ? Colors.blue.shade600 : Colors.blue.shade600,
+                                    foregroundColor: Colors.white,
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                    textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                                    elevation: 2,
+                                  ),
                                 )
                               else if (liveClaimedBy.isNotEmpty)
                                 Row(
@@ -2351,16 +2371,21 @@ class _AnimatedClaimButtonState extends State<AnimatedClaimButton> with SingleTi
     final primaryColor = widget.isDark ? Colors.blue.shade400 : Colors.blue.shade600;
     
     return MouseRegion(
+      cursor: SystemMouseCursors.click,
       onEnter: (_) => setState(() => _isHovered = true),
       onExit: (_) => setState(() => _isHovered = false),
-      child: GestureDetector(
-        onTapDown: (_) => _controller.stop(),
-        onTapUp: (_) {
-          _controller.repeat(reverse: true);
-          widget.onPressed();
-        },
-        onTapCancel: () => _controller.repeat(reverse: true),
-        child: AnimatedBuilder(
+      child: SelectionContainer.disabled(
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTapDown: (_) => _controller.stop(),
+            onTap: () {
+              _controller.repeat(reverse: true);
+              widget.onPressed();
+            },
+            onTapCancel: () => _controller.repeat(reverse: true),
+            borderRadius: BorderRadius.circular(20),
+            child: AnimatedBuilder(
           animation: _controller,
           builder: (context, child) {
             return Transform.scale(
@@ -2408,9 +2433,11 @@ class _AnimatedClaimButtonState extends State<AnimatedClaimButton> with SingleTi
               ),
             );
           },
-        ),
-      ),
-    );
+        ), // AnimatedBuilder
+      ), // InkWell
+      ), // Material
+      ), // SelectionContainer.disabled
+    ); // MouseRegion
   }
 }
 

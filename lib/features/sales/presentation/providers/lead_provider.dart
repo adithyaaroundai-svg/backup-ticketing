@@ -117,10 +117,14 @@ class LeadController extends AsyncNotifier<void> {
         ...updates,
         'updated_at': DateTime.now().toUtc().toIso8601String(),
       };
-      await Supabase.instance.client
+      final response = await Supabase.instance.client
           .from('leads')
           .update(updateData)
-          .eq('id', leadId);
+          .eq('id', leadId)
+          .select();
+      if (response.isEmpty) {
+        throw Exception('Lead not found or you lack permission to update it (ID: $leadId).');
+      }
       // Refresh the leads list after update
       ref.invalidate(leadsProvider);
       ref.invalidate(privateLeadsProvider);

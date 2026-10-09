@@ -153,7 +153,19 @@ class _CreateLeadDialogState extends ConsumerState<CreateLeadDialog> {
         'created_at': DateTime.now().toUtc().toIso8601String(),
       };
 
-      await Supabase.instance.client.from('leads').insert(leadData);
+      // Insert and capture the newly created lead ID in one step
+      String? newLeadId;
+      try {
+        final inserted = await Supabase.instance.client
+            .from('leads')
+            .insert(leadData)
+            .select('id')
+            .single();
+        newLeadId = inserted['id']?.toString();
+      } catch (e) {
+        // If insert fails, we throw to be caught by the outer catch
+        throw Exception('Failed to insert lead: $e');
+      }
 
       // Invalidate the leads providers so the pipeline updates
       container.invalidate(leadsProvider);
@@ -161,21 +173,6 @@ class _CreateLeadDialogState extends ConsumerState<CreateLeadDialog> {
       if (targetPipelineType == 'private') {
         container.invalidate(privateLeadsProvider);
       }
-
-      // Prepare chat content — embed lead ID so the chat bubble can show live status
-      // We fetch the ID by querying after insert (using company_name + created_by match)
-      String? newLeadId;
-      try {
-        final inserted = await Supabase.instance.client
-            .from('leads')
-            .select('id')
-            .eq('company_name', leadData['company_name'] as String)
-            .eq('created_by', currentUser?.id ?? '')
-            .order('created_at', ascending: false)
-            .limit(1)
-            .single();
-        newLeadId = inserted['id']?.toString();
-      } catch (_) {}
 
       String chatContent = [
         '🎯 New Lead (Demo Requested)',
