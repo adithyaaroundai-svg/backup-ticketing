@@ -2048,7 +2048,7 @@ class _LeadChatCard extends ConsumerWidget {
     String liveClaimedBy = '';
     
     if (leadId != null) {
-      final leadsAsync = ref.watch(leadsProvider);
+      final leadsAsync = ref.watch(mobileAppLeadsProvider);
       leadsAsync.whenData((leads) {
         for (final l in leads) {
           if (l.id == leadId) {
