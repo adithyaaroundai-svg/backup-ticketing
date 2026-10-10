@@ -463,7 +463,10 @@ class _MainLayoutState extends ConsumerState<MainLayout> with WidgetsBindingObse
                     });
                   },
                 ),
-                if (currentUser?.id == '2f9066b9-ca8b-4f21-8a83-eb746358b9a0' || (currentUser?.isSupport ?? false))
+                if (currentUser?.id == '2f9066b9-ca8b-4f21-8a83-eb746358b9a0' || 
+                    (currentUser?.isSupport ?? false) ||
+                    (currentUser?.fullName.toLowerCase().contains('rinsiya') == true) ||
+                    (currentUser?.fullName.toLowerCase().contains('swathy') == true))
                   _CollapsibleTicketPane(
                     currentPath: widget.currentPath,
                     isOpen: ref.watch(ticketPaneOpenProvider),
@@ -2661,7 +2664,9 @@ class _CollapsibleTicketPane extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final currentUser = ref.watch(authProvider);
     final canViewPane = currentUser?.id == '2f9066b9-ca8b-4f21-8a83-eb746358b9a0' ||
-        (currentUser?.isSupport ?? false);
+        (currentUser?.isSupport ?? false) ||
+        (currentUser?.fullName.toLowerCase().contains('rinsiya') == true) ||
+        (currentUser?.fullName.toLowerCase().contains('swathy') == true);
     
     if (!canViewPane) {
       return const SizedBox.shrink();
@@ -3954,7 +3959,9 @@ class _RecentTicketsList extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final currentUser = ref.watch(authProvider);
     final canViewPane = currentUser?.id == '2f9066b9-ca8b-4f21-8a83-eb746358b9a0' || 
-        (currentUser?.isSupport ?? false);
+        (currentUser?.isSupport ?? false) ||
+        (currentUser?.fullName.toLowerCase().contains('rinsiya') == true) ||
+        (currentUser?.fullName.toLowerCase().contains('swathy') == true);
     
     if (!canViewPane) {
       return const SizedBox.shrink();
