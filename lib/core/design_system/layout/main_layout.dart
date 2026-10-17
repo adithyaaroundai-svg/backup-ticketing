@@ -31,6 +31,8 @@ import '../../services/reminder_sound_service.dart';
 import '../../services/chat_sound_service.dart';
 import '../../constants/app_version.dart';
 import '../../../features/chat/services/daily_support_summary_service.dart';
+import '../../../features/deals/services/deal_summary_service.dart';
+import '../../../features/deals/services/deal_follow_up_service.dart';
 // -- Layout State Providers ---------------------------------------------------
 class TicketPaneOpenNotifier extends Notifier<bool> {
   @override
@@ -87,6 +89,12 @@ class _MainLayoutState extends ConsumerState<MainLayout> with WidgetsBindingObse
         _setupChatListener();
         _startLastSeenUpdates();
         DailySupportSummaryService.startScheduler(ref);
+        DealSummaryService.startScheduler(ref);
+        Future.delayed(const Duration(milliseconds: 1200), () {
+          if (mounted && !_isDisposed) {
+            DealFollowUpService.checkAndShowOnLogin(context, ref);
+          }
+        });
       }
     });
   }
@@ -139,6 +147,7 @@ class _MainLayoutState extends ConsumerState<MainLayout> with WidgetsBindingObse
     _isDisposed = true;
     _hasInitialized = false;
     DailySupportSummaryService.stopScheduler();
+    DealSummaryService.stopScheduler();
     _chatListenerSubscription?.close();
     _chatListenerSubscription = null;
     _aroundTallyListenerSubscription?.close();
@@ -2905,7 +2914,7 @@ class _ChannelsListState extends ConsumerState<_ChannelsList> {
         fullName.contains('athira') || username.contains('athira') ||
         fullName.contains('vismaya') || username.contains('vismaya');
     final canAccessDealsTracker =
-        currentUser?.id == '0a5aeeb8-9544-4dc8-920f-e26c192b0dd3';
+        currentUser != null && !currentUser.isAdmin && !currentUser.isSoftwareDeveloper;
     final canAccessPrivateLeads =
         currentUser?.id == 'd8aa6435-9e02-4bab-9acc-ae1f5f3d6a1c' ||
         currentUser?.fullName.toLowerCase().contains('sidharth') == true ||

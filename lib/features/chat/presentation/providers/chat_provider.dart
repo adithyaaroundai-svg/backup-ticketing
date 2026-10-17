@@ -11,7 +11,6 @@ import '../../data/repositories/chat_repository.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
 import '../../../tickets/presentation/providers/ticket_provider.dart';
 import '../../data/local/chat_cache_service.dart';
-import '../../data/local/chat_cache_constants.dart';
 import '../../../../core/services/chat_sound_service.dart';
 import 'custom_channel_provider.dart';
 
@@ -102,8 +101,13 @@ class ChatStream extends _$ChatStream {
   @override
   FutureOr<List<ChatMessage>> build(String channel) async {
     final repository = ref.watch(chatRepositoryProvider);
+    final myId = ref.watch(authProvider)?.id;
     
-    final messages = await repository.getPaginatedMessages(channelName: channel, limit: 30);
+    final messages = await repository.getPaginatedMessages(
+      currentUserId: myId,
+      channelName: channel,
+      limit: 30,
+    );
     _hasMore = messages.length == 30;
     
     final currentCache = _chatCache[channel] ?? [];
@@ -160,7 +164,9 @@ class ChatStream extends _$ChatStream {
 
     try {
       final repository = ref.read(chatRepositoryProvider);
+      final myId = ref.read(authProvider)?.id;
       final newMessages = await repository.getPaginatedMessages(
+        currentUserId: myId,
         channelName: channel,
         limit: limit,
         before: oldestMessageDate,
@@ -202,7 +208,15 @@ class ChatStream extends _$ChatStream {
   void _handlePostgresEvent(PostgresChangePayload payload) {
     if (payload.eventType == PostgresChangeEvent.insert) {
       final newMsg = ChatMessage.fromJson(payload.newRecord);
-      if (newMsg.channel != channel || newMsg.receiverId != null) return;
+      if (newMsg.channel != channel) return;
+
+      final currentUserId = ref.read(authProvider)?.id;
+      // If targeted to a specific recipient, only show if current user is the recipient or sender
+      if (newMsg.receiverId != null &&
+          newMsg.receiverId != currentUserId &&
+          newMsg.senderId != currentUserId) {
+        return;
+      }
 
       final currentList = state.value ?? [];
       if (!currentList.any((m) => m.id == newMsg.id)) {
@@ -520,6 +534,7 @@ class DmStream extends _$DmStream {
   }
 
   bool _belongsToConversation(ChatMessage message, String myId) {
+    if (message.channel != 'dm') return false;
     final normalizedMyId = myId.trim().toLowerCase();
     final normalizedPartnerId = chatPartnerId.trim().toLowerCase();
     final normalizedSenderId = message.senderId.trim().toLowerCase();
@@ -2407,6 +2422,7 @@ class DmConversationEngine extends Notifier<Map<String, DmConversationState>> {
     if (payload.eventType == PostgresChangeEvent.insert || payload.eventType == PostgresChangeEvent.update) {
       final msg = ChatMessage.tryParseRecord(payload.newRecord);
       if (msg == null) return;
+      if (msg.channel != 'dm') return;
       _ingest(msg, currentUserId, notify: true);
     } else if (payload.eventType == PostgresChangeEvent.delete) {
       final deletedId = payload.oldRecord['id']?.toString();
@@ -2633,6 +2649,7 @@ class DmConversationEngine extends Notifier<Map<String, DmConversationState>> {
   }
 
   void _ingest(ChatMessage msg, String currentUserId, {required bool notify}) {
+    if (msg.channel != 'dm') return;
     if (msg.receiverId == null || msg.receiverId!.isEmpty) return;
 
     final normalizedMyId = currentUserId.trim().toLowerCase();
@@ -2728,6 +2745,7 @@ class DmConversationEngine extends Notifier<Map<String, DmConversationState>> {
   }
 
   void onOptimisticMessageSent(ChatMessage message) {
+    if (message.channel != 'dm') return;
     final authUser = _ref.read(authProvider);
     if (authUser == null || message.receiverId == null) return;
     final myId = authUser.id.trim().toLowerCase();

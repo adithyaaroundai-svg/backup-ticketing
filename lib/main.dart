@@ -164,6 +164,7 @@ final routerProvider = Provider<GoRouter>((ref) {
   final isSupport = authState?.isSupport ?? false;
   final isHR = authState?.isHR ?? false;
   final isProjectCoordinator = authState?.isProjectCoordinator ?? false;
+  final isSoftwareDeveloper = authState?.isSoftwareDeveloper ?? false;
 
   return GoRouter(
     navigatorKey: rootNavigatorKey,
@@ -318,14 +319,10 @@ final routerProvider = Provider<GoRouter>((ref) {
         }
       }
 
-      // Deals tracker access: only George is allowed
+      // Deals tracker access: all employees except admin & software developer role agents
       if (state.matchedLocation.startsWith('/deals-tracker')) {
-        const allowedDealsTrackerIds = {
-          '0a5aeeb8-9544-4dc8-920f-e26c192b0dd3', // George
-        };
-        final userId = authState?.id ?? '';
-        if (!allowedDealsTrackerIds.contains(userId)) {
-          if (!isLoggedIn) return '/login';
+        if (!isLoggedIn) return '/login';
+        if (isAdmin || isSoftwareDeveloper) {
           return _getHomeRouteForAgent(authState);
         }
       }

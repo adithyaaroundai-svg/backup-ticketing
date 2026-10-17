@@ -20,11 +20,17 @@ class ChatRepository {
     var query = _client.from('chat_messages').select('id, sender_id, receiver_id, sender_name, sender_role, sender_avatar_url, content, created_at, is_deleted, reactions, reply_to_message_id, reply_to_sender_name, reply_to_content, file_url, file_name, file_type, channel, is_forwarded, is_edited, edited_at');
     
     if (chatPartnerId == null) {
-      // Global/Custom channel
-      query = query.eq('channel', channelName).isFilter('receiver_id', null);
+      // Global/Custom channel: include public channel messages or targeted messages where user is receiver or sender
+      if (currentUserId != null && currentUserId.isNotEmpty) {
+        query = query.eq('channel', channelName).or('receiver_id.is.null,receiver_id.eq.$currentUserId,sender_id.eq.$currentUserId');
+      } else {
+        query = query.eq('channel', channelName).isFilter('receiver_id', null);
+      }
     } else {
       // DM
-      query = query.or('and(sender_id.eq.$currentUserId,receiver_id.eq.$chatPartnerId),and(sender_id.eq.$chatPartnerId,receiver_id.eq.$currentUserId)');
+      query = query
+          .eq('channel', 'dm')
+          .or('and(sender_id.eq.$currentUserId,receiver_id.eq.$chatPartnerId),and(sender_id.eq.$chatPartnerId,receiver_id.eq.$currentUserId)');
     }
 
     if (before != null) {
@@ -60,9 +66,15 @@ class ChatRepository {
     var query = _client.from('chat_messages').select('id, sender_id, receiver_id, sender_name, sender_role, sender_avatar_url, content, created_at, is_deleted, reactions, reply_to_message_id, reply_to_sender_name, reply_to_content, file_url, file_name, file_type, channel, is_forwarded, is_edited, edited_at');
 
     if (chatPartnerId == null) {
-      query = query.eq('channel', channelName).isFilter('receiver_id', null);
+      if (currentUserId != null && currentUserId.isNotEmpty) {
+        query = query.eq('channel', channelName).or('receiver_id.is.null,receiver_id.eq.$currentUserId,sender_id.eq.$currentUserId');
+      } else {
+        query = query.eq('channel', channelName).isFilter('receiver_id', null);
+      }
     } else {
-      query = query.or('and(sender_id.eq.$currentUserId,receiver_id.eq.$chatPartnerId),and(sender_id.eq.$chatPartnerId,receiver_id.eq.$currentUserId)');
+      query = query
+          .eq('channel', 'dm')
+          .or('and(sender_id.eq.$currentUserId,receiver_id.eq.$chatPartnerId),and(sender_id.eq.$chatPartnerId,receiver_id.eq.$currentUserId)');
     }
 
     // First batch uses >= (overlap); subsequent use >
@@ -105,7 +117,9 @@ class ChatRepository {
     if (chatPartnerId == null) {
       query = query.eq('channel', channelName).isFilter('receiver_id', null);
     } else {
-      query = query.or('and(sender_id.eq.$currentUserId,receiver_id.eq.$chatPartnerId),and(sender_id.eq.$chatPartnerId,receiver_id.eq.$currentUserId)');
+      query = query
+          .eq('channel', 'dm')
+          .or('and(sender_id.eq.$currentUserId,receiver_id.eq.$chatPartnerId),and(sender_id.eq.$chatPartnerId,receiver_id.eq.$currentUserId)');
     }
 
     final data = await query.order('created_at', ascending: false);
@@ -122,7 +136,9 @@ class ChatRepository {
     if (chatPartnerId == null) {
       query = query.eq('channel', channelName).isFilter('receiver_id', null);
     } else {
-      query = query.or('and(sender_id.eq.$currentUserId,receiver_id.eq.$chatPartnerId),and(sender_id.eq.$chatPartnerId,receiver_id.eq.$currentUserId)');
+      query = query
+          .eq('channel', 'dm')
+          .or('and(sender_id.eq.$currentUserId,receiver_id.eq.$chatPartnerId),and(sender_id.eq.$chatPartnerId,receiver_id.eq.$currentUserId)');
     }
 
     final data = await query.order('created_at', ascending: false);
@@ -441,6 +457,7 @@ class ChatRepository {
     final response = await _client
         .from('chat_messages')
         .select('id, sender_id, receiver_id, sender_name, sender_role, sender_avatar_url, content, created_at, is_deleted, reactions, reply_to_message_id, reply_to_sender_name, reply_to_content, file_url, file_name, file_type, channel, is_forwarded, is_edited, edited_at')
+        .eq('channel', 'dm')
         .not('receiver_id', 'is', null)
         .or('sender_id.eq.$currentUserId,receiver_id.eq.$currentUserId')
         .order('created_at', ascending: false)
@@ -521,6 +538,7 @@ class ChatRepository {
     final data = await _client
         .from('chat_messages')
         .select('id, sender_id, receiver_id, sender_name, sender_role, sender_avatar_url, content, created_at, is_deleted, reactions, reply_to_message_id, reply_to_sender_name, reply_to_content, file_url, file_name, file_type, channel, is_forwarded, is_edited, edited_at')
+        .eq('channel', 'dm')
         .not('receiver_id', 'is', null)
         .or('sender_id.eq.$currentUserId,receiver_id.eq.$currentUserId')
         .order('created_at', ascending: false)

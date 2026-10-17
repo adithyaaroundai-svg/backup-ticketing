@@ -13,20 +13,23 @@ class CreateDealDialog extends ConsumerStatefulWidget {
 
 class _CreateDealDialogState extends ConsumerState<CreateDealDialog> {
   final _nameController = TextEditingController();
+  final _companyController = TextEditingController();
   final _remarkController = TextEditingController();
   final _phoneController = TextEditingController();
   DateTime _selectedDate = DateTime.now();
   DateTime? _selectedFollowUpDate;
+  bool _isSubmitting = false;
 
   @override
   void dispose() {
     _nameController.dispose();
+    _companyController.dispose();
     _remarkController.dispose();
     _phoneController.dispose();
     super.dispose();
   }
 
-  void _submit() {
+  Future<void> _submit() async {
     final name = _nameController.text.trim();
     if (name.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -39,18 +42,39 @@ class _CreateDealDialogState extends ConsumerState<CreateDealDialog> {
 
     String? followUpDateStr;
     if (_selectedFollowUpDate != null) {
-      followUpDateStr = '--';
+      followUpDateStr = '${_selectedFollowUpDate!.year}-${_selectedFollowUpDate!.month.toString().padLeft(2, '0')}-${_selectedFollowUpDate!.day.toString().padLeft(2, '0')}';
     }
 
-    ref.read(dealControllerProvider.notifier).addDeal(
+    setState(() => _isSubmitting = true);
+
+    final error = await ref.read(dealControllerProvider.notifier).addDeal(
       name: name,
+      companyName: _companyController.text.trim(),
       date: dateStr,
       remark: _remarkController.text.trim(),
       phoneNumber: _phoneController.text.trim(),
       followUpDate: followUpDateStr,
     );
 
-    Navigator.of(context).pop();
+    if (!mounted) return;
+    setState(() => _isSubmitting = false);
+
+    if (error != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to create deal: $error'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    } else {
+      Navigator.of(context).pop();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Deal created successfully'),
+          backgroundColor: AppColors.success,
+        ),
+      );
+    }
   }
 
   @override
@@ -86,6 +110,12 @@ class _CreateDealDialogState extends ConsumerState<CreateDealDialog> {
               labelText: 'Deal Name',
               hintText: 'e.g. Software License Renewal',
               controller: _nameController,
+            ),
+            const SizedBox(height: 16),
+            AppTextField(
+              labelText: 'Company Name',
+              hintText: 'e.g. Acme Technologies',
+              controller: _companyController,
             ),
             const SizedBox(height: 16),
             const Text(
@@ -177,7 +207,7 @@ class _CreateDealDialogState extends ConsumerState<CreateDealDialog> {
                     const SizedBox(width: 12),
                     Text(
                       _selectedFollowUpDate != null 
-                        ? '--'
+                        ? '${_selectedFollowUpDate!.year}-${_selectedFollowUpDate!.month.toString().padLeft(2, '0')}-${_selectedFollowUpDate!.day.toString().padLeft(2, '0')}'
                         : 'Select a follow up date',
                       style: TextStyle(
                         fontSize: 14, 
@@ -205,7 +235,7 @@ class _CreateDealDialogState extends ConsumerState<CreateDealDialog> {
                 ),
                 const SizedBox(width: 12),
                 ElevatedButton(
-                  onPressed: _submit,
+                  onPressed: _isSubmitting ? null : _submit,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF10B981), // Emerald
                     foregroundColor: Colors.white,
@@ -214,7 +244,13 @@ class _CreateDealDialogState extends ConsumerState<CreateDealDialog> {
                       borderRadius: BorderRadius.circular(8),
                     ),
                   ),
-                  child: const Text('Create Deal'),
+                  child: _isSubmitting
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        )
+                      : const Text('Create Deal'),
                 ),
               ],
             ),

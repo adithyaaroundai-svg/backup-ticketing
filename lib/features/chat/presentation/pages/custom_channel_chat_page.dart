@@ -1460,6 +1460,37 @@ class _CustomChannelChatPageState extends ConsumerState<CustomChannelChatPage> {
                 const SizedBox(width: 4),
               ],
               Tooltip(
+                message: 'Manage Members',
+                child: InkWell(
+                  onTap: () => _showChannelDetailsDialog(channel!, messagesAsync.value),
+                  borderRadius: BorderRadius.circular(8),
+                  child: Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF10B981).withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.3)),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(LucideIcons.users, size: 16, color: Color(0xFF10B981)),
+                        SizedBox(width: 6),
+                        Text(
+                          'Members',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF10B981),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              Tooltip(
                 message: 'Group Audio Call',
                 child: InkWell(
                   onTap: () => _launchGroupCall(channel!, video: false),
@@ -1546,7 +1577,12 @@ class _CustomChannelChatPageState extends ConsumerState<CustomChannelChatPage> {
                 children: [
                   Expanded(
                   child: messagesAsync.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
-                data: (messages) {
+                data: (rawMessages) {
+                  final messages = rawMessages.where((m) =>
+                    m.receiverId == null ||
+                    m.receiverId == currentUser?.id ||
+                    m.senderId == currentUser?.id
+                  ).toList();
                   _markVisibleMessagesRead(messages);
                   if (messages.isEmpty) {
                     return Center(
@@ -2724,6 +2760,178 @@ class _ChatBubbleState extends ConsumerState<_ChatBubble> {
     );
   }
 
+  Widget _buildDealSummaryCard(BuildContext context, WidgetRef ref, ChatMessage message) {
+    final rawSenderName = message.senderName.isNotEmpty ? message.senderName : 'Agent';
+    final role = message.senderRole;
+    final content = message.content;
+
+    final lines = content.split('\n');
+    String? headerDate;
+    String? dealsCountStr;
+    final dealLines = <String>[];
+
+    for (final line in lines) {
+      final trimmed = line.trim();
+      if (trimmed.startsWith('📋') || trimmed.contains('Daily Deals Summary')) {
+        headerDate = trimmed;
+      } else if (trimmed.startsWith('📦') || trimmed.contains('Deals Logged Today')) {
+        dealsCountStr = trimmed;
+      } else if (trimmed.startsWith('👤') || trimmed.contains('Agent:')) {
+        // Handled in the highlighted big-size card header
+      } else {
+        dealLines.add(line);
+      }
+    }
+
+    final bodyText = dealLines.join('\n').trim();
+
+    final isDark = context.isDarkMode;
+    final emeraldBg = const Color(0xFF10B981).withValues(alpha: isDark ? 0.18 : 0.12);
+    final emeraldBorder = const Color(0xFF10B981).withValues(alpha: 0.4);
+    final agentNameColor = isDark ? const Color(0xFF34D399) : const Color(0xFF047857);
+
+    return Container(
+      constraints: const BoxConstraints(minWidth: 360, maxWidth: 520),
+      decoration: BoxDecoration(
+        color: context.adaptiveCard,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: emeraldBorder, width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.04),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Prominent highlighted agent banner (BIG SIZE)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: emeraldBg,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(10.5)),
+            ),
+            child: Row(
+              children: [
+                CircleAvatar(
+                  radius: 20,
+                  backgroundColor: const Color(0xFF10B981),
+                  child: Text(
+                    rawSenderName.isNotEmpty ? rawSenderName[0].toUpperCase() : 'A',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 16,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              rawSenderName,
+                              style: TextStyle(
+                                fontSize: 19,
+                                fontWeight: FontWeight.w800,
+                                color: agentNameColor,
+                                letterSpacing: 0.2,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          if (role.isNotEmpty) ...[
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF10B981).withValues(alpha: 0.18),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                role,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: agentNameColor,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        headerDate ?? '📋 Daily Deals Summary',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                          color: context.adaptiveSlate600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // Deals Body
+          Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (dealsCountStr != null) ...[
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: isDark ? Colors.white10 : AppColors.slate100,
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          dealsCountStr,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: context.adaptiveSlate800,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Divider(height: 1, color: isDark ? Colors.white12 : AppColors.slate200),
+                  const SizedBox(height: 10),
+                ],
+                SelectableLinkify(
+                  text: bodyText.isNotEmpty ? bodyText : 'No deals logged today.',
+                  style: TextStyle(
+                    fontSize: 13.5,
+                    height: 1.5,
+                    color: isDark ? Colors.white : AppColors.slate800,
+                  ),
+                  linkStyle: TextStyle(
+                    color: isDark ? const Color(0xFF93C5FD) : AppColors.primary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   bool _hovered = false;
 
   void _edit(BuildContext context, ChatMessage message) {
@@ -2870,6 +3078,10 @@ class _ChatBubbleState extends ConsumerState<_ChatBubble> {
         message.content.startsWith('Company: ') &&
         message.content.contains('\nIssue: ');
 
+    final isDealSummary = !isDeleted &&
+        (message.content.contains('Daily Deals Summary') ||
+            message.content.contains('Deals Logged Today'));
+
     return TapRegion(
       onTapOutside: (_) {
         if (_hovered) setState(() => _hovered = false);
@@ -2924,8 +3136,8 @@ class _ChatBubbleState extends ConsumerState<_ChatBubble> {
                           ],
                         ),
                       ),
-                    // Always show sender name
-                    if (showSender && message.senderName != null)
+                    // Always show sender name (except deal summary which has its own prominent header)
+                    if (showSender && message.senderName != null && !isDealSummary)
                       Padding(
                         padding: const EdgeInsets.only(bottom: 3),
                         child: Text(
@@ -3005,7 +3217,9 @@ class _ChatBubbleState extends ConsumerState<_ChatBubble> {
                                         )
                                       : isTicketMessage
                                           ? _buildTicketCard(context, ref, message)
-                                          : SelectableLinkify(
+                                          : isDealSummary
+                                              ? _buildDealSummaryCard(context, ref, message)
+                                              : SelectableLinkify(
                                           text: message.content,
                                           onOpen: (link) async {
                                             final uri = Uri.parse(link.url);

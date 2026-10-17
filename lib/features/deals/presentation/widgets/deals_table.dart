@@ -20,6 +20,7 @@ class _DealsTableState extends ConsumerState<DealsTable> {
   String? _selectedFollowUpDate;
 
   final _nameController = TextEditingController();
+  final _companyController = TextEditingController();
   final _remarkController = TextEditingController();
   final _phoneController = TextEditingController();
   final _scrollController = ScrollController();
@@ -28,15 +29,18 @@ class _DealsTableState extends ConsumerState<DealsTable> {
   String? _editingField;
   String? _editSelectedDate;
   final _editNameController = TextEditingController();
+  final _editCompanyController = TextEditingController();
   final _editRemarkController = TextEditingController();
   final _editPhoneController = TextEditingController();
 
   @override
   void dispose() {
     _nameController.dispose();
+    _companyController.dispose();
     _remarkController.dispose();
     _phoneController.dispose();
     _editNameController.dispose();
+    _editCompanyController.dispose();
     _editRemarkController.dispose();
     _editPhoneController.dispose();
     _scrollController.dispose();
@@ -49,24 +53,56 @@ class _DealsTableState extends ConsumerState<DealsTable> {
       _selectedDate = dateKey;
       _selectedFollowUpDate = null;
       _nameController.clear();
+      _companyController.clear();
       _remarkController.clear();
       _phoneController.clear();
     });
   }
 
-  void _cancelAdding() => setState(() { _addingDateKey = null; _selectedDate = null; _selectedFollowUpDate = null; });
+  void _cancelAdding() => setState(() {
+    _addingDateKey = null;
+    _selectedDate = null;
+    _selectedFollowUpDate = null;
+    _nameController.clear();
+    _companyController.clear();
+    _remarkController.clear();
+    _phoneController.clear();
+  });
 
-  void _submitDeal(String dateKey) {
+  Future<void> _submitDeal(String dateKey) async {
     final name = _nameController.text.trim();
     if (name.isEmpty) { _cancelAdding(); return; }
-    ref.read(dealControllerProvider.notifier).addDeal(
+
+    final targetDate = (_selectedDate != null && _selectedDate!.trim().isNotEmpty)
+        ? _selectedDate!.trim()
+        : (dateKey.trim().isNotEmpty ? dateKey.trim() : DateTime.now().toIso8601String().substring(0, 10));
+
+    final error = await ref.read(dealControllerProvider.notifier).addDeal(
       name: name,
-      date: _selectedDate ?? dateKey,
+      companyName: _companyController.text.trim(),
+      date: targetDate,
       remark: _remarkController.text.trim(),
       phoneNumber: _phoneController.text.trim(),
-      followUpDate: _selectedFollowUpDate,
+      followUpDate: (_selectedFollowUpDate != null && _selectedFollowUpDate!.trim().isNotEmpty) ? _selectedFollowUpDate!.trim() : null,
     );
-    _cancelAdding();
+
+    if (!mounted) return;
+    if (error != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to add deal: $error'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    } else {
+      _cancelAdding();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Deal added successfully'),
+          backgroundColor: AppColors.success,
+        ),
+      );
+    }
   }
 
   void _startEditingDeal(Deal deal, String field) {
@@ -75,6 +111,7 @@ class _DealsTableState extends ConsumerState<DealsTable> {
       _editingField = field;
       _editSelectedDate = deal.date;
       _editNameController.text = deal.name;
+      _editCompanyController.text = deal.companyName ?? '';
       _editRemarkController.text = deal.remark;
       _editPhoneController.text = deal.phoneNumber;
       _cancelAdding();
@@ -83,17 +120,33 @@ class _DealsTableState extends ConsumerState<DealsTable> {
 
   void _cancelEditing() => setState(() { _editingDealId = null; _editingField = null; _editSelectedDate = null; });
 
-  void _submitEdit(Deal deal) {
+  Future<void> _submitEdit(Deal deal) async {
     final name = _editNameController.text.trim();
-    ref.read(dealControllerProvider.notifier).updateDeal(
+    final targetDate = (_editSelectedDate != null && _editSelectedDate!.trim().isNotEmpty)
+        ? _editSelectedDate!.trim()
+        : (deal.date.trim().isNotEmpty ? deal.date.trim() : DateTime.now().toIso8601String().substring(0, 10));
+
+    final error = await ref.read(dealControllerProvider.notifier).updateDeal(
       id: deal.id,
       name: name.isEmpty ? deal.name : name,
-      date: _editSelectedDate ?? deal.date,
+      companyName: _editCompanyController.text.trim(),
+      date: targetDate,
       remark: _editRemarkController.text.trim(),
       phoneNumber: _editPhoneController.text.trim(),
       followUpDate: deal.followUpDate,
     );
-    _cancelEditing();
+
+    if (!mounted) return;
+    if (error != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to update deal: $error'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    } else {
+      _cancelEditing();
+    }
   }
 
   @override
@@ -146,7 +199,7 @@ class _DealsTableState extends ConsumerState<DealsTable> {
                       controller: _scrollController,
                       scrollDirection: Axis.horizontal,
                       child: SizedBox(
-                        width: constraints.maxWidth > 800 ? constraints.maxWidth : 800,
+                        width: constraints.maxWidth > 950 ? constraints.maxWidth : 950,
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
@@ -162,6 +215,7 @@ class _DealsTableState extends ConsumerState<DealsTable> {
                               child: Row(
                                 children: [
                                   Expanded(flex: 3, child: _headerText('Deals', gc)),
+                                  Expanded(flex: 3, child: _headerText('Company Name', gc)),
                                   Expanded(flex: 2, child: _headerText('Date', gc)),
                                   Expanded(flex: 2, child: _headerText('Follow Up', gc)),
                                   Expanded(flex: 3, child: _headerText('Remark', gc)),
@@ -204,6 +258,7 @@ class _DealsTableState extends ConsumerState<DealsTable> {
                                 itemBuilder: (context, index) {
                                   final deal = groupedDeals[date]![index];
                                   final isEditingName = _editingDealId == deal.id && _editingField == 'name';
+                                  final isEditingCompany = _editingDealId == deal.id && _editingField == 'company';
                                   final isEditingRemark = _editingDealId == deal.id && _editingField == 'remark';
                                   final isEditingPhone = _editingDealId == deal.id && _editingField == 'phone';
 
@@ -219,6 +274,20 @@ class _DealsTableState extends ConsumerState<DealsTable> {
                                             child: isEditingName
                                                 ? _editRow(controller: _editNameController, gc: gc, onSubmit: () => _submitEdit(deal), onCancel: _cancelEditing)
                                                 : _cellTap(onTap: () => _startEditingDeal(deal, 'name'), text: deal.name, bold: true, gc: gc),
+                                          ),
+                                        ),
+                                        Expanded(
+                                          flex: 3,
+                                          child: Padding(
+                                            padding: const EdgeInsets.only(right: 16),
+                                            child: isEditingCompany
+                                                ? _editRow(controller: _editCompanyController, gc: gc, onSubmit: () => _submitEdit(deal), onCancel: _cancelEditing)
+                                                : _cellTap(
+                                                    onTap: () => _startEditingDeal(deal, 'company'),
+                                                    text: (deal.companyName != null && deal.companyName!.isNotEmpty) ? deal.companyName! : '-',
+                                                    bold: false,
+                                                    gc: gc,
+                                                  ),
                                           ),
                                         ),
                                         Expanded(
@@ -244,7 +313,7 @@ class _DealsTableState extends ConsumerState<DealsTable> {
                                                   final nd = '${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}';
                                                   if (nd != deal.followUpDate) {
                                                     ref.read(dealControllerProvider.notifier).updateDeal(
-                                                      id: deal.id, name: deal.name, date: deal.date, remark: deal.remark, phoneNumber: deal.phoneNumber, followUpDate: nd,
+                                                      id: deal.id, name: deal.name, companyName: deal.companyName, date: deal.date, remark: deal.remark, phoneNumber: deal.phoneNumber, followUpDate: nd,
                                                     );
                                                   }
                                                 }
@@ -252,7 +321,7 @@ class _DealsTableState extends ConsumerState<DealsTable> {
                                               child: Row(
                                                 mainAxisSize: MainAxisSize.min,
                                                 children: [
-                                                  Flexible(child: Text(deal.followUpDate ?? 'Follow Up', style: TextStyle(fontSize: 14, color: deal.followUpDate != null ? gc.onSurface : gc.onSurfaceMuted))),
+                                                  Flexible(child: Text(deal.followUpDate != null ? (deal.followUpDate!.length >= 10 ? deal.followUpDate!.substring(0, 10) : deal.followUpDate!) : 'Follow Up', style: TextStyle(fontSize: 14, color: deal.followUpDate != null ? gc.onSurface : gc.onSurfaceMuted))),
                                                   const SizedBox(width: 6),
                                                   Icon(LucideIcons.pencil, size: 12, color: gc.onSurfaceFaint),
                                                 ],
@@ -293,17 +362,37 @@ class _DealsTableState extends ConsumerState<DealsTable> {
                                     children: [
                                       Expanded(
                                         flex: 3,
-                                        child: TextField(
-                                          controller: _nameController,
-                                          autofocus: true,
-                                          style: TextStyle(fontSize: 14, color: gc.onSurface),
-                                          decoration: InputDecoration(
-                                            hintText: 'Deal name',
-                                            hintStyle: TextStyle(color: gc.onSurfaceFaint),
-                                            border: InputBorder.none,
-                                            isDense: true,
+                                        child: Padding(
+                                          padding: const EdgeInsets.only(right: 16),
+                                          child: TextField(
+                                            controller: _nameController,
+                                            autofocus: true,
+                                            style: TextStyle(fontSize: 14, color: gc.onSurface),
+                                            decoration: InputDecoration(
+                                              hintText: 'Deal name',
+                                              hintStyle: TextStyle(color: gc.onSurfaceFaint),
+                                              border: InputBorder.none,
+                                              isDense: true,
+                                            ),
+                                            onSubmitted: (_) => _submitDeal(date),
                                           ),
-                                          onSubmitted: (_) => _submitDeal(date),
+                                        ),
+                                      ),
+                                      Expanded(
+                                        flex: 3,
+                                        child: Padding(
+                                          padding: const EdgeInsets.only(right: 16),
+                                          child: TextField(
+                                            controller: _companyController,
+                                            style: TextStyle(fontSize: 14, color: gc.onSurface),
+                                            decoration: InputDecoration(
+                                              hintText: 'Company name',
+                                              hintStyle: TextStyle(color: gc.onSurfaceFaint),
+                                              border: InputBorder.none,
+                                              isDense: true,
+                                            ),
+                                            onSubmitted: (_) => _submitDeal(date),
+                                          ),
                                         ),
                                       ),
                                       Expanded(
@@ -343,7 +432,7 @@ class _DealsTableState extends ConsumerState<DealsTable> {
                                             );
                                             if (picked != null) {
                                               setState(() {
-                                                _selectedFollowUpDate = '--';
+                                                _selectedFollowUpDate = '${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}';
                                               });
                                             }
                                           },
