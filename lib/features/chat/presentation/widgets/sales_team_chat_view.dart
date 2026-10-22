@@ -482,67 +482,36 @@ class _SalesTeamChatViewState extends ConsumerState<SalesTeamChatView> {
       );
     } else {
       setState(() => _isUploading = true);
-      final supabase = Supabase.instance.client;
+      try {
+        final uploadResults = await uploadChatAttachmentsParallel(filesToSend);
 
-      for (int i = 0; i < filesToSend.length; i++) {
-        String? fileUrl;
-        String? fileName = filesToSend[i].name;
-        String? fileType = filesToSend[i].extension;
-
-        try {
-          final filePath = sanitizeStorageFileName(filesToSend[i].name);
-          
-          Uint8List fileBytes;
-          if (filesToSend[i].bytes != null) {
-            fileBytes = filesToSend[i].bytes!;
-          } else if (filesToSend[i].path != null) {
-            fileBytes = await File(filesToSend[i].path!).readAsBytes();
-          } else {
-            throw Exception('No file bytes or path available');
-          }
-          
-          if (fileBytes.isEmpty) {
-            throw Exception('File is empty (0 bytes). Please re-select the file.');
-          }
-          
-          final mimeType = getMimeType(filesToSend[i].extension, filesToSend[i].name);
-          await supabase.storage
-              .from('chat_attachments')
-              .uploadBinary(
-                filePath, 
-                fileBytes,
-                fileOptions: FileOptions(
-                  contentType: mimeType,
-                  upsert: false,
-                ),
-              );
-
-          fileUrl = supabase.storage.from('chat_attachments').getPublicUrl(filePath);
-        } catch (e) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Failed to upload file: $e')),
-            );
-          }
-          continue;
+        for (int i = 0; i < uploadResults.length; i++) {
+          final res = uploadResults[i];
+          await controller.sendMessage(
+            senderId: currentUser.id,
+            senderName: currentUser.fullName.isNotEmpty ? currentUser.fullName : currentUser.username,
+            senderRole: currentUser.role,
+            content: i == 0 ? text : '',
+            replyToMessageId: i == 0 ? _replyingTo : null,
+            replyToSenderName: i == 0 ? _replyToName : null,
+            replyToContent: i == 0 ? _replyToContent : null,
+            fileUrl: res.fileUrl,
+            fileName: res.fileName,
+            fileType: res.fileType,
+            channel: _channelId,
+          );
         }
-
-        await controller.sendMessage(
-          senderId: currentUser.id,
-          senderName: currentUser.fullName.isNotEmpty ? currentUser.fullName : currentUser.username,
-          senderRole: currentUser.role,
-          content: i == 0 ? text : '',
-          replyToMessageId: i == 0 ? _replyingTo : null,
-          replyToSenderName: i == 0 ? _replyToName : null,
-          replyToContent: i == 0 ? _replyToContent : null,
-          fileUrl: fileUrl,
-          fileName: fileName,
-          fileType: fileType,
-          channel: _channelId,
-        );
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed to upload file(s): $e')),
+          );
+        }
+      } finally {
+        if (mounted) {
+          setState(() => _isUploading = false);
+        }
       }
-
-      setState(() => _isUploading = false);
     }
 
     setState(() {
@@ -1523,6 +1492,8 @@ class _ChatBubbleState extends ConsumerState<_ChatBubble> {
                                     message.fileUrl!,
                                     width: 200,
                                     fit: BoxFit.cover,
+                                    cacheWidth: 600,
+                                    gaplessPlayback: true,
                                     loadingBuilder: (_, child, progress) => progress == null
                                         ? child
                                         : SizedBox(

@@ -275,39 +275,13 @@ class _AllAroundTallyChatPageState extends ConsumerState<AllAroundTallyChatPage>
     } else {
       setState(() => _isUploading = true);
       try {
-        final supabase = Supabase.instance.client;
-        
-        for (int i = 0; i < filesToSend.length; i++) {
-          final file = filesToSend[i];
-          final filePath = sanitizeStorageFileName(file.name, prefix: currentUser.id);
-          final mimeType = getMimeType(file.extension, file.name);
+        final uploadResults = await uploadChatAttachmentsParallel(
+          filesToSend,
+          prefix: currentUser.id,
+        );
 
-          Uint8List fileBytes;
-          if (file.bytes != null) {
-            fileBytes = file.bytes!;
-          } else if (file.path != null) {
-            fileBytes = await File(file.path!).readAsBytes();
-          } else {
-            throw Exception('No file bytes or path available');
-          }
-
-          if (fileBytes.isEmpty) {
-            throw Exception('File is empty (0 bytes). Please re-select the file.');
-          }
-
-          await supabase.storage
-              .from('chat_attachments')
-              .uploadBinary(
-                filePath,
-                fileBytes,
-                fileOptions: FileOptions(
-                  contentType: mimeType,
-                  upsert: false,
-                ),
-              );
-
-          final fileUrl = supabase.storage.from('chat_attachments').getPublicUrl(filePath);
-          
+        for (int i = 0; i < uploadResults.length; i++) {
+          final res = uploadResults[i];
           await controller.sendMessage(
             senderId: currentUser.id,
             senderName: currentUser.fullName.isNotEmpty ? currentUser.fullName : currentUser.username,
@@ -316,16 +290,16 @@ class _AllAroundTallyChatPageState extends ConsumerState<AllAroundTallyChatPage>
             replyToMessageId: i == 0 ? _replyingTo : null,
             replyToSenderName: i == 0 ? _replyToName : null,
             replyToContent: i == 0 ? _replyToContent : null,
-            fileUrl: fileUrl,
-            fileName: file.name,
-            fileType: file.extension,
+            fileUrl: res.fileUrl,
+            fileName: res.fileName,
+            fileType: res.fileType,
             channel: 'all-aroundtally',
           );
         }
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Failed to upload file: $e')),
+            SnackBar(content: Text('Failed to upload file(s): $e')),
           );
         }
       } finally {

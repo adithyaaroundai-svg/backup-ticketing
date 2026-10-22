@@ -275,7 +275,7 @@ class _ApplyLeaveDialogState extends ConsumerState<ApplyLeaveDialog> {
                         ),
                         Switch(
                           value: _isHalfDay,
-                          activeColor: AppColors.primary,
+                          activeThumbColor: AppColors.primary,
                           onChanged: (val) {
                             setState(() {
                               _isHalfDay = val;

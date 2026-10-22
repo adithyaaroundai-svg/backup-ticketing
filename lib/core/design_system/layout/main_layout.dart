@@ -2074,6 +2074,11 @@ class _BottomNav extends ConsumerWidget {
                   title: const Text('Activity', style: TextStyle(color: Colors.white)),
                   onTap: () { Navigator.pop(context); context.go('/alerts'); },
                 ),
+                ListTile(
+                  leading: const Icon(LucideIcons.calendarDays, color: Colors.white),
+                  title: const Text('Leave Register', style: TextStyle(color: Colors.white)),
+                  onTap: () { Navigator.pop(context); context.go('/leaves'); },
+                ),
                 if (!isAccountant && !isAdmin && currentUser?.isSupport != true)
                   ListTile(
                     leading: const Icon(LucideIcons.layoutDashboard, color: Colors.white),
@@ -2235,7 +2240,8 @@ class _BottomNav extends ConsumerWidget {
                currentPath.startsWith('/revenue') ||
                currentPath.startsWith('/customers') ||
                currentPath.startsWith('/reports') ||
-               currentPath.startsWith('/proposal-generator')) {
+               currentPath.startsWith('/proposal-generator') ||
+               currentPath.startsWith('/leaves')) {
       selectedIndex = 3;
     }
 
@@ -3475,6 +3481,45 @@ class _ChannelsListState extends ConsumerState<_ChannelsList> {
                 );
               }
             ),
+
+          // Leave Register Sidebar Item
+          Builder(
+            builder: (context) {
+              final isLeavesActive = currentPath.startsWith('/leaves');
+              return Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: () => context.go('/leaves'),
+                  child: Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: isLeavesActive ? activeBgColor : Colors.transparent,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          LucideIcons.calendarDays,
+                          size: 16,
+                          color: isLeavesActive ? textColorPrimary : textColor54,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Leave Register',
+                          style: TextStyle(
+                            color: isLeavesActive ? textColorPrimary : textColor70,
+                            fontSize: 13,
+                            fontWeight: isLeavesActive ? FontWeight.w700 : FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            }
+          ),
 
           const SizedBox(height: 16),
           // Direct Messages Header

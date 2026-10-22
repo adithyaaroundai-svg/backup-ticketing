@@ -127,12 +127,18 @@ class AppButton extends StatelessWidget {
                 Icon(icon, size: _iconSize),
                 const SizedBox(width: 8),
               ],
-              Text(
-                label,
-                style: TextStyle(
-                  fontWeight: FontWeight.w600,
-                  fontSize: _fontSize,
-                  letterSpacing: -0.2,
+              Flexible(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    label,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: _fontSize,
+                      letterSpacing: -0.2,
+                    ),
+                    maxLines: 1,
+                  ),
                 ),
               ),
               if (trailingIcon != null) ...[

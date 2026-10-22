@@ -257,7 +257,12 @@ class AuthNotifier extends _$AuthNotifier {
           client.auth.signInWithPassword(
             email: 'agents@tallycare.local', 
             password: 'AgentShared#2026'
-          ).then((_) => PushNotificationService().saveTokenToSupabase(state?.id));
+          ).then((_) {
+            PushNotificationService().saveTokenToSupabase(state?.id);
+            refreshCurrentAgent();
+          });
+        } else {
+          unawaited(refreshCurrentAgent());
         }
       } catch (e) {
         appLogger.error('Failed to restore Supabase Auth session', error: e);
@@ -379,6 +384,35 @@ class AuthNotifier extends _$AuthNotifier {
         stackTrace: stackTrace,
       );
       return false;
+    }
+  }
+
+  Future<void> refreshCurrentAgent() async {
+    final currentAgent = state;
+    if (currentAgent == null) return;
+
+    try {
+      final client = Supabase.instance.client;
+      final row = await client
+          .from('agents')
+          .select('id, username, full_name, role, display_color, avatar_url, teams_user_id, zoho_mail_id')
+          .eq('id', currentAgent.id)
+          .maybeSingle();
+
+      if (row != null) {
+        final refreshed = Agent.fromJson(Map<String, dynamic>.from(row));
+        if (refreshed.avatarUrl != currentAgent.avatarUrl ||
+            refreshed.fullName != currentAgent.fullName ||
+            refreshed.role != currentAgent.role ||
+            refreshed.displayColor != currentAgent.displayColor ||
+            refreshed.teamsUserId != currentAgent.teamsUserId ||
+            refreshed.zohoMailId != currentAgent.zohoMailId) {
+          state = refreshed;
+          await _persistAgent(refreshed);
+        }
+      }
+    } catch (e, stackTrace) {
+      appLogger.error('Failed to refresh current agent', error: e, stackTrace: stackTrace);
     }
   }
 

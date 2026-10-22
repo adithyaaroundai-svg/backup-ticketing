@@ -21,6 +21,26 @@ class ProfilePage extends ConsumerWidget {
     final ticketsAsync = ref.watch(ticketsStreamProvider);
     final isSupport = user?.isSupport == true;
 
+    // Trigger silent background refresh so agent state (avatar, etc.) stays in sync with Supabase
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(authProvider.notifier).refreshCurrentAgent();
+    });
+
+    final agentsAsync = ref.watch(agentsListProvider);
+    final liveAgent = agentsAsync.maybeWhen(
+      data: (list) {
+        for (final a in list) {
+          if (a['id']?.toString() == user?.id) return a;
+        }
+        return null;
+      },
+      orElse: () => null,
+    );
+
+    final avatarUrl = (user?.avatarUrl != null && user!.avatarUrl!.trim().isNotEmpty)
+        ? user.avatarUrl!.trim()
+        : (liveAgent?['avatar_url']?.toString())?.trim();
+
     return MainLayout(
       currentPath: '/profile',
       child: Scaffold(
@@ -59,17 +79,45 @@ class ProfilePage extends ConsumerWidget {
                               Stack(
                                 clipBehavior: Clip.none,
                                 children: [
-                                  Container(
-                                    width: 72,
-                                    height: 72,
-                                    decoration: BoxDecoration(
-                                      color: Theme.of(context).colorScheme.primary,
-                                      borderRadius: BorderRadius.circular(16),
+                                  GestureDetector(
+                                    onTap: avatarUrl != null && avatarUrl.isNotEmpty
+                                        ? () => _showAvatarPreview(context, avatarUrl)
+                                        : null,
+                                    child: Container(
+                                      width: 72,
+                                      height: 72,
+                                      decoration: BoxDecoration(
+                                        color: Theme.of(context).colorScheme.primary,
+                                        borderRadius: BorderRadius.circular(16),
+                                      ),
+                                      clipBehavior: Clip.antiAlias,
+                                      child: avatarUrl != null && avatarUrl.isNotEmpty
+                                          ? Image.network(
+                                              avatarUrl,
+                                              fit: BoxFit.cover,
+                                              cacheWidth: 200,
+                                              cacheHeight: 200,
+                                              errorBuilder: (_, __, ___) => const Center(
+                                                child: Icon(LucideIcons.user, color: Colors.white, size: 36),
+                                              ),
+                                              loadingBuilder: (context, child, progress) {
+                                                if (progress == null) return child;
+                                                return const Center(
+                                                  child: SizedBox(
+                                                    width: 24,
+                                                    height: 24,
+                                                    child: CircularProgressIndicator(
+                                                      strokeWidth: 2,
+                                                      color: Colors.white70,
+                                                    ),
+                                                  ),
+                                                );
+                                              },
+                                            )
+                                          : const Center(
+                                              child: Icon(LucideIcons.user, color: Colors.white, size: 36),
+                                            ),
                                     ),
-                                    clipBehavior: Clip.antiAlias,
-                                    child: user?.avatarUrl != null
-                                        ? Image.network(user!.avatarUrl!, fit: BoxFit.cover)
-                                        : const Icon(LucideIcons.user, color: Colors.white, size: 36),
                                   ),
                                   Positioned(
                                     right: -6,
@@ -356,35 +404,108 @@ class ProfilePage extends ConsumerWidget {
                   ),
                   const SizedBox(height: 12),
                   AppCard(
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: AppButton.secondary(
-                            label: 'Change Password',
-                            icon: LucideIcons.lock,
-                            onPressed: () {
-                              showDialog(
-                                context: context,
-                                builder: (_) => const _ChangePasswordDialog(),
-                              );
-                            },
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        final isNarrow = constraints.maxWidth < 280;
+
+                        final changePasswordBtn = OutlinedButton.icon(
+                          onPressed: () {
+                            showDialog(
+                              context: context,
+                              builder: (_) => const _ChangePasswordDialog(),
+                            );
+                          },
+                          icon: Icon(
+                            LucideIcons.lock,
+                            size: 16,
+                            color: context.adaptiveSlate800,
                           ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: OutlinedButton.icon(
-                            onPressed: () => ref.read(authProvider.notifier).logout(),
-                            icon: const Icon(LucideIcons.logOut, size: 16),
-                            label: const Text('Logout'),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: AppColors.error,
-                              side: BorderSide(color: AppColors.error.withValues(alpha: 0.3)),
-                              padding: const EdgeInsets.symmetric(vertical: 14),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          label: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text(
+                              'Change Password',
+                              maxLines: 1,
+                              style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 13.5,
+                                letterSpacing: -0.2,
+                                color: context.adaptiveSlate800,
+                              ),
                             ),
                           ),
-                        ),
-                      ],
+                          style: OutlinedButton.styleFrom(
+                            backgroundColor: context.isDarkMode
+                                ? context.adaptiveSlate100
+                                : Colors.white,
+                            side: BorderSide(
+                              color: context.adaptiveBorder,
+                              width: 1.5,
+                            ),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 14,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
+                        );
+
+                        final logoutBtn = OutlinedButton.icon(
+                          onPressed: () => ref.read(authProvider.notifier).logout(),
+                          icon: const Icon(LucideIcons.logOut, size: 16),
+                          label: const FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text(
+                              'Logout',
+                              maxLines: 1,
+                              style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 13.5,
+                              ),
+                            ),
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppColors.error,
+                            side: BorderSide(
+                              color: AppColors.error.withValues(alpha: 0.3),
+                            ),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 14,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
+                        );
+
+                        if (isNarrow) {
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              changePasswordBtn,
+                              const SizedBox(height: 10),
+                              logoutBtn,
+                            ],
+                          );
+                        }
+
+                        return Row(
+                          children: [
+                            Expanded(
+                              flex: 3,
+                              child: changePasswordBtn,
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              flex: 2,
+                              child: logoutBtn,
+                            ),
+                          ],
+                        );
+                      },
                     ),
                   ),
                 ],
@@ -550,6 +671,7 @@ class ProfilePage extends ConsumerWidget {
       if (!context.mounted) return;
 
       if (success) {
+        ref.invalidate(agentsListProvider);
         messenger.showSnackBar(
           const SnackBar(
             content: Text('Profile picture updated successfully'),

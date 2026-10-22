@@ -465,36 +465,43 @@ class _DirectMessagePageState extends ConsumerState<DirectMessagePage> {
         _isUploadingFile = true;
       });
 
-      for (int i = 0; i < filesToSend.length; i++) {
-        final fileUrl = await _uploadFile(filesToSend[i]);
-        if (fileUrl == null) continue;
+      try {
+        final uploadResults = await uploadChatAttachmentsParallel(filesToSend);
 
-        final fileName = filesToSend[i].name;
-        final fileType = filesToSend[i].extension ??
-            (fileName.contains('.') ? fileName.split('.').last : 'png');
-
-        ref
-            .read(chatControllerProvider.notifier)
-            .sendMessage(
-              senderId: agent.id,
-              senderName: agent.fullName,
-              senderRole: agent.role,
-              content: i == 0 ? plainText : '',
-              receiverId: widget.partnerId,
-              senderAvatarUrl: agent.avatarUrl,
-              replyToMessageId: i == 0 ? replyToMessageId : null,
-              replyToSenderName: i == 0 ? replyToSenderName : null,
-              replyToContent: i == 0 ? replyToContent : null,
-              fileUrl: fileUrl,
-              fileName: fileName,
-              fileType: fileType,
-              channel: 'dm',
-            );
+        for (int i = 0; i < uploadResults.length; i++) {
+          final res = uploadResults[i];
+          ref
+              .read(chatControllerProvider.notifier)
+              .sendMessage(
+                senderId: agent.id,
+                senderName: agent.fullName,
+                senderRole: agent.role,
+                content: i == 0 ? plainText : '',
+                receiverId: widget.partnerId,
+                senderAvatarUrl: agent.avatarUrl,
+                replyToMessageId: i == 0 ? replyToMessageId : null,
+                replyToSenderName: i == 0 ? replyToSenderName : null,
+                replyToContent: i == 0 ? replyToContent : null,
+                fileUrl: res.fileUrl,
+                fileName: res.fileName,
+                fileType: res.fileType,
+                channel: 'dm',
+              );
+        }
+      } catch (e) {
+        debugPrint('File upload error: $e');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed to upload file(s): $e')),
+          );
+        }
+      } finally {
+        if (mounted) {
+          setState(() {
+            _isUploadingFile = false;
+          });
+        }
       }
-
-      setState(() {
-        _isUploadingFile = false;
-      });
     }
 
     final agentsAsync = ref.read(agentsListProvider);

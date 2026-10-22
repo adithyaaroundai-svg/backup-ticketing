@@ -101,7 +101,13 @@ class _SharedMediaViewState extends ConsumerState<SharedMediaView> with SingleTi
                 fit: StackFit.expand,
                 children: [
                   if (isImage)
-                    Image.network(url, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.broken_image))
+                    Image.network(
+                      url,
+                      fit: BoxFit.cover,
+                      cacheWidth: 350,
+                      gaplessPlayback: true,
+                      errorBuilder: (_, __, ___) => const Icon(Icons.broken_image),
+                    )
                   else
                     Container(
                       color: Colors.grey.shade800,

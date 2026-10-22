@@ -441,31 +441,42 @@ class _GlobalChatPageState extends ConsumerState<GlobalChatPage>
         _isUploadingFile = true;
       });
 
-      for (int i = 0; i < filesToSend.length; i++) {
-        final fileUrl = await _uploadFile(filesToSend[i]);
-        if (fileUrl == null) continue;
+      try {
+        final uploadResults = await uploadChatAttachmentsParallel(filesToSend);
 
-        final newMsgId = await ref
-            .read(chatControllerProvider.notifier)
-            .sendMessage(
-              senderId: agent.id,
-              senderName: agent.fullName,
-              senderRole: agent.role,
-              content: i == 0 ? content : '',
-              senderAvatarUrl: agent.avatarUrl,
-              replyToMessageId: i == 0 ? replyToMessageId : null,
-              replyToSenderName: i == 0 ? replyToSenderName : null,
-              replyToContent: i == 0 ? replyToContent : null,
-              fileUrl: fileUrl,
-              fileName: filesToSend[i].name,
-              fileType: filesToSend[i].extension,
-            );
-        if (i == 0) firstMsgId = newMsgId;
+        for (int i = 0; i < uploadResults.length; i++) {
+          final res = uploadResults[i];
+          final newMsgId = await ref
+              .read(chatControllerProvider.notifier)
+              .sendMessage(
+                senderId: agent.id,
+                senderName: agent.fullName,
+                senderRole: agent.role,
+                content: i == 0 ? content : '',
+                senderAvatarUrl: agent.avatarUrl,
+                replyToMessageId: i == 0 ? replyToMessageId : null,
+                replyToSenderName: i == 0 ? replyToSenderName : null,
+                replyToContent: i == 0 ? replyToContent : null,
+                fileUrl: res.fileUrl,
+                fileName: res.fileName,
+                fileType: res.fileType,
+              );
+          if (i == 0) firstMsgId = newMsgId;
+        }
+      } catch (e) {
+        debugPrint('File upload error: $e');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed to upload file(s): $e')),
+          );
+        }
+      } finally {
+        if (mounted) {
+          setState(() {
+            _isUploadingFile = false;
+          });
+        }
       }
-
-      setState(() {
-        _isUploadingFile = false;
-      });
     }
 
     final String newMsgId = firstMsgId ?? '';

@@ -172,6 +172,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                               const SizedBox(height: 8),
                               Row(
                                 mainAxisAlignment: MainAxisAlignment.center,
+                                mainAxisSize: MainAxisSize.min,
                                 children: [
                                   Icon(
                                     LucideIcons.award,
@@ -179,12 +180,15 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                                     color: AppColors.warning,
                                   ),
                                   const SizedBox(width: 6),
-                                  Text(
-                                    'Tally Certified Five Star Partner',
-                                    style: GoogleFonts.inter(
-                                      fontSize: 12,
-                                      color: AppColors.slate500,
-                                      fontWeight: FontWeight.w500,
+                                  Flexible(
+                                    child: Text(
+                                      'Tally Certified Five Star Partner',
+                                      style: GoogleFonts.inter(
+                                        fontSize: 12,
+                                        color: AppColors.slate500,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
                                     ),
                                   ),
                                 ],

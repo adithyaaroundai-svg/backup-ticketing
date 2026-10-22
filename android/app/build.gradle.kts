@@ -63,11 +63,6 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            packaging {
-                jniLibs {
-                    keepDebugSymbols.add("**/*.so")
-                }
-            }
         }
     }
 }

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:url_launcher/url_launcher.dart' as url_launcher;
 import 'package:intl/intl.dart';
 import '../../../../core/design_system/theme/app_colors.dart';
 import '../../domain/entities/chat_message.dart';
@@ -9,6 +8,7 @@ import '../providers/chat_provider.dart';
 import '../../../tickets/presentation/widgets/voice_note_widget.dart';
 import '../../../../core/utils/download_helper.dart';
 import 'video_message_widget.dart';
+import '../../../../core/utils/storage_utils.dart';
 
 enum ChatAttachmentType {
   none,
@@ -225,42 +225,49 @@ class ChatAttachmentRenderer extends ConsumerWidget {
                               panEnabled: true,
                               minScale: 0.5,
                               maxScale: 4.0,
-                              child: Image.network(
-                                url,
-                                fit: BoxFit.contain,
-                                loadingBuilder: (_, child, progress) =>
-                                    progress == null
-                                        ? child
-                                        : const Center(
-                                            child: CircularProgressIndicator(
-                                              strokeWidth: 2,
-                                              valueColor:
-                                                  AlwaysStoppedAnimation<Color>(
-                                                Colors.white70,
+                              child: ChatImageMemoryCache.contains(url)
+                                  ? Image.memory(
+                                      ChatImageMemoryCache.get(url)!,
+                                      fit: BoxFit.contain,
+                                      gaplessPlayback: true,
+                                    )
+                                  : Image.network(
+                                      url,
+                                      fit: BoxFit.contain,
+                                      gaplessPlayback: true,
+                                      loadingBuilder: (_, child, progress) =>
+                                          progress == null
+                                              ? child
+                                              : const Center(
+                                                  child: CircularProgressIndicator(
+                                                    strokeWidth: 2,
+                                                    valueColor:
+                                                        AlwaysStoppedAnimation<Color>(
+                                                      Colors.white70,
+                                                    ),
+                                                  ),
+                                                ),
+                                      errorBuilder: (_, __, ___) => const Center(
+                                        child: Column(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(
+                                              Icons.broken_image,
+                                              color: Colors.white38,
+                                              size: 48,
+                                            ),
+                                            SizedBox(height: 8),
+                                            Text(
+                                              'Failed to load image',
+                                              style: TextStyle(
+                                                color: Colors.white54,
+                                                fontSize: 13,
                                               ),
                                             ),
-                                          ),
-                                errorBuilder: (_, __, ___) => const Center(
-                                  child: Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(
-                                        Icons.broken_image,
-                                        color: Colors.white38,
-                                        size: 48,
-                                      ),
-                                      SizedBox(height: 8),
-                                      Text(
-                                        'Failed to load image',
-                                        style: TextStyle(
-                                          color: Colors.white54,
-                                          fontSize: 13,
+                                          ],
                                         ),
                                       ),
-                                    ],
-                                  ),
-                                ),
-                              ),
+                                    ),
                             ),
                           ),
                         ),
@@ -302,42 +309,67 @@ class ChatAttachmentRenderer extends ConsumerWidget {
         break;
       case ChatAttachmentType.gif:
       case ChatAttachmentType.image:
+        final cachedBytes = ChatImageMemoryCache.get(message.fileUrl!);
+        final isGif = type == ChatAttachmentType.gif;
+
+        // Schedule background precache of full image so full-screen opens instantly
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (context.mounted && message.fileUrl != null && message.fileUrl!.isNotEmpty) {
+            precacheImage(NetworkImage(message.fileUrl!), context).catchError((_) {});
+          }
+        });
+
+        Widget imageWidget;
+        if (cachedBytes != null) {
+          imageWidget = Image.memory(
+            cachedBytes,
+            width: 200,
+            fit: BoxFit.cover,
+            cacheWidth: isGif ? null : 600,
+            gaplessPlayback: true,
+          );
+        } else {
+          imageWidget = Image.network(
+            message.fileUrl!,
+            width: 200,
+            fit: BoxFit.cover,
+            cacheWidth: isGif ? null : 600,
+            gaplessPlayback: true,
+            loadingBuilder: (_, child, progress) => progress == null
+                ? child
+                : SizedBox(
+                    width: 200,
+                    height: 120,
+                    child: Center(
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        value: progress.expectedTotalBytes != null
+                            ? progress.cumulativeBytesLoaded / progress.expectedTotalBytes!
+                            : null,
+                      ),
+                    ),
+                  ),
+            errorBuilder: (_, __, ___) => Container(
+              width: 200,
+              height: 80,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade200,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Center(
+                child: Icon(Icons.image_not_supported, size: 32, color: AppColors.slate400),
+              ),
+            ),
+          );
+        }
+
         contentWidget = Padding(
           padding: const EdgeInsets.only(top: 4, bottom: 4),
           child: GestureDetector(
             onTap: () => _showFullScreenImage(context, message.fileUrl!, message.fileName ?? 'image'),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(8),
-              child: Image.network(
-                message.fileUrl!,
-                width: 200,
-                fit: BoxFit.cover,
-                loadingBuilder: (_, child, progress) => progress == null
-                    ? child
-                    : SizedBox(
-                        width: 200,
-                        height: 120,
-                        child: Center(
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            value: progress.expectedTotalBytes != null
-                                ? progress.cumulativeBytesLoaded / progress.expectedTotalBytes!
-                                : null,
-                          ),
-                        ),
-                      ),
-                errorBuilder: (_, __, ___) => Container(
-                  width: 200,
-                  height: 80,
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade200,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const Center(
-                    child: Icon(Icons.image_not_supported, size: 32, color: AppColors.slate400),
-                  ),
-                ),
-              ),
+              child: imageWidget,
             ),
           ),
         );
