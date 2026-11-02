@@ -1273,7 +1273,13 @@ class _CustomChannelChatPageState extends ConsumerState<CustomChannelChatPage> {
       if (next is AsyncData<List<ChatMessage>> && next.value.isNotEmpty) {
         final previousCount = previous is AsyncData<List<ChatMessage>> ? previous.value.length : 0;
         final currentCount = next.value.length;
-        if (currentCount > previousCount) {
+        final previousNewest = previous is AsyncData<List<ChatMessage>> && previous.value.isNotEmpty
+            ? previous.value.last.id
+            : null;
+        final currentNewest = next.value.last.id;
+        final isNearBottom = !_scrollCtrl.hasClients || _scrollCtrl.position.pixels < 150;
+
+        if (previousNewest != currentNewest && isNearBottom) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (_scrollCtrl.hasClients) {
               _scrollCtrl.jumpTo(0.0);

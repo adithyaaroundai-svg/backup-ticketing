@@ -89,6 +89,7 @@ class _GlobalChatPageState extends ConsumerState<GlobalChatPage>
 
 
 
+  bool _showScrollToBottom = false;
   bool _showMentions = false;
 
   String _mentionQuery = '';
@@ -322,12 +323,28 @@ class _GlobalChatPageState extends ConsumerState<GlobalChatPage>
 
   void _onScroll() {
     if (!_scrollCtrl.hasClients) return;
+    final currentScroll = _scrollCtrl.position.pixels;
+    final shouldShow = currentScroll > 200;
+    if (shouldShow != _showScrollToBottom) {
+      setState(() => _showScrollToBottom = shouldShow);
+    }
+
     final maxScroll = _scrollCtrl.position.maxScrollExtent;
-    if (maxScroll > 0 && _scrollCtrl.position.pixels >= maxScroll - 200) {
+    if (maxScroll > 0 && currentScroll >= maxScroll - 200) {
       final notifier = ref.read(chatStreamProvider('support-chat').notifier);
       if (notifier.hasMore && !notifier.isLoadingMore) {
         notifier.loadMore();
       }
+    }
+  }
+
+  void _scrollToBottom() {
+    if (_scrollCtrl.hasClients) {
+      _scrollCtrl.animateTo(
+        0.0,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOut,
+      );
     }
   }
 
@@ -705,7 +722,9 @@ class _GlobalChatPageState extends ConsumerState<GlobalChatPage>
             : null;
         final currentNewest = next.value.last.id;
 
-        if (previousNewest != currentNewest) {
+        final isNearBottom = !_scrollCtrl.hasClients || _scrollCtrl.position.pixels < 150;
+
+        if (previousNewest != currentNewest && isNearBottom) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (_scrollCtrl.hasClients) {
               _scrollCtrl.jumpTo(0.0);
@@ -823,7 +842,9 @@ class _GlobalChatPageState extends ConsumerState<GlobalChatPage>
                   child: Column(
                     children: [
                       Expanded(
-                        child: messagesAsync.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
+                        child: Stack(
+                          children: [
+                            messagesAsync.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
                       data: (rawMessages) {
                         final messages = rawMessages.where((m) =>
                           !m.content.contains('[MentionID:') &&
@@ -1008,7 +1029,20 @@ class _GlobalChatPageState extends ConsumerState<GlobalChatPage>
                       loading: () => Center(child: CircularProgressIndicator()),
                       error: (err, stack) => Center(child: Text('Error: $err')),
                     ),
-                  ),
+                            if (_showScrollToBottom)
+                              Positioned(
+                                right: 16,
+                                bottom: 16,
+                                child: FloatingActionButton.small(
+                                  onPressed: _scrollToBottom,
+                                  backgroundColor: AppColors.primary,
+                                  elevation: 4,
+                                  child: const Icon(Icons.arrow_downward, color: Colors.white, size: 20),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
                   if (_showMentions) _buildMentionsList(),
                   _buildInputArea(),
                 ],
