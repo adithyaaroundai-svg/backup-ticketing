@@ -266,14 +266,14 @@ class _SupportDashboardPageState extends ConsumerState<SupportDashboardPage> {
             );
 
             final showClaimChart = ClaimTimeAudience.showOnSupport(currentUser);
-            final statsHeader = LayoutBuilder(
+            return LayoutBuilder(
               builder: (context, constraints) {
                 final isMobile = constraints.maxWidth < 700;
-                final actions = _buildTopActions(context, ref);
+                final actions = _buildTopActions(context, ref, isMobile: isMobile);
 
-                return Container(
+                final statsHeader = Container(
                   color: context.adaptiveCard,
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                  padding: EdgeInsets.fromLTRB(16, isMobile ? 8 : 12, 16, isMobile ? 8 : 12),
                   child: isMobile
                       ? Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -282,10 +282,10 @@ class _SupportDashboardPageState extends ConsumerState<SupportDashboardPage> {
                               name: currentUser?.username ?? 'Support',
                               subtitle: 'Your support dashboard and ticket queue',
                             ),
-                            const SizedBox(height: 12),
+                            const SizedBox(height: 8),
                             actions,
-                            const SizedBox(height: 12),
-                            _QueueStatTiles(stats: queueStats),
+                            const SizedBox(height: 8),
+                            _QueueStatTiles(stats: queueStats, isMobile: true),
                           ],
                         )
                       : Row(
@@ -301,41 +301,69 @@ class _SupportDashboardPageState extends ConsumerState<SupportDashboardPage> {
                             const SizedBox(width: 8),
                             Expanded(
                               flex: 4,
-                              child: _QueueStatTiles(stats: queueStats),
+                              child: _QueueStatTiles(stats: queueStats, isMobile: false),
                             ),
                             const SizedBox(width: 8),
                             actions,
                           ],
                         ),
                 );
-              },
-            );
-            final ticketTable = FocusScope(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: TicketsTableView(
-                  tickets: allCombinedTickets,
-                  showAllTickets: true,
-                  showOnlyMine: false,
-                  showOnlyUnclaimed: false,
-                  groupResolved: false,
-                  isUnclaimedTab: false,
-                ),
-              ),
-            );
 
-            if (!showClaimChart) {
-              return Column(
-                children: [
-                  statsHeader,
-                  Divider(height: 1, color: Theme.of(context).dividerColor),
-                  Expanded(child: ticketTable),
-                ],
-              );
-            }
+                final ticketTable = FocusScope(
+                  child: Padding(
+                    padding: EdgeInsets.fromLTRB(
+                      isMobile ? 8 : 16,
+                      isMobile ? 8 : 16,
+                      isMobile ? 8 : 16,
+                      isMobile ? 85 : 16,
+                    ),
+                    child: TicketsTableView(
+                      tickets: allCombinedTickets,
+                      showAllTickets: true,
+                      showOnlyMine: false,
+                      showOnlyUnclaimed: false,
+                      groupResolved: false,
+                      isUnclaimedTab: false,
+                    ),
+                  ),
+                );
 
-            return LayoutBuilder(
-              builder: (context, constraints) {
+                if (isMobile) {
+                  return NestedScrollView(
+                    controller: _pageScrollController,
+                    headerSliverBuilder: (context, innerBoxIsScrolled) {
+                      return [
+                        SliverToBoxAdapter(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              statsHeader,
+                              Divider(height: 1, color: Theme.of(context).dividerColor),
+                              if (showClaimChart) ...[
+                                const Padding(
+                                  padding: EdgeInsets.fromLTRB(16, 12, 16, 0),
+                                  child: ClaimTimePieChart(),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ];
+                    },
+                    body: ticketTable,
+                  );
+                }
+
+                if (!showClaimChart) {
+                  return Column(
+                    children: [
+                      statsHeader,
+                      Divider(height: 1, color: Theme.of(context).dividerColor),
+                      Expanded(child: ticketTable),
+                    ],
+                  );
+                }
+
                 return Scrollbar(
                   controller: _pageScrollController,
                   thumbVisibility: true,
@@ -373,7 +401,95 @@ class _SupportDashboardPageState extends ConsumerState<SupportDashboardPage> {
     );
   }
 
-  Widget _buildTopActions(BuildContext context, WidgetRef ref) {
+  Widget _buildTopActions(BuildContext context, WidgetRef ref, {bool isMobile = false}) {
+    final dateFilterButton = OutlinedButton.icon(
+      icon: const Icon(LucideIcons.calendar, size: 13),
+      label: Text(
+        _startDate != null && _endDate != null
+            ? '${_startDate!.day}/${_startDate!.month} - ${_endDate!.day}/${_endDate!.month}'
+            : 'Filter Date',
+        style: const TextStyle(fontSize: 11),
+      ),
+      onPressed: _selectDateRange,
+      style: OutlinedButton.styleFrom(
+        padding: isMobile ? const EdgeInsets.symmetric(horizontal: 10, vertical: 6) : null,
+        visualDensity: isMobile ? VisualDensity.compact : null,
+        foregroundColor: Theme.of(context).brightness == Brightness.dark ? Colors.white : null,
+      ),
+    );
+
+    final dateClearButton = (_startDate != null && _endDate != null)
+        ? IconButton(
+            icon: const Icon(Icons.close, size: 16),
+            onPressed: _clearDateFilter,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
+            color: Theme.of(context).brightness == Brightness.dark ? Colors.white : null,
+          )
+        : null;
+
+    final unclaimedButton = !_isRestrictedAgent
+        ? OutlinedButton.icon(
+            icon: const Icon(LucideIcons.hourglass, size: 13),
+            label: const Text('Unclaimed > 1h', style: TextStyle(fontSize: 11)),
+            onPressed: () => context.push('/tickets?view=stale_unclaimed'),
+            style: OutlinedButton.styleFrom(
+              padding: isMobile ? const EdgeInsets.symmetric(horizontal: 10, vertical: 6) : null,
+              visualDensity: isMobile ? VisualDensity.compact : null,
+              foregroundColor: Theme.of(context).brightness == Brightness.dark ? Colors.white : null,
+            ),
+          )
+        : null;
+
+    final claimedButton = !_isRestrictedAgent
+        ? OutlinedButton.icon(
+            icon: const Icon(LucideIcons.alertTriangle, size: 13),
+            label: const Text('Claimed > 12h', style: TextStyle(fontSize: 11)),
+            onPressed: () => context.push('/tickets?view=claimed_overdue'),
+            style: OutlinedButton.styleFrom(
+              padding: isMobile ? const EdgeInsets.symmetric(horizontal: 10, vertical: 6) : null,
+              visualDensity: isMobile ? VisualDensity.compact : null,
+              foregroundColor: Theme.of(context).brightness == Brightness.dark ? Colors.white : null,
+            ),
+          )
+        : null;
+
+    final refreshButton = IconButton(
+      icon: Icon(Icons.refresh, size: isMobile ? 18 : 20),
+      onPressed: () => ref.invalidate(rawTicketsStreamProvider),
+      tooltip: 'Refresh',
+      padding: isMobile ? const EdgeInsets.all(6) : null,
+      constraints: isMobile ? const BoxConstraints() : null,
+      visualDensity: isMobile ? VisualDensity.compact : null,
+      color: Theme.of(context).brightness == Brightness.dark ? Colors.white : null,
+    );
+
+    if (isMobile) {
+      return SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            dateFilterButton,
+            if (dateClearButton != null) ...[
+              const SizedBox(width: 4),
+              dateClearButton,
+            ],
+            if (unclaimedButton != null) ...[
+              const SizedBox(width: 8),
+              unclaimedButton,
+            ],
+            if (claimedButton != null) ...[
+              const SizedBox(width: 8),
+              claimedButton,
+            ],
+            const SizedBox(width: 6),
+            refreshButton,
+          ],
+        ),
+      );
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.end,
       mainAxisSize: MainAxisSize.min,
@@ -381,56 +497,16 @@ class _SupportDashboardPageState extends ConsumerState<SupportDashboardPage> {
         Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            OutlinedButton.icon(
-              icon: const Icon(LucideIcons.calendar, size: 14),
-              label: Text(
-                _startDate != null && _endDate != null
-                    ? '${_startDate!.day}/${_startDate!.month} - ${_endDate!.day}/${_endDate!.month}'
-                    : 'Filter Date',
-                style: const TextStyle(fontSize: 11),
-              ),
-              onPressed: _selectDateRange,
-              style: OutlinedButton.styleFrom(
-                foregroundColor: Theme.of(context).brightness == Brightness.dark ? Colors.white : null,
-              ),
-            ),
-            if (_startDate != null && _endDate != null)
-              IconButton(
-                icon: const Icon(Icons.close, size: 16),
-                onPressed: _clearDateFilter,
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(),
-                color: Theme.of(context).brightness == Brightness.dark ? Colors.white : null,
-              ),
+            dateFilterButton,
+            if (dateClearButton != null) dateClearButton,
           ],
         ),
         const SizedBox(height: 8),
-        if (!_isRestrictedAgent)
-          OutlinedButton.icon(
-            icon: const Icon(LucideIcons.hourglass, size: 14),
-            label: const Text('Unclaimed > 1h', style: TextStyle(fontSize: 11)),
-            onPressed: () => context.push('/tickets?view=stale_unclaimed'),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: Theme.of(context).brightness == Brightness.dark ? Colors.white : null,
-            ),
-          ),
-        const SizedBox(height: 8),
-        if (!_isRestrictedAgent)
-          OutlinedButton.icon(
-            icon: const Icon(LucideIcons.alertTriangle, size: 14),
-            label: const Text('Claimed > 12h', style: TextStyle(fontSize: 11)),
-            onPressed: () => context.push('/tickets?view=claimed_overdue'),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: Theme.of(context).brightness == Brightness.dark ? Colors.white : null,
-            ),
-          ),
-        const SizedBox(height: 8),
-        IconButton(
-          icon: const Icon(Icons.refresh, size: 20),
-          onPressed: () => ref.invalidate(rawTicketsStreamProvider),
-          tooltip: 'Refresh',
-          color: Theme.of(context).brightness == Brightness.dark ? Colors.white : null,
-        ),
+        if (unclaimedButton != null) unclaimedButton,
+        if (unclaimedButton != null) const SizedBox(height: 8),
+        if (claimedButton != null) claimedButton,
+        if (claimedButton != null) const SizedBox(height: 8),
+        refreshButton,
       ],
     );
   }
@@ -457,8 +533,9 @@ class _QueueStat {
 
 class _QueueStatTiles extends StatelessWidget {
   final List<_QueueStat> stats;
+  final bool isMobile;
 
-  const _QueueStatTiles({required this.stats});
+  const _QueueStatTiles({required this.stats, this.isMobile = false});
 
   @override
   Widget build(BuildContext context) {
@@ -467,8 +544,8 @@ class _QueueStatTiles extends StatelessWidget {
       child: Row(
         children: stats
             .map((stat) => Padding(
-              padding: const EdgeInsets.only(right: 12),
-              child: _QueueStatTile(stat: stat),
+              padding: EdgeInsets.only(right: isMobile ? 8 : 12),
+              child: _QueueStatTile(stat: stat, isMobile: isMobile),
             ))
             .toList(growable: false),
       ),
@@ -478,15 +555,16 @@ class _QueueStatTiles extends StatelessWidget {
 
 class _QueueStatTile extends StatelessWidget {
   final _QueueStat stat;
+  final bool isMobile;
 
-  const _QueueStatTile({required this.stat});
+  const _QueueStatTile({required this.stat, this.isMobile = false});
 
   @override
   Widget build(BuildContext context) {
     final tile = SizedBox(
-      width: 140,
+      width: isMobile ? 124 : 140,
       child: Container(
-        constraints: const BoxConstraints(minHeight: 110),
+        constraints: BoxConstraints(minHeight: isMobile ? 86 : 110),
         decoration: BoxDecoration(
           color: context.adaptiveCard,
           borderRadius: BorderRadius.circular(12),
@@ -499,7 +577,7 @@ class _QueueStatTile extends StatelessWidget {
             ),
           ],
         ),
-        padding: const EdgeInsets.all(12),
+        padding: EdgeInsets.all(isMobile ? 8 : 12),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -509,30 +587,37 @@ class _QueueStatTile extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 CircleAvatar(
-                  radius: 16,
+                  radius: isMobile ? 13 : 16,
                   backgroundColor: stat.color.withValues(alpha: 0.15),
-                  child: Icon(stat.icon, size: 18, color: stat.color),
+                  child: Icon(stat.icon, size: isMobile ? 15 : 18, color: stat.color),
                 ),
-                const SizedBox(height: 8),
+                SizedBox(height: isMobile ? 4 : 8),
                 Text(
                   stat.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    fontSize: 13,
+                    fontSize: isMobile ? 12 : 13,
                     fontWeight: FontWeight.w600,
                     color: Theme.of(context).textTheme.titleSmall?.color ?? Theme.of(context).colorScheme.onSurface,
                   ),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 2),
                 Text(
                   stat.subtitle,
-                  style: TextStyle(fontSize: 11, color: Theme.of(context).textTheme.bodySmall?.color ?? Theme.of(context).colorScheme.onSurfaceVariant),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: isMobile ? 10 : 11,
+                    color: Theme.of(context).textTheme.bodySmall?.color ?? Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
                 ),
               ],
             ),
             Text(
               '${stat.count}',
               style: TextStyle(
-                fontSize: 18,
+                fontSize: isMobile ? 16 : 18,
                 fontWeight: FontWeight.w700,
                 color: Theme.of(context).textTheme.titleLarge?.color ?? Theme.of(context).colorScheme.onSurface,
               ),
@@ -550,3 +635,4 @@ class _QueueStatTile extends StatelessWidget {
     );
   }
 }
+

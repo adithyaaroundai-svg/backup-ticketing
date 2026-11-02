@@ -5,6 +5,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../core/design_system/layout/main_layout.dart';
 import '../../../../core/design_system/theme/app_colors.dart';
 import '../../../../core/design_system/components/app_card.dart';
+import '../../../../core/models/app_version_control.dart';
+import '../../../../core/services/app_update_service.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
 import '../providers/app_settings_provider.dart';
 import '../widgets/role_permissions_editor.dart';
@@ -28,16 +30,40 @@ class _AppSettingsPageState extends ConsumerState<AppSettingsPage>
   bool _isLoading = true;
   late TabController _tabController;
 
+  // App Version Control state
+  final _minVersionCodeCtrl = TextEditingController(text: '4');
+  final _latestVersionCodeCtrl = TextEditingController(text: '4');
+  final _minVersionNameCtrl = TextEditingController(text: '1.0.3');
+  final _latestVersionNameCtrl = TextEditingController(text: '1.0.3');
+  final _updateTitleCtrl = TextEditingController(text: 'Update Required');
+  final _updateMessageCtrl = TextEditingController(
+    text: 'A newer version of TallyCare is available on Google Play. Please update the app to continue using it.',
+  );
+  final _releaseNotesCtrl = TextEditingController();
+  final _playStoreUrlCtrl = TextEditingController(
+    text: 'https://play.google.com/store/apps/details?id=com.aroundtally.tallycare',
+  );
+  bool _forceUpdateEnabled = true;
+  bool _isSavingVersion = false;
+
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 4, vsync: this);
     _loadSettings();
   }
 
   @override
   void dispose() {
     _tabController.dispose();
+    _minVersionCodeCtrl.dispose();
+    _latestVersionCodeCtrl.dispose();
+    _minVersionNameCtrl.dispose();
+    _latestVersionNameCtrl.dispose();
+    _updateTitleCtrl.dispose();
+    _updateMessageCtrl.dispose();
+    _releaseNotesCtrl.dispose();
+    _playStoreUrlCtrl.dispose();
     super.dispose();
   }
 
@@ -107,6 +133,17 @@ class _AppSettingsPageState extends ConsumerState<AppSettingsPage>
             if (statuses is List) {
               visibleStatuses = statuses.whereType<String>().toList();
             }
+          } else if (key == 'app_version_control') {
+            final vc = AppVersionControl.fromJson(value);
+            _minVersionCodeCtrl.text = vc.minVersionCode.toString();
+            _latestVersionCodeCtrl.text = vc.latestVersionCode.toString();
+            _minVersionNameCtrl.text = vc.minVersionName;
+            _latestVersionNameCtrl.text = vc.latestVersionName;
+            _updateTitleCtrl.text = vc.title;
+            _updateMessageCtrl.text = vc.message;
+            _releaseNotesCtrl.text = vc.releaseNotes;
+            _playStoreUrlCtrl.text = vc.playStoreUrl;
+            _forceUpdateEnabled = vc.forceUpdate;
           } else if (value.containsKey('enabled')) {
             // Simple boolean flag
             settings[key] = value['enabled'] as bool? ?? true;
@@ -352,6 +389,10 @@ class _AppSettingsPageState extends ConsumerState<AppSettingsPage>
                               icon: Icon(LucideIcons.clock, size: 18),
                               text: 'Workflow & Response Times',
                             ),
+                            Tab(
+                              icon: Icon(LucideIcons.arrowUpCircle, size: 18),
+                              text: 'App Updates',
+                            ),
                           ],
                         ),
                       ],
@@ -365,6 +406,7 @@ class _AppSettingsPageState extends ConsumerState<AppSettingsPage>
                         _buildFeaturesTab(),
                         _buildRolePermissionsTab(),
                         _buildWorkflowTab(),
+                        _buildVersionControlTab(),
                       ],
                     ),
                   ),
@@ -616,5 +658,300 @@ class _AppSettingsPageState extends ConsumerState<AppSettingsPage>
         ],
       ),
     );
+  }
+
+  Widget _buildVersionControlTab() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                LucideIcons.arrowUpCircle,
+                size: 20,
+                color: AppColors.primary,
+              ),
+              const SizedBox(width: 8),
+              const Text(
+                'Google Play Version Control & Force Update',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.slate900,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'Control minimum required app versions remotely. When a user runs an older version, they will be prompted with a non-dismissible popup to update from Google Play.',
+            style: TextStyle(
+              fontSize: 13,
+              color: AppColors.slate500,
+            ),
+          ),
+          const SizedBox(height: 20),
+
+          // Force Update Switch Card
+          AppCard(
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(
+                    LucideIcons.shieldAlert,
+                    color: AppColors.primary,
+                    size: 24,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Enforce Mandatory Update (Force Update)',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.slate900,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      const Text(
+                        'When enabled, users on versions below the Minimum Version Code will be blocked from using the app until they update on Google Play.',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: AppColors.slate500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Switch(
+                  value: _forceUpdateEnabled,
+                  onChanged: (val) => setState(() => _forceUpdateEnabled = val),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // Version Codes Card
+          AppCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Version Thresholds',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.slate900,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _minVersionCodeCtrl,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          labelText: 'Minimum Version Code *',
+                          hintText: 'e.g. 4',
+                          helperText: 'Older than this build number = blocked',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: TextField(
+                        controller: _minVersionNameCtrl,
+                        decoration: const InputDecoration(
+                          labelText: 'Minimum Version Name *',
+                          hintText: 'e.g. 1.0.3',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _latestVersionCodeCtrl,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          labelText: 'Latest Version Code *',
+                          hintText: 'e.g. 4',
+                          helperText: 'Current release on Play Store',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: TextField(
+                        controller: _latestVersionNameCtrl,
+                        decoration: const InputDecoration(
+                          labelText: 'Latest Version Name *',
+                          hintText: 'e.g. 1.0.3',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // Dialog Messaging Card
+          AppCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Popup Content & Store Link',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.slate900,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                TextField(
+                  controller: _updateTitleCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Popup Title',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                TextField(
+                  controller: _updateMessageCtrl,
+                  maxLines: 2,
+                  decoration: const InputDecoration(
+                    labelText: 'Popup Message',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                TextField(
+                  controller: _releaseNotesCtrl,
+                  maxLines: 3,
+                  decoration: const InputDecoration(
+                    labelText: "What's New / Release Notes (Optional)",
+                    hintText: '• Performance improvements\n• Bug fixes',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                TextField(
+                  controller: _playStoreUrlCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Google Play Store URL',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+
+          // Save Button
+          SizedBox(
+            height: 48,
+            child: ElevatedButton.icon(
+              onPressed: _isSavingVersion ? null : _saveVersionControl,
+              icon: _isSavingVersion
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation(Colors.white),
+                      ),
+                    )
+                  : const Icon(LucideIcons.save, size: 18),
+              label: Text(
+                _isSavingVersion ? 'Saving...' : 'Save Version Settings',
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+              ),
+            ),
+          ),
+          const SizedBox(height: 32),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _saveVersionControl() async {
+    setState(() => _isSavingVersion = true);
+
+    try {
+      final currentUser = ref.read(authProvider);
+      final minCode = int.tryParse(_minVersionCodeCtrl.text.trim()) ?? 1;
+      final latestCode = int.tryParse(_latestVersionCodeCtrl.text.trim()) ?? minCode;
+
+      final config = AppVersionControl(
+        minVersionCode: minCode,
+        latestVersionCode: latestCode,
+        minVersionName: _minVersionNameCtrl.text.trim(),
+        latestVersionName: _latestVersionNameCtrl.text.trim(),
+        forceUpdate: _forceUpdateEnabled,
+        title: _updateTitleCtrl.text.trim(),
+        message: _updateMessageCtrl.text.trim(),
+        releaseNotes: _releaseNotesCtrl.text.trim(),
+        playStoreUrl: _playStoreUrlCtrl.text.trim(),
+      );
+
+      await _supabase.from('app_settings').upsert({
+        'setting_key': 'app_version_control',
+        'setting_value': config.toJson(),
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
+        'updated_by': currentUser?.id,
+      }, onConflict: 'setting_key');
+
+      ref.invalidate(appUpdateProvider);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('App Version Control settings saved successfully!'),
+            backgroundColor: AppColors.success,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error saving version settings: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isSavingVersion = false);
+      }
+    }
   }
 }

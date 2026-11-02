@@ -4,6 +4,12 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../domain/entities/chat_message.dart';
 import '../local/chat_cache_constants.dart';
 
+
+bool _isGhostMentionMessage(String content) {
+  final c = content.toLowerCase();
+  return content.contains('[MentionID:') || c.contains('you were mentioned in the support chat');
+}
+
 class ChatRepository {
   final SupabaseClient _client;
 
@@ -40,7 +46,10 @@ class ChatRepository {
     // Fetch newest first
     final data = await query.order('created_at', ascending: false).limit(limit);
 
-    final messages = data.map((json) => ChatMessage.fromJson(json)).toList();
+    final messages = data
+        .map((json) => ChatMessage.fromJson(json))
+        .where((m) => !_isGhostMentionMessage(m.content))
+        .toList();
     
     // Sort ascending for UI (oldest to newest)
     messages.sort((a, b) {
@@ -86,7 +95,10 @@ class ChatRepository {
         .order('created_at', ascending: true)   // ASC — simple forward append
         .limit(batchSize);
 
-    return data.map((json) => ChatMessage.fromJson(json)).toList();
+    return data
+        .map((json) => ChatMessage.fromJson(json))
+        .where((m) => !_isGhostMentionMessage(m.content))
+        .toList();
   }
 
   Future<Map<String, Set<String>>> fetchReceiptsForMessages(List<String> messageIds) async {
@@ -123,7 +135,10 @@ class ChatRepository {
     }
 
     final data = await query.order('created_at', ascending: false);
-    return data.map((json) => ChatMessage.fromJson(json)).toList();
+    return data
+        .map((json) => ChatMessage.fromJson(json))
+        .where((m) => !_isGhostMentionMessage(m.content))
+        .toList();
   }
 
   Future<List<ChatMessage>> getSharedLinks({
@@ -142,7 +157,10 @@ class ChatRepository {
     }
 
     final data = await query.order('created_at', ascending: false);
-    return data.map((json) => ChatMessage.fromJson(json)).toList();
+    return data
+        .map((json) => ChatMessage.fromJson(json))
+        .where((m) => !_isGhostMentionMessage(m.content))
+        .toList();
   }
 
   // ── Realtime subscription for chat messages ──────────────────────────────────

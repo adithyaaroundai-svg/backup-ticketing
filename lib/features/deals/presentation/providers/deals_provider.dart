@@ -157,4 +157,18 @@ class DealController extends AsyncNotifier<void> {
       return e is PostgrestException ? e.message : e.toString();
     }
   }
+
+  Future<String?> deleteDeal(String id) async {
+    state = const AsyncLoading();
+    try {
+      await Supabase.instance.client.from('deals').delete().eq('id', id);
+      state = const AsyncData(null);
+      ref.invalidate(dealsProvider);
+      return null;
+    } catch (e, st) {
+      print('DEBUG: deleteDeal error: $e');
+      state = AsyncError(e, st);
+      return e is PostgrestException ? e.message : e.toString();
+    }
+  }
 }

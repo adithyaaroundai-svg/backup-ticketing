@@ -227,6 +227,7 @@ class _TicketsTableViewState extends ConsumerState<TicketsTableView> {
     _verticalScrollController.addListener(() {
       if (widget.hasMore && 
           widget.onLoadMore != null &&
+          _verticalScrollController.hasClients &&
           _verticalScrollController.position.pixels >= _verticalScrollController.position.maxScrollExtent - 200) {
         widget.onLoadMore!();
       }
@@ -510,6 +511,7 @@ class _TicketsTableViewState extends ConsumerState<TicketsTableView> {
 
     return LayoutBuilder(
       builder: (context, constraints) {
+        final isMobileLayout = constraints.maxWidth < 700;
         // Force desktop table view on mobile as well per user request
         final isMobile = false;
 
@@ -544,167 +546,337 @@ class _TicketsTableViewState extends ConsumerState<TicketsTableView> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Wrap(
-              spacing: 12,
-              runSpacing: 10,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                // Filter tabs: All, Active Tasks, Completed, Cancelled
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Container(
-                    padding: const EdgeInsets.all(3),
-                    decoration: BoxDecoration(
-                      color: context.adaptiveSlate100,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: context.adaptiveBorder),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        _buildStatusFilterButton(
-                          filterKey: 'all',
-                          label: 'All',
-                          icon: LucideIcons.layers,
-                          count: totalCount,
-                          activeColor: const Color(0xFF6366F1),
-                          context: context,
-                        ),
-                        const SizedBox(width: 4),
-                        _buildStatusFilterButton(
-                          filterKey: 'active',
-                          label: 'Active Tasks',
-                          icon: LucideIcons.listTodo,
-                          count: activeCount,
-                          activeColor: AppColors.primary,
-                          context: context,
-                        ),
-                        const SizedBox(width: 4),
-                        _buildStatusFilterButton(
-                          filterKey: 'completed',
-                          label: 'Completed',
-                          icon: LucideIcons.checkCircle2,
-                          count: completedCount,
-                          activeColor: const Color(0xFF16A34A),
-                          context: context,
-                        ),
-                        const SizedBox(width: 4),
-                        _buildStatusFilterButton(
-                          filterKey: 'cancelled',
-                          label: 'Cancelled',
-                          icon: LucideIcons.xCircle,
-                          count: cancelledCount,
-                          activeColor: const Color(0xFFDC2626),
-                          context: context,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                ConstrainedBox(
-                  constraints: const BoxConstraints(minWidth: 200, maxWidth: 350),
-                  child: Container(
-                    height: 36,
-                    decoration: BoxDecoration(
-                      color: context.adaptiveSlate50,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: context.adaptiveBorder),
-                    ),
-                    child: TextField(
-                      decoration: InputDecoration(
-                        hintText: 'Search customer, task, agent...',
-                        hintStyle: TextStyle(fontSize: 13, color: context.adaptiveSlate400),
-                        prefixIcon: Icon(LucideIcons.search, size: 16, color: context.adaptiveSlate400),
-                        border: InputBorder.none,
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                        isDense: true,
-                      ),
-                      style: TextStyle(fontSize: 13, color: context.adaptiveSlate700),
-                      onChanged: (val) {
-                        setState(() {
-                          _searchQuery = val;
-                        });
-                      },
-                    ),
-                  ),
-                ),
-                Container(
-                  height: 36,
-                  width: 200,
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  decoration: BoxDecoration(
-                    color: context.adaptiveSlate50,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: context.adaptiveBorder),
-                  ),
-                  child: DropdownButtonHideUnderline(
-                    child: DropdownButton<String?>(
-                      isExpanded: true,
-                      isDense: true,
-                      value: dropdownValue,
-                      hint: Text('Filter by Assigned Agent', style: TextStyle(fontSize: 13, color: context.adaptiveSlate400)),
-                      icon: Icon(LucideIcons.chevronDown, size: 16, color: context.adaptiveSlate400),
-                      style: TextStyle(fontSize: 13, color: context.adaptiveSlate700),
-                      items: [
-                        const DropdownMenuItem<String?>(
-                          value: null,
-                          child: Text('All Agents'),
-                        ),
-                        ...(agentsAsync.value ?? []).map((agent) {
-                          final agentId = agent['id']?.toString();
-                          final agentName = agent['full_name']?.toString() ?? agent['username']?.toString() ?? 'Unknown';
-                          return DropdownMenuItem<String?>(
-                            value: agentId,
-                            child: Text(agentName),
-                          );
-                        }),
-                      ],
-                      onChanged: (val) {
-                        if (val == null) {
-                          ref.read(ticketAssigneeFilterProvider.notifier).setAll();
-                        } else {
-                          ref.read(ticketAssigneeFilterProvider.notifier).setAgent(val);
-                        }
-                      },
-                    ),
-                  ),
-                ),
-                Container(
-                  height: 36,
-                  width: 180,
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  decoration: BoxDecoration(
-                    color: context.adaptiveSlate50,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: context.adaptiveBorder),
-                  ),
-                  child: DropdownButtonHideUnderline(
-                    child: DropdownButton<String?>(
-                      isExpanded: true,
-                      isDense: true,
-                      value: selectedStatus,
-                      hint: Text('All Statuses', style: TextStyle(fontSize: 13, color: context.adaptiveSlate400)),
-                      icon: Icon(LucideIcons.chevronDown, size: 16, color: context.adaptiveSlate400),
-                      style: TextStyle(fontSize: 13, color: context.adaptiveSlate700),
-                      items: [
-                        const DropdownMenuItem<String?>(
-                          value: null,
-                          child: Text('All Statuses'),
-                        ),
-                        ...statusLabels.map(
-                          (label) => DropdownMenuItem<String?>(
-                            value: label,
-                            child: Text(label, overflow: TextOverflow.ellipsis),
+            padding: EdgeInsets.symmetric(
+              horizontal: isMobileLayout ? 10.0 : 16.0,
+              vertical: isMobileLayout ? 8.0 : 16.0,
+            ),
+            child: isMobileLayout
+                ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // Filter tabs: All, Active Tasks, Completed, Cancelled
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Container(
+                          padding: const EdgeInsets.all(3),
+                          decoration: BoxDecoration(
+                            color: context.adaptiveSlate100,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: context.adaptiveBorder),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              _buildStatusFilterButton(
+                                filterKey: 'all',
+                                label: 'All',
+                                icon: LucideIcons.layers,
+                                count: totalCount,
+                                activeColor: const Color(0xFF6366F1),
+                                context: context,
+                              ),
+                              const SizedBox(width: 4),
+                              _buildStatusFilterButton(
+                                filterKey: 'active',
+                                label: 'Active Tasks',
+                                icon: LucideIcons.listTodo,
+                                count: activeCount,
+                                activeColor: AppColors.primary,
+                                context: context,
+                              ),
+                              const SizedBox(width: 4),
+                              _buildStatusFilterButton(
+                                filterKey: 'completed',
+                                label: 'Completed',
+                                icon: LucideIcons.checkCircle2,
+                                count: completedCount,
+                                activeColor: const Color(0xFF16A34A),
+                                context: context,
+                              ),
+                              const SizedBox(width: 4),
+                              _buildStatusFilterButton(
+                                filterKey: 'cancelled',
+                                label: 'Cancelled',
+                                icon: LucideIcons.xCircle,
+                                count: cancelledCount,
+                                activeColor: const Color(0xFFDC2626),
+                                context: context,
+                              ),
+                            ],
                           ),
                         ),
-                      ],
-                      onChanged: (val) => setState(() => _statusFilter = val),
-                    ),
+                      ),
+                      const SizedBox(height: 8),
+                      // Search field
+                      Container(
+                        height: 36,
+                        decoration: BoxDecoration(
+                          color: context.adaptiveSlate50,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: context.adaptiveBorder),
+                        ),
+                        child: TextField(
+                          decoration: InputDecoration(
+                            hintText: 'Search customer, task, agent...',
+                            hintStyle: TextStyle(fontSize: 12, color: context.adaptiveSlate400),
+                            prefixIcon: Icon(LucideIcons.search, size: 15, color: context.adaptiveSlate400),
+                            border: InputBorder.none,
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+                            isDense: true,
+                          ),
+                          style: TextStyle(fontSize: 12, color: context.adaptiveSlate700),
+                          onChanged: (val) {
+                            setState(() {
+                              _searchQuery = val;
+                            });
+                          },
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      // Agent & Status dropdowns side by side
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Container(
+                              height: 36,
+                              padding: const EdgeInsets.symmetric(horizontal: 8),
+                              decoration: BoxDecoration(
+                                color: context.adaptiveSlate50,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: context.adaptiveBorder),
+                              ),
+                              child: DropdownButtonHideUnderline(
+                                child: DropdownButton<String?>(
+                                  isExpanded: true,
+                                  isDense: true,
+                                  value: dropdownValue,
+                                  hint: Text('Agent', style: TextStyle(fontSize: 12, color: context.adaptiveSlate400)),
+                                  icon: Icon(LucideIcons.chevronDown, size: 14, color: context.adaptiveSlate400),
+                                  style: TextStyle(fontSize: 12, color: context.adaptiveSlate700),
+                                  items: [
+                                    const DropdownMenuItem<String?>(
+                                      value: null,
+                                      child: Text('All Agents', style: TextStyle(fontSize: 12)),
+                                    ),
+                                    ...(agentsAsync.value ?? []).map((agent) {
+                                      final agentId = agent['id']?.toString();
+                                      final agentName = agent['full_name']?.toString() ?? agent['username']?.toString() ?? 'Unknown';
+                                      return DropdownMenuItem<String?>(
+                                        value: agentId,
+                                        child: Text(agentName, style: const TextStyle(fontSize: 12), overflow: TextOverflow.ellipsis),
+                                      );
+                                    }),
+                                  ],
+                                  onChanged: (val) {
+                                    if (val == null) {
+                                      ref.read(ticketAssigneeFilterProvider.notifier).setAll();
+                                    } else {
+                                      ref.read(ticketAssigneeFilterProvider.notifier).setAgent(val);
+                                    }
+                                  },
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Container(
+                              height: 36,
+                              padding: const EdgeInsets.symmetric(horizontal: 8),
+                              decoration: BoxDecoration(
+                                color: context.adaptiveSlate50,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: context.adaptiveBorder),
+                              ),
+                              child: DropdownButtonHideUnderline(
+                                child: DropdownButton<String?>(
+                                  isExpanded: true,
+                                  isDense: true,
+                                  value: selectedStatus,
+                                  hint: Text('Status', style: TextStyle(fontSize: 12, color: context.adaptiveSlate400)),
+                                  icon: Icon(LucideIcons.chevronDown, size: 14, color: context.adaptiveSlate400),
+                                  style: TextStyle(fontSize: 12, color: context.adaptiveSlate700),
+                                  items: [
+                                    const DropdownMenuItem<String?>(
+                                      value: null,
+                                      child: Text('All Statuses', style: TextStyle(fontSize: 12)),
+                                    ),
+                                    ...statusLabels.map(
+                                      (label) => DropdownMenuItem<String?>(
+                                        value: label,
+                                        child: Text(label, style: const TextStyle(fontSize: 12), overflow: TextOverflow.ellipsis),
+                                      ),
+                                    ),
+                                  ],
+                                  onChanged: (val) => setState(() => _statusFilter = val),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  )
+                : Wrap(
+                    spacing: 12,
+                    runSpacing: 10,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      // Filter tabs: All, Active Tasks, Completed, Cancelled
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Container(
+                          padding: const EdgeInsets.all(3),
+                          decoration: BoxDecoration(
+                            color: context.adaptiveSlate100,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: context.adaptiveBorder),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              _buildStatusFilterButton(
+                                filterKey: 'all',
+                                label: 'All',
+                                icon: LucideIcons.layers,
+                                count: totalCount,
+                                activeColor: const Color(0xFF6366F1),
+                                context: context,
+                              ),
+                              const SizedBox(width: 4),
+                              _buildStatusFilterButton(
+                                filterKey: 'active',
+                                label: 'Active Tasks',
+                                icon: LucideIcons.listTodo,
+                                count: activeCount,
+                                activeColor: AppColors.primary,
+                                context: context,
+                              ),
+                              const SizedBox(width: 4),
+                              _buildStatusFilterButton(
+                                filterKey: 'completed',
+                                label: 'Completed',
+                                icon: LucideIcons.checkCircle2,
+                                count: completedCount,
+                                activeColor: const Color(0xFF16A34A),
+                                context: context,
+                              ),
+                              const SizedBox(width: 4),
+                              _buildStatusFilterButton(
+                                filterKey: 'cancelled',
+                                label: 'Cancelled',
+                                icon: LucideIcons.xCircle,
+                                count: cancelledCount,
+                                activeColor: const Color(0xFFDC2626),
+                                context: context,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(minWidth: 200, maxWidth: 350),
+                        child: Container(
+                          height: 36,
+                          decoration: BoxDecoration(
+                            color: context.adaptiveSlate50,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: context.adaptiveBorder),
+                          ),
+                          child: TextField(
+                            decoration: InputDecoration(
+                              hintText: 'Search customer, task, agent...',
+                              hintStyle: TextStyle(fontSize: 13, color: context.adaptiveSlate400),
+                              prefixIcon: Icon(LucideIcons.search, size: 16, color: context.adaptiveSlate400),
+                              border: InputBorder.none,
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                              isDense: true,
+                            ),
+                            style: TextStyle(fontSize: 13, color: context.adaptiveSlate700),
+                            onChanged: (val) {
+                              setState(() {
+                                _searchQuery = val;
+                              });
+                            },
+                          ),
+                        ),
+                      ),
+                      Container(
+                        height: 36,
+                        width: 200,
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        decoration: BoxDecoration(
+                          color: context.adaptiveSlate50,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: context.adaptiveBorder),
+                        ),
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<String?>(
+                            isExpanded: true,
+                            isDense: true,
+                            value: dropdownValue,
+                            hint: Text('Filter by Assigned Agent', style: TextStyle(fontSize: 13, color: context.adaptiveSlate400)),
+                            icon: Icon(LucideIcons.chevronDown, size: 16, color: context.adaptiveSlate400),
+                            style: TextStyle(fontSize: 13, color: context.adaptiveSlate700),
+                            items: [
+                              const DropdownMenuItem<String?>(
+                                value: null,
+                                child: Text('All Agents'),
+                              ),
+                              ...(agentsAsync.value ?? []).map((agent) {
+                                final agentId = agent['id']?.toString();
+                                final agentName = agent['full_name']?.toString() ?? agent['username']?.toString() ?? 'Unknown';
+                                return DropdownMenuItem<String?>(
+                                  value: agentId,
+                                  child: Text(agentName),
+                                );
+                              }),
+                            ],
+                            onChanged: (val) {
+                              if (val == null) {
+                                ref.read(ticketAssigneeFilterProvider.notifier).setAll();
+                              } else {
+                                ref.read(ticketAssigneeFilterProvider.notifier).setAgent(val);
+                              }
+                            },
+                          ),
+                        ),
+                      ),
+                      Container(
+                        height: 36,
+                        width: 180,
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        decoration: BoxDecoration(
+                          color: context.adaptiveSlate50,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: context.adaptiveBorder),
+                        ),
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<String?>(
+                            isExpanded: true,
+                            isDense: true,
+                            value: selectedStatus,
+                            hint: Text('All Statuses', style: TextStyle(fontSize: 13, color: context.adaptiveSlate400)),
+                            icon: Icon(LucideIcons.chevronDown, size: 16, color: context.adaptiveSlate400),
+                            style: TextStyle(fontSize: 13, color: context.adaptiveSlate700),
+                            items: [
+                              const DropdownMenuItem<String?>(
+                                value: null,
+                                child: Text('All Statuses'),
+                              ),
+                              ...statusLabels.map(
+                                (label) => DropdownMenuItem<String?>(
+                                  value: label,
+                                  child: Text(label, overflow: TextOverflow.ellipsis),
+                                ),
+                              ),
+                            ],
+                            onChanged: (val) => setState(() => _statusFilter = val),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-              ],
-            ),
           ),
           Divider(height: 1, color: AppColors.border),
           Expanded(
@@ -753,11 +925,22 @@ class _TicketsTableViewState extends ConsumerState<TicketsTableView> {
                           final agentsMap = {for (final a in agents) a['id'].toString(): a};
                           final customersMap = {for (final c in customers) c.id.toString(): c};
 
-                          return ListView.builder(
-                            controller: _verticalScrollController,
-                            padding: EdgeInsets.zero,
-                            itemCount: groupedTickets.length + ((widget.hasMore && _searchQuery.isEmpty) ? 1 : 0),
-                            itemBuilder: (context, index) {
+                          final hasPrimary = PrimaryScrollController.maybeOf(context) != null;
+                          return NotificationListener<ScrollNotification>(
+                            onNotification: (notification) {
+                              if (widget.hasMore && 
+                                  widget.onLoadMore != null &&
+                                  notification.metrics.pixels >= notification.metrics.maxScrollExtent - 200) {
+                                widget.onLoadMore!();
+                              }
+                              return false;
+                            },
+                            child: ListView.builder(
+                              controller: hasPrimary ? null : _verticalScrollController,
+                              primary: hasPrimary ? true : false,
+                              padding: EdgeInsets.only(bottom: isMobileLayout ? 32 : 16),
+                              itemCount: groupedTickets.length + ((widget.hasMore && _searchQuery.isEmpty) ? 1 : 0),
+                              itemBuilder: (context, index) {
                               if (index >= groupedTickets.length) {
                                 return const Padding(
                                   padding: EdgeInsets.all(32.0),
@@ -1132,8 +1315,9 @@ class _TicketsTableViewState extends ConsumerState<TicketsTableView> {
                             ),
                           );
                         },
-                          );
-                        },
+                      ),
+                    );
+                  },
                         loading: () => Center(child: CircularProgressIndicator()),
                         error: (error, stack) => Center(
                           child: Text(

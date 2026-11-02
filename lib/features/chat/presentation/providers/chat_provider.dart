@@ -209,6 +209,10 @@ class ChatStream extends _$ChatStream {
     if (payload.eventType == PostgresChangeEvent.insert) {
       final newMsg = ChatMessage.fromJson(payload.newRecord);
       if (newMsg.channel != channel) return;
+      if (newMsg.content.contains('[MentionID:') ||
+          newMsg.content.toLowerCase().contains('you were mentioned in the support chat')) {
+        return;
+      }
 
       final currentUserId = ref.read(authProvider)?.id;
       // If targeted to a specific recipient, only show if current user is the recipient or sender

@@ -492,18 +492,6 @@ class _GlobalChatPageState extends ConsumerState<GlobalChatPage>
 
       if (fullName.isNotEmpty && content.contains('@$fullName') && a['id'] != agent.id) {
         try {
-          await ref
-              .read(chatRepositoryProvider)
-              .sendMessage(
-                senderId: agent.id,
-                senderName: agent.fullName,
-                senderRole: agent.role,
-                content:
-                    'You were mentioned in the support chat:\n\n"$content"\n\n[MentionID:$newMsgId]',
-                receiverId: a['id'],
-                senderAvatarUrl: agent.avatarUrl,
-              );
-
           await Supabase.instance.client.from('notifications').insert({
             'user_id': a['id'],
             'type': 'mention',
@@ -513,7 +501,7 @@ class _GlobalChatPageState extends ConsumerState<GlobalChatPage>
             'is_read': false,
           });
         } catch (e) {
-          debugPrint('Error sending mention notification/DM: $e');
+          debugPrint('Error sending mention notification: $e');
         }
       }
     }
@@ -836,7 +824,11 @@ class _GlobalChatPageState extends ConsumerState<GlobalChatPage>
                     children: [
                       Expanded(
                         child: messagesAsync.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
-                      data: (messages) {
+                      data: (rawMessages) {
+                        final messages = rawMessages.where((m) =>
+                          !m.content.contains('[MentionID:') &&
+                          !m.content.toLowerCase().contains('you were mentioned in the support chat')
+                        ).toList();
                         if (messages.isEmpty) {
                           return Center(
                             child: Column(
@@ -2647,6 +2639,12 @@ class _ChatBubble extends ConsumerWidget {
         ? agentData!['full_name'] 
         : agentData?['username']) ?? message.senderName;
     final currentSenderRole = agentData?['role'] ?? message.senderRole;
+
+    // Hide internal mention notification messages that were sent to support-chat
+    if (message.content.contains('[MentionID:') ||
+        message.content.toLowerCase().contains('you were mentioned in the support chat')) {
+      return const SizedBox.shrink();
+    }
 
     final isTicketMessage =
         message.content.startsWith('Company: ') &&

@@ -54,6 +54,7 @@ import 'features/developer_crm/presentation/dev_crm_app.dart';
 import 'features/leaves/presentation/pages/leaves_page.dart';
 
 import 'core/services/local_notification_service.dart';
+import 'core/widgets/app_update_gate.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'features/chat/data/local/hive_chat_message.dart';
@@ -620,7 +621,7 @@ class TallyCareApp extends ConsumerWidget {
                   )
                 : null,
           ),
-          child: child ?? const SizedBox(),
+          child: AppUpdateGate(child: child ?? const SizedBox()),
         );
       },
     );
