@@ -90,6 +90,11 @@ class _AllAroundTallyChatPageState extends ConsumerState<AllAroundTallyChatPage>
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        ref.read(currentOpenChannelProvider.notifier).state = 'all-aroundtally';
+      }
+    });
     _scrollCtrl.addListener(_onScroll);
     _focusNode.addListener(_onFocusChange);
 
@@ -151,6 +156,11 @@ class _AllAroundTallyChatPageState extends ConsumerState<AllAroundTallyChatPage>
 
   @override
   void dispose() {
+    try {
+      if (ref.read(currentOpenChannelProvider) == 'all-aroundtally') {
+        ref.read(currentOpenChannelProvider.notifier).state = null;
+      }
+    } catch (_) {}
     _dragDropPasteSub?.cancel();
     _ctrl.dispose();
     _scrollCtrl.dispose();

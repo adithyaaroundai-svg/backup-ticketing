@@ -209,6 +209,11 @@ class _CustomChannelChatPageState extends ConsumerState<CustomChannelChatPage> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        ref.read(currentOpenChannelProvider.notifier).state = widget.channelId;
+      }
+    });
     _scrollCtrl.addListener(_onScroll);
     _focusNode.addListener(_onFocusChange);
 
@@ -295,6 +300,11 @@ class _CustomChannelChatPageState extends ConsumerState<CustomChannelChatPage> {
 
   @override
   void dispose() {
+    try {
+      if (ref.read(currentOpenChannelProvider) == widget.channelId) {
+        ref.read(currentOpenChannelProvider.notifier).state = null;
+      }
+    } catch (_) {}
     _dragDropPasteSub?.cancel();
     _messageCtrl.dispose();
     _scrollCtrl.dispose();

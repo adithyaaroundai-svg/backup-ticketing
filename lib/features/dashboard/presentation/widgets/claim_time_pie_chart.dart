@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../core/design_system/design_system.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
@@ -246,6 +247,11 @@ class _ClaimTimePieChartState extends ConsumerState<ClaimTimePieChart>
     with SingleTickerProviderStateMixin {
   Timer? _tick;
   late final AnimationController _pulse;
+  bool _isSectionHidden = false;
+  bool _hideClaim = false;
+  bool _hideResolve = false;
+  bool _hideStatus = false;
+  bool _hideTiming = false;
 
   @override
   void initState() {
@@ -257,6 +263,38 @@ class _ClaimTimePieChartState extends ConsumerState<ClaimTimePieChart>
     _tick = Timer.periodic(const Duration(seconds: 20), (_) {
       if (mounted) setState(() {});
     });
+    _loadPreferences();
+  }
+
+  Future<void> _loadPreferences() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (!mounted) return;
+      setState(() {
+        _isSectionHidden = prefs.getBool('dashboard_charts_section_hidden') ?? false;
+        _hideClaim = prefs.getBool('dashboard_chart_hide_claim') ?? false;
+        _hideResolve = prefs.getBool('dashboard_chart_hide_resolve') ?? false;
+        _hideStatus = prefs.getBool('dashboard_chart_hide_status') ?? false;
+        _hideTiming = prefs.getBool('dashboard_chart_hide_timing') ?? false;
+      });
+    } catch (_) {}
+  }
+
+  void _toggleSectionHidden(bool hidden) async {
+    setState(() => _isSectionHidden = hidden);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('dashboard_charts_section_hidden', hidden);
+    } catch (_) {}
+  }
+
+  void _toggleCardHidden(String key, bool currentVal, void Function(bool) updater) async {
+    final nextVal = !currentVal;
+    setState(() => updater(nextVal));
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(key, nextVal);
+    } catch (_) {}
   }
 
   @override
@@ -380,91 +418,201 @@ class _ClaimTimePieChartState extends ConsumerState<ClaimTimePieChart>
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final titleColor = isDark ? Colors.white : AppColors.slate900;
+    final muted = isDark ? Colors.white70 : AppColors.slate500;
+
+    if (_isSectionHidden == true) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 8),
+        child: AppCard(
+          child: InkWell(
+            borderRadius: BorderRadius.circular(8),
+            onTap: () => _toggleSectionHidden(false),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              child: Row(
+                children: [
+                  Icon(Icons.pie_chart_outline, size: 18, color: AppColors.primary),
+                  const SizedBox(width: 10),
+                  Text(
+                    'Ticket Performance & Status Charts',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: titleColor,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: AppColors.slate500.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      'Hidden',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                        color: muted,
+                      ),
+                    ),
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    icon: const Icon(Icons.visibility_off_outlined, size: 20),
+                    tooltip: 'Show all charts',
+                    color: AppColors.primary,
+                    onPressed: () => _toggleSectionHidden(false),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
     final ticketsAsync = ref.watch(claimTimeTicketsProvider);
     final statusAsync = ref.watch(allStatusTicketsProvider);
     final timingAsync = ref.watch(allTimingTicketsProvider);
     final now = DateTime.now();
 
-    return ticketsAsync.when(
-      data: (tickets) {
-        final statusTickets = statusAsync.asData?.value ?? tickets;
-        final claim = _PieCard(
-          model: _claimChart(tickets, now),
-          pulse: _pulse,
-          showLive: true,
-          onSlice: _openSlice,
-        );
-        final resolve = _PieCard(
-          model: _resolveChart(tickets, now),
-          pulse: _pulse,
-          showLive: false,
-          onSlice: _openSlice,
-        );
-        final status = _PieCard(
-          model: _statusChart(statusTickets, complete: statusAsync.hasValue),
-          pulse: _pulse,
-          showLive: false,
-          onSlice: _openSlice,
-        );
-        final timing = _AllTimeTimingCard(
-          timings: timingAsync,
-          onOpen: (ticket) => context.push('/ticket/${ticket.id}'),
-        );
-        return LayoutBuilder(
-          builder: (context, constraints) {
-            final stacked = constraints.maxWidth < 980;
-            if (stacked) {
-              return Column(
-                children: [
-                  claim,
-                  const SizedBox(height: 12),
-                  resolve,
-                  const SizedBox(height: 12),
-                  timing,
-                  const SizedBox(height: 12),
-                  status,
-                ],
-              );
-            }
-            return Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  flex: 2,
-                  child: Column(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
+          child: Row(
+            children: [
+              Icon(Icons.bar_chart, size: 15, color: muted),
+              const SizedBox(width: 6),
+              Text(
+                'TICKET METRICS & PERFORMANCE',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.8,
+                  color: muted,
+                ),
+              ),
+              const Spacer(),
+              InkWell(
+                borderRadius: BorderRadius.circular(6),
+                onTap: () => _toggleSectionHidden(true),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(child: claim),
-                          const SizedBox(width: 12),
-                          Expanded(child: resolve),
-                        ],
+                      Icon(Icons.visibility_outlined, size: 16, color: muted),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Hide charts',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: muted,
+                        ),
                       ),
-                      const SizedBox(height: 12),
-                      timing,
                     ],
                   ),
                 ),
-                const SizedBox(width: 12),
-                Expanded(child: status),
-              ],
+              ),
+            ],
+          ),
+        ),
+        ticketsAsync.when(
+          data: (tickets) {
+            final statusTickets = statusAsync.asData?.value ?? tickets;
+            final claim = _PieCard(
+              model: _claimChart(tickets, now),
+              pulse: _pulse,
+              showLive: true,
+              onSlice: _openSlice,
+              isHidden: _hideClaim == true,
+              onToggleHide: () => _toggleCardHidden('dashboard_chart_hide_claim', _hideClaim, (v) => _hideClaim = v),
+            );
+            final resolve = _PieCard(
+              model: _resolveChart(tickets, now),
+              pulse: _pulse,
+              showLive: false,
+              onSlice: _openSlice,
+              isHidden: _hideResolve == true,
+              onToggleHide: () => _toggleCardHidden('dashboard_chart_hide_resolve', _hideResolve, (v) => _hideResolve = v),
+            );
+            final status = _PieCard(
+              model: _statusChart(statusTickets, complete: statusAsync.hasValue),
+              pulse: _pulse,
+              showLive: false,
+              onSlice: _openSlice,
+              isHidden: _hideStatus == true,
+              onToggleHide: () => _toggleCardHidden('dashboard_chart_hide_status', _hideStatus, (v) => _hideStatus = v),
+            );
+            final timing = _AllTimeTimingCard(
+              timings: timingAsync,
+              onOpen: (ticket) => context.push('/ticket/${ticket.id}'),
+              isHidden: _hideTiming == true,
+              onToggleHide: () => _toggleCardHidden('dashboard_chart_hide_timing', _hideTiming, (v) => _hideTiming = v),
+            );
+            return LayoutBuilder(
+              builder: (context, constraints) {
+                final stacked = constraints.maxWidth < 980;
+                if (stacked) {
+                  return Column(
+                    children: [
+                      claim,
+                      const SizedBox(height: 12),
+                      resolve,
+                      const SizedBox(height: 12),
+                      timing,
+                      const SizedBox(height: 12),
+                      status,
+                    ],
+                  );
+                }
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      flex: 2,
+                      child: Column(
+                        children: [
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(child: claim),
+                              const SizedBox(width: 12),
+                              Expanded(child: resolve),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          timing,
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(child: status),
+                  ],
+                );
+              },
             );
           },
-        );
-      },
-      loading: () => const AppCard(
-        child: SizedBox(
-          height: 180,
-          child: Center(child: CircularProgressIndicator()),
+          loading: () => const AppCard(
+            child: SizedBox(
+              height: 180,
+              child: Center(child: CircularProgressIndicator()),
+            ),
+          ),
+          error: (err, _) => const AppCard(
+            child: SizedBox(
+              height: 120,
+              child: Center(child: Text('Could not load ticket metrics')),
+            ),
+          ),
         ),
-      ),
-      error: (err, _) => const AppCard(
-        child: SizedBox(
-          height: 120,
-          child: Center(child: Text('Could not load ticket metrics')),
-        ),
-      ),
+      ],
     );
   }
 }
@@ -474,12 +622,16 @@ class _PieCard extends StatefulWidget {
   final Animation<double> pulse;
   final bool showLive;
   final ValueChanged<_Slice> onSlice;
+  final bool? isHidden;
+  final VoidCallback? onToggleHide;
 
   const _PieCard({
     required this.model,
     required this.pulse,
     required this.showLive,
     required this.onSlice,
+    this.isHidden = false,
+    this.onToggleHide,
   });
 
   @override
@@ -495,6 +647,43 @@ class _PieCardState extends State<_PieCard> {
     final titleColor = isDark ? Colors.white : AppColors.slate900;
     final muted = isDark ? Colors.white70 : AppColors.slate500;
     final model = widget.model;
+
+    final hideCard = widget.isHidden ?? false;
+    if (hideCard) {
+      return AppCard(
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    model.title,
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: titleColor,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text('Hidden', style: TextStyle(fontSize: 12, color: muted)),
+                ],
+              ),
+            ),
+            if (widget.onToggleHide != null)
+              IconButton(
+                icon: const Icon(Icons.visibility_off_outlined, size: 18),
+                tooltip: 'Show chart',
+                color: muted,
+                splashRadius: 16,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                onPressed: widget.onToggleHide,
+              ),
+          ],
+        ),
+      );
+    }
 
     return AppCard(
       child: Column(
@@ -522,7 +711,7 @@ class _PieCardState extends State<_PieCard> {
                   ],
                 ),
               ),
-              if (widget.showLive)
+              if (widget.showLive) ...[
                 FadeTransition(
                   opacity: Tween<double>(begin: 0.35, end: 1).animate(widget.pulse),
                   child: Container(
@@ -547,6 +736,18 @@ class _PieCardState extends State<_PieCard> {
                       ],
                     ),
                   ),
+                ),
+                const SizedBox(width: 6),
+              ],
+              if (widget.onToggleHide != null)
+                IconButton(
+                  icon: const Icon(Icons.visibility_outlined, size: 18),
+                  tooltip: 'Hide chart',
+                  color: muted,
+                  splashRadius: 16,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                  onPressed: widget.onToggleHide,
                 ),
             ],
           ),
@@ -847,10 +1048,14 @@ _TimingSummary _timingSummary(List<_TicketSnap> tickets) {
 class _AllTimeTimingCard extends StatelessWidget {
   final AsyncValue<List<_TicketSnap>> timings;
   final ValueChanged<_TicketSnap> onOpen;
+  final bool? isHidden;
+  final VoidCallback? onToggleHide;
 
   const _AllTimeTimingCard({
     required this.timings,
     required this.onOpen,
+    this.isHidden = false,
+    this.onToggleHide,
   });
 
   @override
@@ -861,24 +1066,82 @@ class _AllTimeTimingCard extends StatelessWidget {
     final loaded = timings.asData?.value;
     final summary = loaded == null ? null : _timingSummary(loaded);
 
+    final hideCard = isHidden ?? false;
+    if (hideCard) {
+      return AppCard(
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'All-time timing',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: titleColor,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text('Hidden', style: TextStyle(fontSize: 12, color: muted)),
+                ],
+              ),
+            ),
+            if (onToggleHide != null)
+              IconButton(
+                icon: const Icon(Icons.visibility_off_outlined, size: 18),
+                tooltip: 'Show timing',
+                color: muted,
+                splashRadius: 16,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                onPressed: onToggleHide,
+              ),
+          ],
+        ),
+      );
+    }
+
     return AppCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'All-time timing',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-              color: titleColor,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            loaded == null
-                ? 'Loading claim and resolve times for every ticket'
-                : 'Average across every ticket, then each ticket',
-            style: TextStyle(fontSize: 12, color: muted),
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'All-time timing',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: titleColor,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      loaded == null
+                          ? 'Loading claim and resolve times for every ticket'
+                          : 'Average across every ticket, then each ticket',
+                      style: TextStyle(fontSize: 12, color: muted),
+                    ),
+                  ],
+                ),
+              ),
+              if (onToggleHide != null)
+                IconButton(
+                  icon: const Icon(Icons.visibility_outlined, size: 18),
+                  tooltip: 'Hide timing',
+                  color: muted,
+                  splashRadius: 16,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                  onPressed: onToggleHide,
+                ),
+            ],
           ),
           const SizedBox(height: 12),
           if (summary == null)

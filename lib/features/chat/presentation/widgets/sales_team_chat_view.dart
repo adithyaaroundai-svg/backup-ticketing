@@ -119,12 +119,20 @@ class _SalesTeamChatViewState extends ConsumerState<SalesTeamChatView> {
     });
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        ref.read(currentOpenChannelProvider.notifier).state = _channelId;
+      }
       _scrollToBottom();
     });
   }
 
   @override
   void dispose() {
+    try {
+      if (ref.read(currentOpenChannelProvider) == _channelId) {
+        ref.read(currentOpenChannelProvider.notifier).state = null;
+      }
+    } catch (_) {}
     _messageCtrl.dispose();
     _scrollCtrl.dispose();
     _focusNode.dispose();

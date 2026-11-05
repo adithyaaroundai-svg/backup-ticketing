@@ -87,6 +87,19 @@ final attachmentUploadStateProvider = NotifierProvider<AttachmentUploadStateNoti
 final _chatCache = <String, List<ChatMessage>>{};
 final _chatHasMoreCache = <String, bool>{};
 
+class CurrentOpenChannelNotifier extends Notifier<String?> {
+  @override
+  String? build() => null;
+  @override
+  set state(String? value) => super.state = value;
+  void setChannel(String? channel) => state = channel;
+}
+
+final currentOpenChannelProvider =
+    NotifierProvider<CurrentOpenChannelNotifier, String?>(() {
+  return CurrentOpenChannelNotifier();
+});
+
 // ── Chat stream — keepAlive so it never resets on navigation ─────────────────
 @Riverpod(keepAlive: true)
 class ChatStream extends _$ChatStream {
@@ -94,20 +107,170 @@ class ChatStream extends _$ChatStream {
   RealtimeChannel? _receiptsSub;
   bool _hasMore = true;
   bool _isLoadingMore = false;
+  bool _alive = true;
+  bool _catchingUp = false;
+  bool _isRealtimeConnected = false;
+  Timer? _pollTimer;
+  Timer? _resubscribeTimer;
   
   bool get isLoadingMore => _isLoadingMore;
   bool get hasMore => _hasMore;
+
+  bool get _isThisChannelOpen {
+    final open = ref.read(currentOpenChannelProvider);
+    return open != null && open.trim().toLowerCase() == channel.trim().toLowerCase();
+  }
+
+  void _bindLifecycle() {
+    _alive = true;
+    _pollTimer?.cancel();
+    _resubscribeTimer?.cancel();
+    ref.onDispose(() {
+      _alive = false;
+      _pollTimer?.cancel();
+      _resubscribeTimer?.cancel();
+      _channelSub?.unsubscribe();
+      _receiptsSub?.unsubscribe();
+    });
+  }
+
+  void _listen(ChatRepository repository) {
+    _channelSub?.unsubscribe();
+    _receiptsSub?.unsubscribe();
+
+    _channelSub = repository.subscribeToMessages(
+      channelName: channel,
+      onEvent: _handlePostgresEvent,
+      onStatus: _onChannelStatus,
+    );
+
+    _receiptsSub = repository.subscribeToReadReceipts(
+      channelName: channel,
+      onEvent: _handleReadReceiptEvent,
+    );
+  }
+
+  void _onChannelStatus(RealtimeSubscribeStatus status, Object? error) {
+    if (!_alive) return;
+    _isRealtimeConnected = (status == RealtimeSubscribeStatus.subscribed);
+    if (status == RealtimeSubscribeStatus.subscribed) {
+      _resubscribeTimer?.cancel();
+      _resubscribeTimer = null;
+      if (_isThisChannelOpen) {
+        _catchUp();
+      }
+      return;
+    }
+    if (status == RealtimeSubscribeStatus.channelError ||
+        status == RealtimeSubscribeStatus.timedOut ||
+        status == RealtimeSubscribeStatus.closed) {
+      _scheduleResubscribe();
+    }
+  }
+
+  void _scheduleResubscribe() {
+    if (!_alive || _resubscribeTimer != null) return;
+    _resubscribeTimer = Timer(const Duration(seconds: 2), () {
+      _resubscribeTimer = null;
+      if (!_alive) return;
+      _listen(ref.read(chatRepositoryProvider));
+    });
+  }
+
+  void _startPolling() {
+    _pollTimer?.cancel();
+    // Only poll when this channel is actively open AND Realtime is disconnected.
+    // If Realtime is connected, WebSocket delivers messages with zero delay.
+    _pollTimer = Timer.periodic(const Duration(seconds: 4), (_) {
+      if (!_alive || !_isThisChannelOpen) return;
+      if (_isRealtimeConnected) return;
+      _catchUp();
+    });
+  }
+
+  Future<void> _catchUp() async {
+    if (!_alive || _catchingUp) return;
+    _catchingUp = true;
+    try {
+      final repository = ref.read(chatRepositoryProvider);
+      final myId = ref.read(authProvider)?.id;
+      final latestMessages = await repository.getPaginatedMessages(
+        currentUserId: myId,
+        channelName: channel,
+        limit: 25,
+      );
+      if (!_alive) return;
+      if (latestMessages.isNotEmpty) {
+        _mergeRemote(latestMessages);
+      }
+    } catch (e) {
+      debugPrint('ChatStream catch-up error: $e');
+    } finally {
+      _catchingUp = false;
+    }
+  }
+
+  void _mergeRemote(List<ChatMessage> incoming) {
+    if (!_alive) return;
+    final currentList = List<ChatMessage>.from(state.value ?? const <ChatMessage>[]);
+    var changed = false;
+    final newlyAdded = <ChatMessage>[];
+
+    for (final message in incoming) {
+      if (message.channel != channel) continue;
+      if (message.content.contains('[MentionID:') ||
+          message.content.toLowerCase().contains('you were mentioned in the support chat')) {
+        continue;
+      }
+      final currentUserId = ref.read(authProvider)?.id;
+      if (message.receiverId != null &&
+          message.receiverId != currentUserId &&
+          message.senderId != currentUserId) {
+        continue;
+      }
+
+      final index = currentList.indexWhere((m) => m.id == message.id);
+      if (index == -1) {
+        currentList.add(message);
+        newlyAdded.add(message);
+        changed = true;
+      } else if (currentList[index] != message) {
+        currentList[index] = message;
+        changed = true;
+      }
+    }
+
+    if (changed) {
+      currentList.sort((a, b) {
+        final t = a.createdAt.toUtc().compareTo(b.createdAt.toUtc());
+        return t != 0 ? t : a.id.compareTo(b.id);
+      });
+      _updateState(currentList);
+
+      final newIds = newlyAdded.map((m) => m.id).toList();
+      if (newIds.isNotEmpty) {
+        ref.read(chatRepositoryProvider).fetchReceiptsForMessages(newIds).then((receipts) {
+          if (_alive) ReadReceiptsTracker.injectReceipts(receipts);
+        });
+      }
+    }
+  }
   
   @override
   FutureOr<List<ChatMessage>> build(String channel) async {
+    _bindLifecycle();
     final repository = ref.watch(chatRepositoryProvider);
     final myId = ref.watch(authProvider)?.id;
+    
+    // Subscribe to Realtime before/during fetch so new events are caught
+    _listen(repository);
     
     final messages = await repository.getPaginatedMessages(
       currentUserId: myId,
       channelName: channel,
       limit: 30,
     );
+    if (!_alive) return messages;
     _hasMore = messages.length == 30;
     
     final currentCache = _chatCache[channel] ?? [];
@@ -127,27 +290,14 @@ class ChatStream extends _$ChatStream {
     _updateState(finalMessages);
     _chatHasMoreCache[channel] = _hasMore;
     
-    _channelSub = repository.subscribeToMessages(
-      channelName: channel,
-      onEvent: _handlePostgresEvent,
-    );
-
-    _receiptsSub = repository.subscribeToReadReceipts(
-      channelName: channel,
-      onEvent: _handleReadReceiptEvent,
-    );
-    
-    ref.onDispose(() {
-      _channelSub?.unsubscribe();
-      _receiptsSub?.unsubscribe();
-    });
+    // Start fast polling fallback
+    _startPolling();
     
     return finalMessages;
   }
 
   void _updateState(List<ChatMessage> newList) {
     state = AsyncData(newList);
-    print('Riverpod state assigned successfully');
     _chatCache[channel] = newList;
   }
 
@@ -207,7 +357,8 @@ class ChatStream extends _$ChatStream {
 
   void _handlePostgresEvent(PostgresChangePayload payload) {
     if (payload.eventType == PostgresChangeEvent.insert) {
-      final newMsg = ChatMessage.fromJson(payload.newRecord);
+      final newMsg = ChatMessage.tryParseRecord(payload.newRecord);
+      if (newMsg == null) return;
       if (newMsg.channel != channel) return;
       if (newMsg.content.contains('[MentionID:') ||
           newMsg.content.toLowerCase().contains('you were mentioned in the support chat')) {
@@ -227,7 +378,6 @@ class ChatStream extends _$ChatStream {
         _updateState([...currentList, newMsg]);
         
         // Fire notification for custom channels (not support-chat or all-aroundtally)
-        final currentUserId = ref.read(authProvider)?.id;
         final isFromCurrentUser = currentUserId != null && 
             newMsg.senderId.trim().toLowerCase() == currentUserId.trim().toLowerCase();
         
@@ -297,9 +447,8 @@ class ChatStream extends _$ChatStream {
         }
       }
     } else if (payload.eventType == PostgresChangeEvent.update) {
-      print('Postgres UPDATE received for channel! Record ID: ${payload.newRecord['id']}');
-      final updatedMsg = ChatMessage.fromJson(payload.newRecord);
-      if (updatedMsg.channel != channel || updatedMsg.receiverId != null) return;
+      final updatedMsg = ChatMessage.tryParseRecord(payload.newRecord);
+      if (updatedMsg == null || updatedMsg.channel != channel || updatedMsg.receiverId != null) return;
 
       final currentList = state.value ?? [];
       final index = currentList.indexWhere((m) => m.id == updatedMsg.id);
@@ -369,18 +518,18 @@ class ChatStream extends _$ChatStream {
         limit: 30,
       );
 
-    if (olderMessages.length < 30) {
-      _hasMore = false;
-      _chatHasMoreCache[channel] = false;
-    }
-    
-    final messageIds = olderMessages.map((m) => m.id).toList();
-    if (messageIds.isNotEmpty) {
-      final receipts = await repository.fetchReceiptsForMessages(messageIds);
-      ReadReceiptsTracker.injectReceipts(receipts);
-    }
-    
-    _updateState([...olderMessages, ...currentList]);
+      if (olderMessages.length < 30) {
+        _hasMore = false;
+        _chatHasMoreCache[channel] = false;
+      }
+      
+      final messageIds = olderMessages.map((m) => m.id).toList();
+      if (messageIds.isNotEmpty) {
+        final receipts = await repository.fetchReceiptsForMessages(messageIds);
+        ReadReceiptsTracker.injectReceipts(receipts);
+      }
+      
+      _updateState([...olderMessages, ...currentList]);
     } finally {
       _isLoadingMore = false;
     }
@@ -391,37 +540,8 @@ class ChatStream extends _$ChatStream {
   }
 
   Future<void> softRefresh() async {
-    final repository = ref.read(chatRepositoryProvider);
-    final currentList = state.value ?? [];
-    
-    // Reconnect subscriptions
-    _channelSub?.unsubscribe();
-    _receiptsSub?.unsubscribe();
-    _channelSub = repository.subscribeToMessages(
-      channelName: channel,
-      onEvent: _handlePostgresEvent,
-    );
-    _receiptsSub = repository.subscribeToReadReceipts(
-      channelName: channel,
-      onEvent: _handleReadReceiptEvent,
-    );
-    
-    // Fetch latest messages and append missing ones
-    if (currentList.isNotEmpty) {
-      final messages = await repository.getPaginatedMessages(channelName: channel, limit: 30);
-      final newMessages = messages.where((m) => !currentList.any((c) => c.id == m.id)).toList();
-      if (newMessages.isNotEmpty) {
-        final combined = [...currentList, ...newMessages];
-        combined.sort((a, b) {
-          final t = a.createdAt.toUtc().compareTo(b.createdAt.toUtc());
-          return t != 0 ? t : a.id.compareTo(b.id);
-        });
-        _updateState(combined);
-      }
-    } else {
-      final messages = await repository.getPaginatedMessages(channelName: channel, limit: 30);
-      _updateState(messages);
-    }
+    _listen(ref.read(chatRepositoryProvider));
+    await _catchUp();
   }
 }
 
@@ -510,7 +630,7 @@ class DmStream extends _$DmStream {
 
   void _startPolling() {
     _pollTimer?.cancel();
-    _pollTimer = Timer.periodic(const Duration(seconds: 3), (_) {
+    _pollTimer = Timer.periodic(const Duration(seconds: 4), (_) {
       if (!_alive) return;
       final open = ref.read(currentOpenConversationProvider)?.trim().toLowerCase();
       if (open == null || open != chatPartnerId.trim().toLowerCase()) return;
@@ -525,7 +645,7 @@ class DmStream extends _$DmStream {
 
   void _startReceiptPolling() {
     _receiptTimer?.cancel();
-    _receiptTimer = Timer.periodic(const Duration(seconds: 1), (_) async {
+    _receiptTimer = Timer.periodic(const Duration(seconds: 5), (_) async {
       if (!_alive || !_acceptEvents || !_isThisConversationOpen) return;
       final myId = ref.read(authProvider)?.id;
       if (myId == null) return;
@@ -2572,7 +2692,7 @@ class DmConversationEngine extends Notifier<Map<String, DmConversationState>> {
 
   void _startPolling() {
     _pollTimer?.cancel();
-    _pollTimer = Timer.periodic(const Duration(seconds: 3), (_) {
+    _pollTimer = Timer.periodic(const Duration(seconds: 4), (_) {
       reconcileRecent();
     });
   }

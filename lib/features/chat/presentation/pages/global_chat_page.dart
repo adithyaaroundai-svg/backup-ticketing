@@ -287,6 +287,12 @@ class _GlobalChatPageState extends ConsumerState<GlobalChatPage>
   void initState() {
     super.initState();
 
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        ref.read(currentOpenChannelProvider.notifier).state = 'support-chat';
+      }
+    });
+
     // Preload read receipts cache for instant access
     ReadReceiptsTracker.preload();
 
@@ -393,6 +399,11 @@ class _GlobalChatPageState extends ConsumerState<GlobalChatPage>
 
   @override
   void dispose() {
+    try {
+      if (ref.read(currentOpenChannelProvider) == 'support-chat') {
+        ref.read(currentOpenChannelProvider.notifier).state = null;
+      }
+    } catch (_) {}
     _dragDropPasteSub?.cancel();
     _messageCtrl.dispose();
     _messageFocusNode.dispose();

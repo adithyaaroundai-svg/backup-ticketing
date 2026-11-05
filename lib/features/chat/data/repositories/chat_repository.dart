@@ -178,38 +178,18 @@ class ChatRepository {
 
     final channelBuilder = _client.channel(realtimeChannelName);
     
-    if (chatPartnerId != null) {
-      return channelBuilder
-          .onPostgresChanges(
-            event: PostgresChangeEvent.all,
-            schema: 'public',
-            table: 'chat_messages',
-            callback: onEvent,
-          )
-          .subscribe((status, [error]) {
-            print('Realtime subscribeToMessages ($realtimeChannelName) status: $status');
-            if (error != null) print('Realtime error: $error');
-            onStatus?.call(status, error);
-          });
-    } else {
-      return channelBuilder
-          .onPostgresChanges(
-            event: PostgresChangeEvent.all,
-            schema: 'public',
-            table: 'chat_messages',
-            filter: PostgresChangeFilter(
-              type: PostgresChangeFilterType.eq,
-              column: 'channel',
-              value: channelName,
-            ),
-            callback: onEvent,
-          )
-          .subscribe((status, [error]) {
-            print('Realtime subscribeToMessages ($realtimeChannelName) status: $status');
-            if (error != null) print('Realtime error: $error');
-            onStatus?.call(status, error);
-          });
-    }
+    return channelBuilder
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'chat_messages',
+          callback: onEvent,
+        )
+        .subscribe((status, [error]) {
+          print('Realtime subscribeToMessages ($realtimeChannelName) status: $status');
+          if (error != null) print('Realtime error: $error');
+          onStatus?.call(status, error);
+        });
   }
 
   RealtimeChannel subscribeToReadReceipts({

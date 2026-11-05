@@ -2863,22 +2863,7 @@ class _ChannelsList extends ConsumerStatefulWidget {
 }
 
 class _ChannelsListState extends ConsumerState<_ChannelsList> {
-  Timer? _timer;
   bool _showAllDms = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (mounted) setState(() {});
-    });
-  }
-
-  @override
-  void dispose() {
-    _timer?.cancel();
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) {
