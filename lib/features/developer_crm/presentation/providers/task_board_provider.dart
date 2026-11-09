@@ -1,4 +1,5 @@
 import 'dart:async';
+import '../../core/crm_storage_service.dart';
 import '../../core/dev_task_chat_helper.dart';
 import '../../core/upload_part.dart';
 import 'package:flutter/foundation.dart';
@@ -131,9 +132,12 @@ class TaskBoardProvider extends ChangeNotifier {
         client_id,
         created_by,
         status_updated_by,
+        status_updated_at,
         cancel_reason,
         time_spent_seconds,
         timer_started_at,
+        created_at,
+        completed_at,
         clients ( name ),
         task_assignees ( user_id, users ( name ) ),
         advances ( amount ),
@@ -158,7 +162,11 @@ class TaskBoardProvider extends ChangeNotifier {
       final response = await query.order('id', ascending: false);
       
       final mapped = (response as List).map((row) => _mapSupabaseToLegacy(row)).toList();
-      
+
+      // Debug: print first few created_at values to verify data
+      for (final m in mapped.take(3)) {
+        debugPrint('[TaskBoard] id=${m['id']} created_at=${m['created_at']} task_date=${m['task_date']}');
+      }
       if (assigneeFilter != null) {
         mapped.retainWhere((t) {
           final aList = t['assignees'] as List;
@@ -362,8 +370,8 @@ class TaskBoardProvider extends ChangeNotifier {
     }
 
     for (final part in files) {
-      final path = '${DateTime.now().millisecondsSinceEpoch}_${part.filename}';
-      await supabase.storage.from('dev_crm_files').uploadBinary(path, Uint8List.fromList(part.bytes));
+      final path = await CrmStorageService.uploadFile(part);
+
       await supabase.schema('aroundtally').from('task_files').insert({
         'task_id': taskId,
         'filename': part.filename,

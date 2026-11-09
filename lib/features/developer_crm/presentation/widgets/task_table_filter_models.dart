@@ -23,7 +23,7 @@ enum TaskColumn {
   description('Description'),
   priority('Priority'),
   status('Status'),
-  due('Due'),
+  due('Due Date'),
   assignees('Assignees'),
   time('Time');
 

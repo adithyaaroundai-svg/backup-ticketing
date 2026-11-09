@@ -1,3 +1,4 @@
+import '../../core/crm_storage_service.dart';
 import '../../core/dev_task_chat_helper.dart';
 import '../../core/upload_part.dart';
 import 'package:flutter/foundation.dart';
@@ -179,8 +180,8 @@ class TaskEditProvider extends ChangeNotifier {
     }
 
     for (final part in newFiles) {
-      final path = '${DateTime.now().millisecondsSinceEpoch}_${part.filename}';
-      await supabase.storage.from('dev_crm_files').uploadBinary(path, Uint8List.fromList(part.bytes));
+      final path = await CrmStorageService.uploadFile(part);
+
       await supabase.schema('aroundtally').from('task_files').insert({
         'task_id': taskId,
         'filename': part.filename,

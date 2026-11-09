@@ -1,11 +1,13 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
+import '../../../../core/design_system/theme/app_colors.dart';
+import '../../../../core/design_system/theme/app_theme.dart';
 import '../../core/money_utils.dart';
 import '../../core/time_utils.dart';
+import '../../domain/entities/billing.dart';
+import '../providers/auth_provider.dart';
 import '../providers/billing_provider.dart';
 import '../widgets/common.dart';
 
@@ -36,168 +38,683 @@ class _BillingScreenState extends State<BillingScreen> {
   }
 }
 
-class _BillingBody extends StatefulWidget {
+class _BillingBody extends StatelessWidget {
   const _BillingBody();
-
-  @override
-  State<_BillingBody> createState() => _BillingBodyState();
-}
-
-class _BillingBodyState extends State<_BillingBody> {
-  final ScrollController _horizontalScrollController = ScrollController();
-
-  @override
-  void dispose() {
-    _horizontalScrollController.dispose();
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) {
     final prov = context.watch<BillingProvider>();
-    if (prov.data == null) {
-      if (prov.error != null) {
-        return ErrorBanner(message: prov.error!, onRetry: prov.load);
-      }
+    final authProv = context.watch<AuthProvider>();
+
+    if (prov.loading && prov.data == null) {
       return const CenterLoading();
     }
-    final data = prov.data!;
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        return Scrollbar(
-          controller: _horizontalScrollController,
-          thumbVisibility: true,
-          trackVisibility: true,
-          child: SingleChildScrollView(
-            controller: _horizontalScrollController,
-            scrollDirection: Axis.horizontal,
-            child: ConstrainedBox(
-              constraints: BoxConstraints(
-                minWidth: math.max(constraints.maxWidth, 1000), // Enforce minimum width
-              ),
-              child: RefreshIndicator(
-                onRefresh: prov.load,
-                child: SingleChildScrollView(
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text('Billing', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-          if (data.readOnly) ...[
-            const SizedBox(height: 8),
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: Colors.amber.withValues(alpha: 0.2),
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: const Row(children: [
-                Icon(Icons.lock_outline, size: 18),
-                SizedBox(width: 8),
-                Text('Read-only view for accountants.'),
-              ]),
-            ),
-          ],
-          const SizedBox(height: 16),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: [
-                  _Stat(label: 'Grand billed', value: data.grandBilled),
-                  _Stat(label: 'Grand advances', value: data.grandAdvances),
-                  _Stat(label: 'Grand balance', value: data.grandBalance),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 16),
-          for (final g in data.groups)
-            Card(
-              margin: const EdgeInsets.only(bottom: 16),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
+    if (prov.error != null && prov.data == null) {
+      return ErrorBanner(message: prov.error!, onRetry: prov.load);
+    }
+
+    final data = prov.data;
+    if (data == null) return const CenterLoading();
+
+    return RefreshIndicator(
+      onRefresh: prov.load,
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(24, 20, 24, 28),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Page Header
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(g.client, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                        Text(
-                          'Billed ${fmtMoney(g.billed)} \u2022 Advances ${fmtMoney(g.advances)} \u2022 Balance ${fmtMoney(g.balance)}',
-                          style: const TextStyle(fontSize: 12, color: Colors.grey),
-                        ),
+                    Text(
+                      'Billing',
+                      style: TextStyle(
+                        fontSize: 26,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: -0.4,
+                        color: AppColors.slate900,
+                        height: 1.1,
+                      ),
+                    ),
+                    SizedBox(height: 4),
+                    Text(
+                      'Client billing ledger, advances, and outstanding balances.',
+                      style: TextStyle(fontSize: 13.5, color: AppColors.slate500, height: 1.3),
+                    ),
+                  ],
+                ),
+                IconButton.outlined(
+                  tooltip: 'Refresh',
+                  icon: const Icon(Icons.refresh, size: 20),
+                  onPressed: prov.loading ? null : prov.load,
+                ),
+              ],
+            ),
+
+            if (data.readOnly) ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: Colors.amber.withValues(alpha: 0.15),
+                  border: Border.all(color: Colors.amber.shade300),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.lock_outline, size: 18, color: Colors.amber),
+                    SizedBox(width: 8),
+                    Text(
+                      'Read-only view for accountants.',
+                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.slate800),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+
+            const SizedBox(height: 16),
+
+            // Filter Tabs (All / Billed / Pending Billing)
+            _FilterTabs(
+              currentFilter: prov.filter,
+              totalCount: prov.totalCount,
+              billedCount: prov.billedCount,
+              unbilledCount: prov.unbilledCount,
+              onFilterChanged: prov.setFilter,
+            ),
+
+            const SizedBox(height: 16),
+
+            // Grand Summary Cards (Responsive Row)
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final isWide = constraints.maxWidth >= 720;
+                final cards = [
+                  _SummaryStatCard(
+                    label: 'Grand Billed',
+                    value: data.grandBilled,
+                    icon: Icons.receipt_long_rounded,
+                    color: AppColors.primary,
+                  ),
+                  _SummaryStatCard(
+                    label: 'Grand Advances',
+                    value: data.grandAdvances,
+                    icon: Icons.account_balance_wallet_outlined,
+                    color: const Color(0xFFD97706), // Amber 600
+                  ),
+                  _SummaryStatCard(
+                    label: 'Grand Balance',
+                    value: data.grandBalance,
+                    icon: Icons.savings_outlined,
+                    color: data.grandBalance >= 0 ? AppColors.success : AppColors.error,
+                  ),
+                ];
+
+                if (!isWide) {
+                  return Column(
+                    children: [
+                      for (int i = 0; i < cards.length; i++) ...[
+                        if (i > 0) const SizedBox(height: 10),
+                        cards[i],
                       ],
+                    ],
+                  );
+                }
+
+                return Row(
+                  children: [
+                    for (int i = 0; i < cards.length; i++) ...[
+                      if (i > 0) const SizedBox(width: 14),
+                      Expanded(child: cards[i]),
+                    ],
+                  ],
+                );
+              },
+            ),
+
+            const SizedBox(height: 24),
+
+            // Client Groups
+            if (data.groups.isEmpty)
+              _EmptyBillingState(filter: prov.filter)
+            else
+              for (final g in data.groups) ...[
+                _ClientBillingCard(
+                  group: g,
+                  readOnly: data.readOnly,
+                  onEditBilling: (task) => _showEditBillingDialog(context, prov, authProv, task),
+                ),
+                const SizedBox(height: 20),
+              ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showEditBillingDialog(
+    BuildContext context,
+    BillingProvider prov,
+    AuthProvider authProv,
+    BillingTaskRow task,
+  ) {
+    final billAmountCtrl = TextEditingController(
+      text: (task.billAmount != null && task.billAmount! > 0) ? task.billAmount!.toStringAsFixed(2) : '',
+    );
+    final advanceAmountCtrl = TextEditingController();
+    final advanceNoteCtrl = TextEditingController();
+    bool isBilled = task.billed;
+    bool isSubmitting = false;
+
+    showDialog(
+      context: context,
+      builder: (dialogCtx) => StatefulBuilder(
+        builder: (dialogCtx, setStateDialog) {
+          return AlertDialog(
+            title: Row(
+              children: [
+                const Icon(Icons.receipt_long_rounded, color: AppColors.primary, size: 22),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Billing — #${task.id}',
+                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+            ),
+            content: SizedBox(
+              width: 440,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      task.description,
+                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.slate800),
+                    ),
+                    if (task.client != null) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        'Client: ${task.client}',
+                        style: const TextStyle(fontSize: 12, color: AppColors.slate500),
+                      ),
+                    ],
+                    const Divider(height: 24),
+
+                    // Bill Amount Input
+                    TextField(
+                      controller: billAmountCtrl,
+                      decoration: const InputDecoration(
+                        labelText: 'Bill Amount (\u20b9)',
+                        hintText: 'e.g. 5000',
+                        prefixText: '\u20b9 ',
+                        border: OutlineInputBorder(),
+                      ),
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Billed Toggle
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Mark as Billed', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                      subtitle: const Text('Includes this task in completed client invoices', style: TextStyle(fontSize: 12)),
+                      value: isBilled,
+                      activeThumbColor: AppColors.primary,
+                      onChanged: (val) {
+                        setStateDialog(() => isBilled = val);
+                      },
+                    ),
+
+                    const Divider(height: 24),
+
+                    // Add Advance (Optional)
+                    const Text(
+                      'Record Advance (Optional)',
+                      style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: AppColors.slate700),
                     ),
                     const SizedBox(height: 8),
-                    DataTable(
-                      columns: const [
-                          DataColumn(label: Text('Task')),
-                          DataColumn(label: Text('Status')),
-                          DataColumn(label: Text('Bill amount')),
-                          DataColumn(label: Text('Advances')),
-                          DataColumn(label: Text('Balance')),
-                          DataColumn(label: Text('Completed')),
-                        ],
-                        rows: [
-                          for (final t in g.tasks)
-                            DataRow(
-                              onSelectChanged: (_) => context.push('/dev-crm/tasks/${t.id}'),
-                              cells: [
-                                DataCell(ConstrainedBox(
-                                  constraints: const BoxConstraints(maxWidth: 220),
-                                  child: Tooltip(
-                                    message: t.description,
-                                    waitDuration: const Duration(milliseconds: 250),
-                                    child: Text(t.description, overflow: TextOverflow.ellipsis, maxLines: 1),
-                                  ),
-                                )),
-                                DataCell(StatusChip(status: t.status)),
-                                DataCell(Text(fmtMoney(t.billAmount))),
-                                DataCell(Text(fmtMoney(t.advancesTotal))),
-                                DataCell(Text(fmtMoney(t.balance))),
-                                DataCell(Text(t.completedAt == null ? '-' : fmtDateTimeIst(t.completedAt))),
-                              ],
-                            ),
-                      ],
+                    TextField(
+                      controller: advanceAmountCtrl,
+                      decoration: const InputDecoration(
+                        labelText: 'Advance Amount (\u20b9)',
+                        hintText: 'e.g. 1000',
+                        prefixText: '\u20b9 ',
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: advanceNoteCtrl,
+                      decoration: const InputDecoration(
+                        labelText: 'Advance Note / Reference',
+                        hintText: 'e.g. Received via GPay',
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                      ),
                     ),
                   ],
                 ),
               ),
             ),
-          if (data.groups.isEmpty)
-            const Padding(
-              padding: EdgeInsets.all(24),
-              child: Text('No billed tasks yet.', style: TextStyle(color: Colors.grey)),
-            ),
-        ],
+            actions: [
+              TextButton(
+                onPressed: isSubmitting ? null : () => Navigator.of(dialogCtx).pop(),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: isSubmitting
+                    ? null
+                    : () async {
+                        final billVal = num.tryParse(billAmountCtrl.text.trim()) ?? 0;
+                        final advVal = num.tryParse(advanceAmountCtrl.text.trim());
+                        final advNote = advanceNoteCtrl.text.trim().isEmpty ? null : advanceNoteCtrl.text.trim();
+
+                        setStateDialog(() => isSubmitting = true);
+                        try {
+                          await prov.updateTaskBilling(
+                            task.id,
+                            billAmount: billVal,
+                            billed: isBilled,
+                            newAdvanceAmount: advVal,
+                            newAdvanceNote: advNote,
+                            currentUserId: authProv.user?.id,
+                            currentUserName: authProv.user?.name,
+                          );
+                          if (dialogCtx.mounted) Navigator.of(dialogCtx).pop();
+                          if (context.mounted) showSavedSnack(context, message: 'Billing updated \u2713');
+                        } catch (e) {
+                          if (context.mounted) showSavedSnack(context, ok: false, message: e.toString());
+                        } finally {
+                          if (dialogCtx.mounted) setStateDialog(() => isSubmitting = false);
+                        }
+                      },
+                child: isSubmitting
+                    ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                    : const Text('Save Billing'),
+              ),
+            ],
+          );
+        },
       ),
-    ),
-  ),
-),
-          ),
-        );
-      },
     );
   }
 }
 
-class _Stat extends StatelessWidget {
-  final String label;
-  final num value;
-  const _Stat({required this.label, required this.value});
+class _FilterTabs extends StatelessWidget {
+  final String currentFilter;
+  final int totalCount;
+  final int billedCount;
+  final int unbilledCount;
+  final ValueChanged<String> onFilterChanged;
+
+  const _FilterTabs({
+    required this.currentFilter,
+    required this.totalCount,
+    required this.billedCount,
+    required this.unbilledCount,
+    required this.onFilterChanged,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Text(label, style: const TextStyle(color: Colors.grey)),
-        const SizedBox(height: 4),
-        Text(fmtMoney(value), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-      ],
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: AppColors.slate100,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Wrap(
+        spacing: 6,
+        children: [
+          _TabPill(
+            label: 'All ($totalCount)',
+            selected: currentFilter == 'all',
+            onTap: () => onFilterChanged('all'),
+          ),
+          _TabPill(
+            label: 'Billed ($billedCount)',
+            selected: currentFilter == 'billed',
+            onTap: () => onFilterChanged('billed'),
+          ),
+          _TabPill(
+            label: 'Pending Billing ($unbilledCount)',
+            selected: currentFilter == 'unbilled',
+            onTap: () => onFilterChanged('unbilled'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TabPill extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _TabPill({required this.label, required this.selected, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: selected ? Colors.white : Colors.transparent,
+      borderRadius: BorderRadius.circular(8),
+      elevation: selected ? 1 : 0,
+      shadowColor: Colors.black26,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+              color: selected ? AppColors.primary : AppColors.slate600,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SummaryStatCard extends StatelessWidget {
+  final String label;
+  final num value;
+  final IconData icon;
+  final Color color;
+
+  const _SummaryStatCard({
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.border),
+        boxShadow: AppTheme.subtleShadow,
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, size: 22, color: color),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w500, color: AppColors.slate500),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  fmtMoney(value),
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.slate900,
+                    letterSpacing: -0.3,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ClientBillingCard extends StatelessWidget {
+  final BillingGroup group;
+  final bool readOnly;
+  final ValueChanged<BillingTaskRow> onEditBilling;
+
+  const _ClientBillingCard({
+    required this.group,
+    required this.readOnly,
+    required this.onEditBilling,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.border),
+        boxShadow: AppTheme.cardShadow,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Card Header with client name & financial pills
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            child: Row(
+              children: [
+                Container(
+                  width: 4,
+                  height: 18,
+                  decoration: BoxDecoration(
+                    color: AppColors.primary,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    group.client,
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.slate900),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: AppColors.slate100,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: AppColors.border),
+                  ),
+                  child: Text(
+                    'Billed ${fmtMoney(group.billed)}  \u2022  Advances ${fmtMoney(group.advances)}  \u2022  Balance ${fmtMoney(group.balance)}',
+                    style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: AppColors.slate700),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1, thickness: 1, color: AppColors.border),
+
+          // Horizontal scrollable table container (scrolls ONLY if table overflows card)
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: DataTable(
+              headingRowColor: const WidgetStatePropertyAll(AppColors.slate100),
+              headingTextStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.slate800),
+              dataRowMinHeight: 48,
+              dataRowMaxHeight: 52,
+              horizontalMargin: 16,
+              columnSpacing: 24,
+              columns: [
+                const DataColumn(label: Text('Task')),
+                const DataColumn(label: Text('Status')),
+                const DataColumn(label: Text('Billing')),
+                const DataColumn(label: Text('Bill amount')),
+                const DataColumn(label: Text('Advances')),
+                const DataColumn(label: Text('Balance')),
+                const DataColumn(label: Text('Completed')),
+                if (!readOnly) const DataColumn(label: Text('Actions')),
+              ],
+              rows: [
+                for (final t in group.tasks)
+                  DataRow(
+                    cells: [
+                      // Task Description
+                      DataCell(
+                        ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 240),
+                          child: InkWell(
+                            onTap: () => context.push('/dev-crm/tasks/${t.id}'),
+                            child: Tooltip(
+                              message: '${t.description}\n(Tap to view task)',
+                              waitDuration: const Duration(milliseconds: 250),
+                              child: Text(
+                                t.description,
+                                overflow: TextOverflow.ellipsis,
+                                maxLines: 1,
+                                style: const TextStyle(fontSize: 13, color: AppColors.slate800, fontWeight: FontWeight.w500),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      // Task Status
+                      DataCell(StatusChip(status: t.status)),
+                      // Billed Badge
+                      DataCell(
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: t.billed
+                                ? AppColors.success.withValues(alpha: 0.12)
+                                : AppColors.slate200,
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(
+                              color: t.billed ? AppColors.success.withValues(alpha: 0.3) : AppColors.border,
+                            ),
+                          ),
+                          child: Text(
+                            t.billed ? 'Billed' : 'Unbilled',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: t.billed ? AppColors.success : AppColors.slate600,
+                            ),
+                          ),
+                        ),
+                      ),
+                      // Bill Amount
+                      DataCell(
+                        Text(
+                          fmtMoney(t.billAmount),
+                          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.slate900),
+                        ),
+                      ),
+                      // Advances
+                      DataCell(
+                        Text(
+                          fmtMoney(t.advancesTotal),
+                          style: const TextStyle(fontSize: 13, color: AppColors.slate700),
+                        ),
+                      ),
+                      // Balance
+                      DataCell(
+                        Text(
+                          fmtMoney(t.balance),
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: t.balance > 0 ? AppColors.slate900 : AppColors.slate500,
+                          ),
+                        ),
+                      ),
+                      // Completed Date
+                      DataCell(
+                        Text(
+                          t.completedAt == null ? '-' : fmtDateTimeIst(t.completedAt),
+                          style: const TextStyle(fontSize: 12.5, color: AppColors.slate600),
+                        ),
+                      ),
+                      // Actions (Edit Billing)
+                      if (!readOnly)
+                        DataCell(
+                          OutlinedButton.icon(
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              visualDensity: VisualDensity.compact,
+                            ),
+                            icon: const Icon(Icons.edit_outlined, size: 14),
+                            label: const Text('Edit', style: TextStyle(fontSize: 12)),
+                            onPressed: () => onEditBilling(t),
+                          ),
+                        ),
+                    ],
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _EmptyBillingState extends StatelessWidget {
+  final String filter;
+  const _EmptyBillingState({required this.filter});
+
+  @override
+  Widget build(BuildContext context) {
+    final message = filter == 'billed'
+        ? 'No billed tasks found.'
+        : filter == 'unbilled'
+            ? 'No unbilled completed tasks found.'
+            : 'No billing records found.';
+
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 48, horizontal: 24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        children: [
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: AppColors.primarySurface,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(Icons.receipt_long_outlined, color: AppColors.primary),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            message,
+            style: const TextStyle(color: AppColors.slate500, fontWeight: FontWeight.w500),
+          ),
+        ],
+      ),
     );
   }
 }

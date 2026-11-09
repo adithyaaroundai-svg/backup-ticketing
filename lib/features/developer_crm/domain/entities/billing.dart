@@ -10,6 +10,7 @@ class BillingTaskRow {
   final String? client;
   final num advancesTotal;
   final num balance;
+  final bool billed;
 
   BillingTaskRow({
     required this.id,
@@ -21,6 +22,7 @@ class BillingTaskRow {
     this.client,
     required this.advancesTotal,
     required this.balance,
+    this.billed = false,
   });
 
   factory BillingTaskRow.fromJson(Map<String, dynamic> json) => BillingTaskRow(
@@ -33,6 +35,7 @@ class BillingTaskRow {
         client: asStringOrNull(json['client']),
         advancesTotal: asNum(json['advances_total']),
         balance: asNum(json['balance']),
+        billed: asBool(json['billed']),
       );
 }
 

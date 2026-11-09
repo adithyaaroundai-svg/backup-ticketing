@@ -1,3 +1,4 @@
+import '../../core/crm_storage_service.dart';
 import '../../core/upload_part.dart';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -200,8 +201,8 @@ class ClientDetailProvider extends ChangeNotifier {
     }
 
     for (final part in files) {
-      final path = '${DateTime.now().millisecondsSinceEpoch}_${part.filename}';
-      await supabase.storage.from('dev_crm_files').uploadBinary(path, Uint8List.fromList(part.bytes));
+      final path = await CrmStorageService.uploadFile(part);
+
       await supabase.schema('aroundtally').from('task_files').insert({
         'task_id': taskId,
         'filename': part.filename,
@@ -270,8 +271,8 @@ class ClientDetailProvider extends ChangeNotifier {
     }
 
     for (final part in allParts) {
-      final path = '${DateTime.now().millisecondsSinceEpoch}_${part.filename}';
-      await supabase.storage.from('dev_crm_files').uploadBinary(path, Uint8List.fromList(part.bytes));
+      final path = await CrmStorageService.uploadFile(part);
+
       await supabase.schema('aroundtally').from('work_item_files').insert({
         'work_item_id': wId,
         'filename': part.filename,

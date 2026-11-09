@@ -1,5 +1,3 @@
-import 'dart:collection';
-
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -112,11 +110,36 @@ class _TaskBoardBodyState extends State<_TaskBoardBody> {
       return ErrorBanner(message: prov.error!, onRetry: () => prov.load());
     }
 
-    final grouped = LinkedHashMap<String, List<Task>>();
-    for (final t in prov.filteredTasks) {
-      final key = t.taskDate ?? 'No date';
+    // Build a YYYY-MM-DD key from createdAt (in IST) for each task,
+    // then group and sort those date buckets newest-first.
+    String createdDateKey(Task t) {
+      final dt = parseServerTimestamp(t.createdAt);
+      if (dt == null) return 'No date';
+      final ist = dt.add(kIstOffset);
+      return '${ist.year.toString().padLeft(4, '0')}-'
+          '${ist.month.toString().padLeft(2, '0')}-'
+          '${ist.day.toString().padLeft(2, '0')}';
+    }
+
+    final sortedTasks = [...prov.filteredTasks]..sort((a, b) {
+        final dtA = parseServerTimestamp(a.createdAt);
+        final dtB = parseServerTimestamp(b.createdAt);
+        if (dtA == null && dtB == null) return 0;
+        if (dtA == null) return 1;
+        if (dtB == null) return -1;
+        return dtB.compareTo(dtA); // newest date group first
+      });
+
+    final grouped = <String, List<Task>>{};
+    for (final t in sortedTasks) {
+      final key = createdDateKey(t);
       (grouped[key] ??= []).add(t);
     }
+
+    final todayIst = DateTime.now().toUtc().add(kIstOffset);
+    final todayKey = '${todayIst.year.toString().padLeft(4, '0')}-'
+        '${todayIst.month.toString().padLeft(2, '0')}-'
+        '${todayIst.day.toString().padLeft(2, '0')}';
 
     final emptyMessage = prov.statusFilter == 'completed'
         ? 'No completed tasks found.'
@@ -134,7 +157,7 @@ class _TaskBoardBodyState extends State<_TaskBoardBody> {
           children: [
             const BoardPageHeader(
               title: "Today's Tasks",
-              subtitle: 'Work planned for today, grouped by date.',
+              subtitle: 'Work planned for today, grouped by created date.',
             ),
             const SizedBox(height: 16),
             LayoutBuilder(
@@ -238,7 +261,11 @@ class _TaskBoardBodyState extends State<_TaskBoardBody> {
             if (grouped.isEmpty) BoardEmptyState(message: emptyMessage),
             for (final entry in grouped.entries) ...[
               BoardDateHeader(
-                label: entry.key == 'No date' ? 'No date' : fmtDate(entry.key),
+                label: entry.key == 'No date'
+                    ? 'No created date'
+                    : entry.key == todayKey
+                        ? 'Created Date: ${fmtDate(entry.key)} (Today)'
+                        : 'Created Date: ${fmtDate(entry.key)}',
                 count: entry.value.length,
               ),
               const SizedBox(height: 8),

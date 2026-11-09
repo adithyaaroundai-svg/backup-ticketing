@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -85,30 +84,10 @@ class _TaskFormDialogState extends State<_TaskFormDialog> {
     try {
       final result = await FilePicker.platform.pickFiles(
         allowMultiple: true,
-        withData: true,
+        withData: kIsWeb,
       );
       if (result != null && result.files.isNotEmpty) {
-        final List<PlatformFile> loaded = [];
-        for (final f in result.files) {
-          Uint8List? bytes = f.bytes;
-          if ((bytes == null || bytes.isEmpty) && !kIsWeb && f.path != null) {
-            try {
-              final file = File(f.path!);
-              if (file.existsSync()) {
-                bytes = await file.readAsBytes();
-              }
-            } catch (e) {
-              debugPrint('Error reading file bytes: $e');
-            }
-          }
-          loaded.add(PlatformFile(
-            name: f.name,
-            size: f.size > 0 ? f.size : (bytes?.length ?? 0),
-            bytes: bytes,
-            path: f.path,
-          ));
-        }
-        setState(() => _files.addAll(loaded));
+        setState(() => _files.addAll(result.files));
       }
     } catch (e) {
       debugPrint('Error picking files: $e');
@@ -375,7 +354,7 @@ class _TaskFormDialogState extends State<_TaskFormDialog> {
               assigneeIds: _assignees.toList(),
               files: [
                 for (final f in _files)
-                  UploadPart(field: 'task_files', filename: f.name, bytes: f.bytes ?? []),
+                  UploadPart.fromPlatformFile(f, field: 'task_files'),
               ],
             ));
           },

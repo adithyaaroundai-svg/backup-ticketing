@@ -249,9 +249,13 @@ class _TaskTableState extends State<TaskTable> {
                 ),
                 PriorityChip(priority: displayTasks[i].priority),
                 StatusChip(status: displayTasks[i].status),
-                Text(
-                  displayTasks[i].expectedFinish == null ? '-' : fmtDate(displayTasks[i].expectedFinish),
-                  style: const TextStyle(fontSize: 13, color: AppColors.slate700),
+                Tooltip(
+                  message: 'Due: ${displayTasks[i].expectedFinish == null ? '-' : fmtDate(displayTasks[i].expectedFinish)}\nCreated: ${fmtDateTimeIst(displayTasks[i].createdAt)}',
+                  waitDuration: const Duration(milliseconds: 250),
+                  child: Text(
+                    displayTasks[i].expectedFinish == null ? '-' : fmtDate(displayTasks[i].expectedFinish),
+                    style: const TextStyle(fontSize: 13, color: AppColors.slate700),
+                  ),
                 ),
                 Tooltip(
                   message: displayTasks[i].assignees.map((a) => a.name ?? '#${a.id}').join(', '),

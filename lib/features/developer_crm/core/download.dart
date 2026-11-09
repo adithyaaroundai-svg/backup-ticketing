@@ -1,14 +1,38 @@
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
+import '../../../../core/utils/download_helper.dart';
+import 'crm_storage_service.dart';
 
-/// Opens a file-download URL (built with the `?token=` fallback per
-/// API.md) in a new tab/external app.
-Future<void> openDownload(BuildContext context, String url) async {
-  final uri = Uri.parse(url);
-  final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
-  if (!ok && context.mounted) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Could not open the download link.')),
-    );
+/// Opens or initiates a file download for CRM attachments.
+/// Builds a clean URL with `?download=filename` and uses [downloadFileDirectly]
+/// to save the file properly on both Web and Native desktop platforms.
+Future<void> openDownload(BuildContext context, String storagePathOrUrl, {String? filename}) async {
+  try {
+    final effectiveUrl = CrmStorageService.getDownloadUrl(storagePathOrUrl, filename: filename);
+    if (effectiveUrl.isEmpty) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('File path is empty or invalid.')),
+        );
+      }
+      return;
+    }
+
+    final effectiveName = filename ?? storagePathOrUrl.split('/').last.split('?').first;
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Downloading $effectiveName...'),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
+
+    await downloadFileDirectly(effectiveUrl, effectiveName);
+  } catch (e) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not download file: $e')),
+      );
+    }
   }
 }

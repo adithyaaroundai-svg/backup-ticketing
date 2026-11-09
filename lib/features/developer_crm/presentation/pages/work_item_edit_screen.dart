@@ -1,4 +1,5 @@
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:flutter/foundation.dart';
+
 import '../../core/upload_part.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -49,7 +50,7 @@ class _WorkItemEditBodyState extends State<_WorkItemEditBody> {
   }
 
   Future<void> _pick(List<PlatformFile> bucket) async {
-    final result = await FilePicker.platform.pickFiles(allowMultiple: true, withData: true);
+    final result = await FilePicker.platform.pickFiles(allowMultiple: true, withData: kIsWeb);
     if (result != null) setState(() => bucket.addAll(result.files));
   }
 
@@ -64,14 +65,14 @@ class _WorkItemEditBodyState extends State<_WorkItemEditBody> {
         description: _descCtrl.text.trim(),
         removeFileIds: _removeIds.toList(),
         excelFiles: [
-          for (final f in _excel) UploadPart(field: 'excel_files', filename: f.name, bytes: f.bytes ?? [])
+          for (final f in _excel) UploadPart.fromPlatformFile(f, field: 'excel_files')
         ],
         proposalFiles: [
           for (final f in _proposal)
-            UploadPart(field: 'proposal_files', filename: f.name, bytes: f.bytes ?? [])
+            UploadPart.fromPlatformFile(f, field: 'proposal_files')
         ],
         otherFiles: [
-          for (final f in _other) UploadPart(field: 'other_files', filename: f.name, bytes: f.bytes ?? [])
+          for (final f in _other) UploadPart.fromPlatformFile(f, field: 'other_files')
         ],
       );
       _removeIds.clear();
@@ -146,7 +147,7 @@ class _WorkItemEditBodyState extends State<_WorkItemEditBody> {
               subtitle: const Text('Check to remove'),
               secondary: IconButton(
                 icon: const Icon(Icons.download),
-                onPressed: () => openDownload(context, Supabase.instance.client.storage.from('dev_crm_files').getPublicUrl(f.storagePath ?? '')),
+                onPressed: () => openDownload(context, f.storagePath ?? '', filename: f.filename),
               ),
             ),
           const SizedBox(height: 20),

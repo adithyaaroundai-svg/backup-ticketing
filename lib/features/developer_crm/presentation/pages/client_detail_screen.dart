@@ -1,4 +1,5 @@
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:flutter/foundation.dart';
+
 import '../../core/upload_part.dart';
 
 import 'package:file_picker/file_picker.dart';
@@ -243,7 +244,7 @@ class _WorkHistoryTab extends StatelessWidget {
       builder: (dialogCtx) => StatefulBuilder(
         builder: (dialogCtx, setState) {
           Future<void> pick(List<PlatformFile> bucket) async {
-            final result = await FilePicker.platform.pickFiles(allowMultiple: true, withData: true);
+            final result = await FilePicker.platform.pickFiles(allowMultiple: true, withData: kIsWeb);
             if (result != null) setState(() => bucket.addAll(result.files));
           }
 
@@ -322,16 +323,16 @@ class _WorkHistoryTab extends StatelessWidget {
                             codeSnippet: snippetCtrl.text.trim().isEmpty ? null : snippetCtrl.text.trim(),
                             excelFiles: [
                               for (final f in excel)
-                                UploadPart(field: 'excel_files', filename: f.name, bytes: f.bytes ?? [])
+                                UploadPart.fromPlatformFile(f, field: 'excel_files')
                             ],
                             proposalFiles: [
                               for (final f in proposal)
-                                UploadPart(
-                                    field: 'proposal_files', filename: f.name, bytes: f.bytes ?? [])
+                                UploadPart.fromPlatformFile(f,
+                                    field: 'proposal_files')
                             ],
                             otherFiles: [
                               for (final f in other)
-                                UploadPart(field: 'other_files', filename: f.name, bytes: f.bytes ?? [])
+                                UploadPart.fromPlatformFile(f, field: 'other_files')
                             ],
                           );
                           if (dialogCtx.mounted) Navigator.of(dialogCtx).pop();
@@ -449,13 +450,13 @@ class _WorkItemCard extends StatelessWidget {
                       ActionChip(
                         avatar: const Icon(Icons.download, size: 16),
                         label: Text(f.filename),
-                        onPressed: () {
-                          openDownload(
-                              context,
-                              Supabase.instance.client.storage
-                                  .from('dev_crm_files')
-                                  .getPublicUrl(f.storagePath ?? ''));
-                        },
+                        onPressed: () => openDownload(context, f.storagePath ?? '', filename: f.filename),
+
+
+
+
+
+
                       ),
                   ],
                 ),
