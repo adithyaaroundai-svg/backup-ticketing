@@ -63,6 +63,7 @@ class Task {
   final int timeSpentSeconds;
   final String? timerStartedAt;
   final String? createdAt;
+  final String? displayDate;
   final num advancesTotal;
   final List<AssigneeRef> assignees;
   final List<TaskFile> files;
@@ -93,6 +94,7 @@ class Task {
     required this.timeSpentSeconds,
     this.timerStartedAt,
     this.createdAt,
+    this.displayDate,
     this.advancesTotal = 0,
     this.assignees = const [],
     this.files = const [],
@@ -159,6 +161,7 @@ class Task {
       timeSpentSeconds: asInt(json['time_spent_seconds']),
       timerStartedAt: asStringOrNull(json['timer_started_at']),
       createdAt: asStringOrNull(json['created_at']),
+      displayDate: asStringOrNull(json['display_date']),
       advancesTotal: asNum(json['advances_total']),
       assignees: assignees,
       files: files,

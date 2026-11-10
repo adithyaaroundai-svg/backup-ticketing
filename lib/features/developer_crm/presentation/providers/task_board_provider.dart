@@ -138,6 +138,7 @@ class TaskBoardProvider extends ChangeNotifier {
         timer_started_at,
         created_at,
         completed_at,
+        display_date,
         clients ( name ),
         task_assignees ( user_id, users ( name ) ),
         advances ( amount ),
@@ -163,10 +164,6 @@ class TaskBoardProvider extends ChangeNotifier {
       
       final mapped = (response as List).map((row) => _mapSupabaseToLegacy(row)).toList();
 
-      // Debug: print first few created_at values to verify data
-      for (final m in mapped.take(3)) {
-        debugPrint('[TaskBoard] id=${m['id']} created_at=${m['created_at']} task_date=${m['task_date']}');
-      }
       if (assigneeFilter != null) {
         mapped.retainWhere((t) {
           final aList = t['assignees'] as List;
@@ -221,6 +218,8 @@ class TaskBoardProvider extends ChangeNotifier {
         billed: oldTask.billed,
         timeSpentSeconds: oldTask.timeSpentSeconds,
         timerStartedAt: oldTask.timerStartedAt,
+        createdAt: oldTask.createdAt,
+        displayDate: oldTask.displayDate,
         assignees: oldTask.assignees,
         files: oldTask.files,
         advancesTotal: oldTask.advancesTotal,
@@ -341,6 +340,7 @@ class TaskBoardProvider extends ChangeNotifier {
       'expected_finish': expectedFinish,
       'start_date': startDate,
       'task_date': taskDate,
+      'display_date': taskDate,
       'approved': approved ? 1 : 0,
       'pending': pending ? 1 : 0,
       'created_by': currentUserId,
@@ -414,7 +414,11 @@ class TaskBoardProvider extends ChangeNotifier {
   }
 
   Future<void> carryForwardOne(int taskId, {String? taskDescription, int? currentUserId, String? currentUserName}) async {
+    final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
     await Supabase.instance.client.schema('aroundtally').rpc('carry_forward_one', params: {'p_task_id': taskId});
+    // Also update display_date directly so grouping reflects the carry-forward
+    await Supabase.instance.client.schema('aroundtally').from('tasks')
+        .update({'display_date': today}).eq('id', taskId);
     if (currentUserId != null && currentUserName != null) {
       try {
         final tDesc = taskDescription ?? '#$taskId';

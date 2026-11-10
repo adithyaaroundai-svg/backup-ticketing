@@ -110,9 +110,11 @@ class _TaskBoardBodyState extends State<_TaskBoardBody> {
       return ErrorBanner(message: prov.error!, onRetry: () => prov.load());
     }
 
-    // Build a YYYY-MM-DD key from createdAt (in IST) for each task,
-    // then group and sort those date buckets newest-first.
-    String createdDateKey(Task t) {
+    // Group by display_date (plain YYYY-MM-DD string).
+    // display_date = created_at date by default; updates to today when carried forward.
+    String displayDateKey(Task t) {
+      if (t.displayDate != null && t.displayDate!.isNotEmpty) return t.displayDate!;
+      // Fallback to created_at date if display_date not yet populated
       final dt = parseServerTimestamp(t.createdAt);
       if (dt == null) return 'No date';
       final ist = dt.add(kIstOffset);
@@ -122,17 +124,17 @@ class _TaskBoardBodyState extends State<_TaskBoardBody> {
     }
 
     final sortedTasks = [...prov.filteredTasks]..sort((a, b) {
-        final dtA = parseServerTimestamp(a.createdAt);
-        final dtB = parseServerTimestamp(b.createdAt);
-        if (dtA == null && dtB == null) return 0;
-        if (dtA == null) return 1;
-        if (dtB == null) return -1;
-        return dtB.compareTo(dtA); // newest date group first
+        final keyA = a.displayDate ?? '';
+        final keyB = b.displayDate ?? '';
+        if (keyA.isEmpty && keyB.isEmpty) return 0;
+        if (keyA.isEmpty) return 1;
+        if (keyB.isEmpty) return -1;
+        return keyB.compareTo(keyA); // newest date group first
       });
 
     final grouped = <String, List<Task>>{};
     for (final t in sortedTasks) {
-      final key = createdDateKey(t);
+      final key = displayDateKey(t);
       (grouped[key] ??= []).add(t);
     }
 
