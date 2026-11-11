@@ -116,6 +116,37 @@ class _AroundaiProjectStatusScreenState extends ConsumerState<AroundaiProjectSta
     return '${local.day.toString().padLeft(2, '0')}-${local.month.toString().padLeft(2, '0')}-${local.year}';
   }
 
+  InputDecoration _dialogInputDecoration({
+    String? hintText,
+    EdgeInsetsGeometry contentPadding = const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+    bool showIdleBorder = false,
+  }) {
+    final idleSide = showIdleBorder ? BorderSide(color: Colors.grey.shade200) : BorderSide.none;
+    return InputDecoration(
+      hintText: hintText,
+      hintStyle: const TextStyle(
+        color: AppColors.slate500,
+        fontSize: 14,
+        fontWeight: FontWeight.normal,
+      ),
+      contentPadding: contentPadding,
+      filled: true,
+      fillColor: const Color(0xFFF8FAFC),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+        borderSide: showIdleBorder ? BorderSide(color: Colors.grey.shade300) : BorderSide.none,
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+        borderSide: idleSide,
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+        borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+      ),
+    );
+  }
+
   void _showTaskDialog({AroundaiProjectStatus? task}) {
     final nameCtrl = TextEditingController(text: task?.taskName);
     final statusCtrl = TextEditingController(text: task?.taskStatus ?? 'not started');
@@ -141,25 +172,28 @@ class _AroundaiProjectStatusScreenState extends ConsumerState<AroundaiProjectSta
                 children: [
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          task == null ? 'Create New Task' : 'Edit Task',
-                          style: const TextStyle(
-                            fontSize: 22,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.textPrimary,
-                            letterSpacing: -0.5,
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            task == null ? 'Create New Task' : 'Edit Task',
+                            style: const TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.textPrimary,
+                              letterSpacing: -0.5,
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          task == null ? 'Add a new task to the project status.' : 'Update the details of the task.',
-                          style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
-                        ),
-                      ],
+                          const SizedBox(height: 4),
+                          Text(
+                            task == null ? 'Add a new task to the project status.' : 'Update the details of the task.',
+                            style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+                          ),
+                        ],
+                      ),
                     ),
                     IconButton(
                       onPressed: () => Navigator.pop(dialogCtx),
@@ -173,31 +207,23 @@ class _AroundaiProjectStatusScreenState extends ConsumerState<AroundaiProjectSta
                 const SizedBox(height: 8),
                 TextFormField(
                   controller: nameCtrl,
-                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-                  decoration: InputDecoration(
-                    hintText: 'e.g., Integrate Supabase API',
-                    hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 14, fontWeight: FontWeight.normal),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                    filled: true,
-                    fillColor: const Color(0xFFF8FAFC),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
-                    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: AppColors.primary, width: 1.5)),
+                  cursorColor: AppColors.primary,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: AppColors.textPrimary,
                   ),
+                  decoration: _dialogInputDecoration(hintText: 'e.g., Integrate Supabase API'),
                 ),
                 const SizedBox(height: 20),
                 const Text('Current Status', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.black87)),
                 const SizedBox(height: 8),
                 DropdownButtonFormField<String>(
                   value: statusCtrl.text,
+                  dropdownColor: Colors.white,
                   icon: const Icon(LucideIcons.chevronDown, size: 16, color: Colors.black54),
                   style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: AppColors.textPrimary),
-                  decoration: InputDecoration(
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                    filled: true,
-                    fillColor: const Color(0xFFF8FAFC),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
-                    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: AppColors.primary, width: 1.5)),
-                  ),
+                  decoration: _dialogInputDecoration(),
                   items: [
                     _buildDropdownItem('not started', 'Not Started', Colors.grey.shade600, Colors.grey.shade200),
                     _buildDropdownItem('working', 'Presently Working', Colors.orange.shade800, Colors.orange.shade100),
@@ -214,17 +240,10 @@ class _AroundaiProjectStatusScreenState extends ConsumerState<AroundaiProjectSta
                 const SizedBox(height: 8),
                 TextFormField(
                   controller: notesCtrl,
-                  style: const TextStyle(fontSize: 14),
+                  cursorColor: AppColors.primary,
+                  style: const TextStyle(fontSize: 14, color: AppColors.textPrimary),
                   maxLines: 3,
-                  decoration: InputDecoration(
-                    hintText: 'Any extra details...',
-                    hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 14),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                    filled: true,
-                    fillColor: const Color(0xFFF8FAFC),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
-                    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: AppColors.primary, width: 1.5)),
-                  ),
+                  decoration: _dialogInputDecoration(hintText: 'Any extra details...'),
                 ),
                 const SizedBox(height: 20),
                 const Text('Follow-up Date', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.black87)),
@@ -253,8 +272,8 @@ class _AroundaiProjectStatusScreenState extends ConsumerState<AroundaiProjectSta
                         Text(
                           selectedFollowUp == null ? 'Select Date' : _formatDateOnly(selectedFollowUp),
                           style: TextStyle(
-                            fontSize: 14, 
-                            color: selectedFollowUp == null ? Colors.grey.shade400 : AppColors.textPrimary
+                            fontSize: 14,
+                            color: selectedFollowUp == null ? AppColors.slate500 : AppColors.textPrimary,
                           ),
                         ),
                         const Icon(LucideIcons.calendar, size: 16, color: Colors.black54),
@@ -278,6 +297,7 @@ class _AroundaiProjectStatusScreenState extends ConsumerState<AroundaiProjectSta
                     FilledButton(
                       style: FilledButton.styleFrom(
                         backgroundColor: AppColors.primary,
+                        foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                         elevation: 0,
@@ -354,9 +374,17 @@ class _AroundaiProjectStatusScreenState extends ConsumerState<AroundaiProjectSta
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Delete Task', style: TextStyle(fontWeight: FontWeight.bold)),
-        content: Text('Are you sure you want to delete "${task.taskName}"? This action cannot be undone.'),
+        title: const Text(
+          'Delete Task',
+          style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+        ),
+        content: Text(
+          'Are you sure you want to delete "${task.taskName}"? This action cannot be undone.',
+          style: TextStyle(color: Colors.grey.shade700),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
@@ -364,7 +392,11 @@ class _AroundaiProjectStatusScreenState extends ConsumerState<AroundaiProjectSta
             child: const Text('Cancel'),
           ),
           FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: Colors.red.shade600, elevation: 0),
+            style: FilledButton.styleFrom(
+              backgroundColor: Colors.red.shade600,
+              foregroundColor: Colors.white,
+              elevation: 0,
+            ),
             onPressed: () async {
               Navigator.pop(ctx);
               try {
@@ -386,8 +418,13 @@ class _AroundaiProjectStatusScreenState extends ConsumerState<AroundaiProjectSta
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text('Notes History - ${task.taskName}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+        title: Text(
+          'Notes History - ${task.taskName}',
+          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: AppColors.textPrimary),
+        ),
         content: Container(
           constraints: const BoxConstraints(maxWidth: 500),
           width: double.maxFinite,
@@ -399,7 +436,7 @@ class _AroundaiProjectStatusScreenState extends ConsumerState<AroundaiProjectSta
                     children: [
                       Icon(LucideIcons.history, size: 48, color: Colors.grey.shade300),
                       const SizedBox(height: 16),
-                      const Text('No note history found for this task.', style: TextStyle(color: Colors.grey)),
+                      Text('No note history found for this task.', style: TextStyle(color: Colors.grey.shade600)),
                     ],
                   ),
                 )
@@ -423,7 +460,7 @@ class _AroundaiProjectStatusScreenState extends ConsumerState<AroundaiProjectSta
                         children: [
                           Text(
                             dateStr.isNotEmpty ? dateStr : 'Unknown Time',
-                            style: TextStyle(fontSize: 12, color: Colors.grey.shade500, fontWeight: FontWeight.bold),
+                            style: TextStyle(fontSize: 12, color: Colors.grey.shade600, fontWeight: FontWeight.bold),
                           ),
                           const SizedBox(height: 4),
                           Text(
@@ -525,25 +562,12 @@ class _AroundaiProjectStatusScreenState extends ConsumerState<AroundaiProjectSta
                   controller: noteCtrl,
                   autofocus: true,
                   maxLines: 4,
+                  cursorColor: AppColors.primary,
                   style: const TextStyle(fontSize: 14, color: AppColors.textPrimary),
-                  decoration: InputDecoration(
+                  decoration: _dialogInputDecoration(
                     hintText: 'Enter note description or updates...',
-                    hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 14),
                     contentPadding: const EdgeInsets.all(14),
-                    filled: true,
-                    fillColor: const Color(0xFFF8FAFC),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: BorderSide(color: Colors.grey.shade300),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: BorderSide(color: Colors.grey.shade200),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
-                    ),
+                    showIdleBorder: true,
                   ),
                 ),
                 const SizedBox(height: 24),
@@ -562,6 +586,7 @@ class _AroundaiProjectStatusScreenState extends ConsumerState<AroundaiProjectSta
                     FilledButton.icon(
                       style: FilledButton.styleFrom(
                         backgroundColor: AppColors.primary,
+                        foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                         elevation: 0,
@@ -657,6 +682,8 @@ class _AroundaiProjectStatusScreenState extends ConsumerState<AroundaiProjectSta
       offset: const Offset(-8, 0),
       child: PopupMenuButton<String>(
         tooltip: 'Change Status',
+        color: Colors.white,
+        surfaceTintColor: Colors.transparent,
         padding: EdgeInsets.zero,
       initialValue: task.taskStatus,
       onSelected: (String newStatus) async {
@@ -1303,7 +1330,11 @@ class _AroundaiProjectStatusScreenState extends ConsumerState<AroundaiProjectSta
           children: [
             Text(
               task.taskName,
-              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+              style: const TextStyle(
+                fontWeight: FontWeight.w600,
+                fontSize: 14,
+                color: AppColors.textPrimary,
+              ),
             ),
             const SizedBox(height: 4),
             Row(
