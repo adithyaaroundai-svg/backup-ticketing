@@ -3,6 +3,13 @@ import 'package:flutter/material.dart';
 import '../../../../core/design_system/theme/app_colors.dart';
 import '../../../../core/design_system/theme/app_theme.dart';
 
+Color adaptiveAccentColor(BuildContext context, Color color) {
+  if (!context.isDarkMode) return color;
+  if (color == AppColors.primary) return AppColors.primaryLight;
+  if (color == AppColors.slate600) return AppColors.slate400;
+  return color;
+}
+
 class BoardPageHeader extends StatelessWidget {
   const BoardPageHeader({
     super.key,
@@ -20,18 +27,18 @@ class BoardPageHeader extends StatelessWidget {
       children: [
         Text(
           title,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 26,
             fontWeight: FontWeight.w700,
             letterSpacing: -0.4,
-            color: AppColors.slate900,
+            color: context.adaptiveSlate900,
             height: 1.1,
           ),
         ),
         const SizedBox(height: 4),
         Text(
           subtitle,
-          style: const TextStyle(fontSize: 13.5, color: AppColors.slate500, height: 1.3),
+          style: TextStyle(fontSize: 13.5, color: context.adaptiveSlate500, height: 1.3),
         ),
       ],
     );
@@ -58,8 +65,13 @@ class BoardStatusCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = context.isDarkMode;
+    final effectiveColor = adaptiveAccentColor(context, color);
+
     return Material(
-      color: selected ? color.withValues(alpha: 0.08) : Colors.white,
+      color: selected
+          ? effectiveColor.withValues(alpha: isDark ? 0.18 : 0.08)
+          : context.adaptiveCard,
       borderRadius: BorderRadius.circular(12),
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
@@ -69,10 +81,10 @@ class BoardStatusCard extends StatelessWidget {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color: selected ? color : AppColors.border,
+              color: selected ? effectiveColor : context.adaptiveBorder,
               width: selected ? 1.5 : 1,
             ),
-            boxShadow: selected ? null : AppTheme.subtleShadow,
+            boxShadow: (selected || isDark) ? null : AppTheme.subtleShadow,
           ),
           child: Row(
             children: [
@@ -80,10 +92,10 @@ class BoardStatusCard extends StatelessWidget {
                 width: 36,
                 height: 36,
                 decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.12),
+                  color: effectiveColor.withValues(alpha: isDark ? 0.20 : 0.12),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: Icon(icon, size: 18, color: color),
+                child: Icon(icon, size: 18, color: effectiveColor),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -92,10 +104,10 @@ class BoardStatusCard extends StatelessWidget {
                   children: [
                     Text(
                       '$count',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w700,
-                        color: AppColors.slate900,
+                        color: context.adaptiveSlate900,
                         height: 1.1,
                       ),
                     ),
@@ -104,7 +116,7 @@ class BoardStatusCard extends StatelessWidget {
                       label,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 12, color: AppColors.slate500, fontWeight: FontWeight.w500),
+                      style: TextStyle(fontSize: 12, color: context.adaptiveSlate500, fontWeight: FontWeight.w500),
                     ),
                   ],
                 ),
@@ -148,8 +160,11 @@ class BoardAssigneeFilter extends StatelessWidget {
           ),
       ],
       builder: (context, controller, child) {
+        final filterFill = context.isDarkMode
+            ? Colors.white.withValues(alpha: 0.06)
+            : AppColors.slate50;
         return Material(
-          color: AppColors.slate50,
+          color: filterFill,
           borderRadius: BorderRadius.circular(8),
           child: InkWell(
             borderRadius: BorderRadius.circular(8),
@@ -157,7 +172,7 @@ class BoardAssigneeFilter extends StatelessWidget {
             child: Container(
               padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
               decoration: BoxDecoration(
-                border: Border.all(color: AppColors.border),
+                border: Border.all(color: context.adaptiveBorder),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Row(
@@ -168,10 +183,10 @@ class BoardAssigneeFilter extends StatelessWidget {
                     child: Text(
                       label,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.slate800),
+                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: context.adaptiveSlate800),
                     ),
                   ),
-                  const Icon(Icons.arrow_drop_down, color: AppColors.slate600),
+                  Icon(Icons.arrow_drop_down, color: context.adaptiveSlate600),
                 ],
               ),
             ),
@@ -192,10 +207,10 @@ class BoardToolbar extends StatelessWidget {
     return DecoratedBox(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(12),
-        boxShadow: AppTheme.subtleShadow,
+        boxShadow: context.isDarkMode ? null : AppTheme.subtleShadow,
       ),
       child: Material(
-        color: Colors.white,
+        color: context.adaptiveCard,
         borderRadius: BorderRadius.circular(12),
         clipBehavior: Clip.antiAlias,
         child: Container(
@@ -203,7 +218,7 @@ class BoardToolbar extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: AppColors.border),
+            border: Border.all(color: context.adaptiveBorder),
           ),
           child: Wrap(
             spacing: 10,
@@ -227,16 +242,16 @@ class BoardTableCard extends StatelessWidget {
     return DecoratedBox(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(12),
-        boxShadow: AppTheme.cardShadow,
+        boxShadow: context.isDarkMode ? null : AppTheme.cardShadow,
       ),
       child: Material(
-        color: Colors.white,
+        color: context.adaptiveCard,
         borderRadius: BorderRadius.circular(12),
         clipBehavior: Clip.antiAlias,
         child: Container(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: AppColors.border),
+            border: Border.all(color: context.adaptiveBorder),
           ),
           child: child,
         ),
@@ -253,38 +268,39 @@ class BoardDateHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = context.isDarkMode;
     return Row(
       children: [
         Container(
           width: 4,
           height: 16,
           decoration: BoxDecoration(
-            color: AppColors.primary,
+            color: isDark ? AppColors.primaryLight : AppColors.primary,
             borderRadius: BorderRadius.circular(4),
           ),
         ),
         const SizedBox(width: 10),
         Text(
           label,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 15,
             fontWeight: FontWeight.w700,
-            color: AppColors.slate800,
+            color: context.adaptiveSlate900,
           ),
         ),
         const SizedBox(width: 8),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
           decoration: BoxDecoration(
-            color: AppColors.slate100,
+            color: isDark ? Colors.white.withValues(alpha: 0.10) : AppColors.slate100,
             borderRadius: BorderRadius.circular(99),
           ),
           child: Text(
             '$count',
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w600,
-              color: AppColors.slate600,
+              color: context.adaptiveSlate800,
             ),
           ),
         ),
@@ -300,6 +316,8 @@ class BoardEmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = context.isDarkMode;
+    final accent = isDark ? AppColors.primaryLight : AppColors.primary;
     return BoardTableCard(
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 48, horizontal: 24),
@@ -309,15 +327,15 @@ class BoardEmptyState extends StatelessWidget {
               width: 48,
               height: 48,
               decoration: BoxDecoration(
-                color: AppColors.primarySurface,
+                color: isDark ? accent.withValues(alpha: 0.18) : AppColors.primarySurface,
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: const Icon(Icons.inbox_outlined, color: AppColors.primary),
+              child: Icon(Icons.inbox_outlined, color: accent),
             ),
             const SizedBox(height: 12),
             Text(
               message,
-              style: const TextStyle(color: AppColors.slate500, fontWeight: FontWeight.w500),
+              style: TextStyle(color: context.adaptiveSlate500, fontWeight: FontWeight.w500),
             ),
           ],
         ),

@@ -227,12 +227,15 @@ class _SectionTitle extends StatelessWidget {
         Container(
           width: 4,
           height: 16,
-          decoration: BoxDecoration(color: AppColors.primary, borderRadius: BorderRadius.circular(4)),
+          decoration: BoxDecoration(
+            color: adaptiveAccentColor(context, AppColors.primary),
+            borderRadius: BorderRadius.circular(4),
+          ),
         ),
         const SizedBox(width: 10),
         Text(
           title,
-          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.slate800),
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: context.adaptiveSlate900),
         ),
       ],
     );
@@ -256,13 +259,20 @@ class _StatCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = context.isDarkMode;
+    final effectiveColor = adaptiveAccentColor(context, color);
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: tinted ? color.withValues(alpha: 0.08) : Colors.white,
+        color: tinted
+            ? effectiveColor.withValues(alpha: isDark ? 0.16 : 0.08)
+            : context.adaptiveCard,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: tinted ? color.withValues(alpha: 0.35) : AppColors.border),
-        boxShadow: AppTheme.subtleShadow,
+        border: Border.all(
+          color: tinted ? effectiveColor.withValues(alpha: 0.40) : context.adaptiveBorder,
+        ),
+        boxShadow: isDark ? null : AppTheme.subtleShadow,
       ),
       child: Row(
         children: [
@@ -270,10 +280,10 @@ class _StatCard extends StatelessWidget {
             width: 40,
             height: 40,
             decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.12),
+              color: effectiveColor.withValues(alpha: isDark ? 0.20 : 0.12),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: Icon(icon, color: color, size: 20),
+            child: Icon(icon, color: effectiveColor, size: 20),
           ),
           const SizedBox(width: 14),
           Expanded(
@@ -284,7 +294,7 @@ class _StatCard extends StatelessWidget {
                   label,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 12, color: AppColors.slate500, fontWeight: FontWeight.w500),
+                  style: TextStyle(fontSize: 12, color: context.adaptiveSlate500, fontWeight: FontWeight.w500),
                 ),
                 const SizedBox(height: 4),
                 Text(
@@ -293,7 +303,7 @@ class _StatCard extends StatelessWidget {
                     fontSize: 26,
                     fontWeight: FontWeight.w700,
                     height: 1,
-                    color: tinted ? color : AppColors.slate900,
+                    color: tinted ? effectiveColor : context.adaptiveSlate900,
                   ),
                 ),
               ],
@@ -320,27 +330,30 @@ class _MoneyCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = context.isDarkMode;
+    final effectiveColor = adaptiveAccentColor(context, color);
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.adaptiveCard,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.border),
-        boxShadow: AppTheme.subtleShadow,
+        border: Border.all(color: context.adaptiveBorder),
+        boxShadow: isDark ? null : AppTheme.subtleShadow,
       ),
       child: Row(
         children: [
-          Icon(icon, color: color, size: 20),
+          Icon(icon, color: effectiveColor, size: 20),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(label, style: const TextStyle(fontSize: 12, color: AppColors.slate500, fontWeight: FontWeight.w500)),
+                Text(label, style: TextStyle(fontSize: 12, color: context.adaptiveSlate500, fontWeight: FontWeight.w500)),
                 const SizedBox(height: 2),
                 Text(
                   fmtMoney(value),
-                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.slate900),
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: context.adaptiveSlate900),
                 ),
               ],
             ),
@@ -373,25 +386,25 @@ class _FillTable extends StatelessWidget {
           ? Padding(
               padding: const EdgeInsets.symmetric(vertical: 36, horizontal: 16),
               child: Center(
-                child: Text(emptyMessage, style: const TextStyle(color: AppColors.slate500, fontWeight: FontWeight.w500)),
+                child: Text(emptyMessage, style: TextStyle(color: context.adaptiveSlate500, fontWeight: FontWeight.w500)),
               ),
             )
           : Column(
               children: [
                 _band(
-                  color: AppColors.slate100,
-                  border: const Border(bottom: BorderSide(color: AppColors.border)),
+                  color: context.adaptiveSlate100,
+                  border: Border(bottom: BorderSide(color: context.adaptiveBorder)),
                   values: headers,
                   bold: true,
-                  colorText: AppColors.slate600,
+                  colorText: context.adaptiveSlate800,
                 ),
                 for (var i = 0; i < rows.length; i++)
                   _band(
-                    color: i.isOdd ? AppColors.slate50 : Colors.white,
-                    border: const Border(bottom: BorderSide(color: AppColors.border, width: 0.6)),
+                    color: i.isOdd ? context.adaptiveSlate50 : Colors.transparent,
+                    border: Border(bottom: BorderSide(color: context.adaptiveBorder, width: 0.6)),
                     values: rows[i],
                     bold: false,
-                    colorText: AppColors.slate800,
+                    colorText: context.adaptiveSlate800,
                   ),
               ],
             ),
@@ -442,9 +455,10 @@ class _BackupCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = context.isDarkMode;
     final backup = data.lastBackup;
     final ok = backup?.status == 'ok';
-    final color = backup == null ? AppColors.slate500 : (ok ? AppColors.success : AppColors.error);
+    final color = backup == null ? context.adaptiveSlate500 : (ok ? AppColors.success : AppColors.error);
     final title = backup == null ? 'No backups recorded yet' : (backup.objectKey ?? 'Backup');
     final detail = backup == null
         ? 'A backup has not been stored for this workspace.'
@@ -455,10 +469,10 @@ class _BackupCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.adaptiveCard,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.border),
-        boxShadow: AppTheme.subtleShadow,
+        border: Border.all(color: context.adaptiveBorder),
+        boxShadow: isDark ? null : AppTheme.subtleShadow,
       ),
       child: Row(
         children: [
@@ -466,7 +480,7 @@ class _BackupCard extends StatelessWidget {
             width: 40,
             height: 40,
             decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.12),
+              color: color.withValues(alpha: isDark ? 0.20 : 0.12),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(backup == null ? Icons.cloud_off_outlined : (ok ? Icons.cloud_done_outlined : Icons.error_outline), color: color),
@@ -476,9 +490,9 @@ class _BackupCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: const TextStyle(fontWeight: FontWeight.w600, color: AppColors.slate900)),
+                Text(title, style: TextStyle(fontWeight: FontWeight.w600, color: context.adaptiveSlate900)),
                 const SizedBox(height: 2),
-                Text(detail, style: const TextStyle(fontSize: 13, color: AppColors.slate500)),
+                Text(detail, style: TextStyle(fontSize: 13, color: context.adaptiveSlate500)),
               ],
             ),
           ),

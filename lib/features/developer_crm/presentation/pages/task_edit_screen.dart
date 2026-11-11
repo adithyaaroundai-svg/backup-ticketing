@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
+import '../../../../core/design_system/theme/app_colors.dart';
 import '../../core/download.dart';
 import '../../core/enums.dart';
 import '../../core/money_utils.dart';
@@ -253,8 +254,8 @@ class _TaskEditBodyState extends State<_TaskEditBody> {
               // Main Form Card
               Card(
                 elevation: 0,
-                color: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: Colors.grey.shade200)),
+                color: context.adaptiveCard,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: context.adaptiveBorder)),
                 child: Padding(
                   padding: const EdgeInsets.all(24),
                   child: Column(
@@ -355,8 +356,8 @@ class _TaskEditBodyState extends State<_TaskEditBody> {
               // Assignees & Files Card
               Card(
                 elevation: 0,
-                color: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: Colors.grey.shade200)),
+                color: context.adaptiveCard,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: context.adaptiveBorder)),
                 child: Padding(
                   padding: const EdgeInsets.all(24),
                   child: Column(
@@ -455,8 +456,8 @@ class _TaskEditBodyState extends State<_TaskEditBody> {
               // Daily Notes Card
               Card(
                 elevation: 0,
-                color: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: Colors.grey.shade200)),
+                color: context.adaptiveCard,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: context.adaptiveBorder)),
                 child: Padding(
                   padding: const EdgeInsets.all(24),
                   child: Column(
@@ -500,9 +501,9 @@ class _TaskEditBodyState extends State<_TaskEditBody> {
                       for (final n in prov.notes.where((n) => n.noteDate != prov.today))
                         Card(
                           margin: const EdgeInsets.only(bottom: 8),
-                          color: Colors.grey.shade50,
+                          color: context.adaptiveSlate50,
                           elevation: 0,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: BorderSide(color: Colors.grey.shade300)),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: BorderSide(color: context.adaptiveBorder)),
                           child: ListTile(
                             title: Text(n.body),
                             subtitle: Text('${fmtDate(n.noteDate)} \u2022 ${n.authorName ?? ''} (locked)'),
@@ -517,8 +518,8 @@ class _TaskEditBodyState extends State<_TaskEditBody> {
               // Status History Card
               Card(
                 elevation: 0,
-                color: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: Colors.grey.shade200)),
+                color: context.adaptiveCard,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: context.adaptiveBorder)),
                 child: Padding(
                   padding: const EdgeInsets.all(24),
                   child: Column(
@@ -528,22 +529,22 @@ class _TaskEditBodyState extends State<_TaskEditBody> {
                         text: TextSpan(
                           children: [
                             TextSpan(text: 'Status change history ', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
-                            TextSpan(text: '(most recent first)', style: TextStyle(color: Colors.grey.shade500, fontSize: 13)),
+                            TextSpan(text: '(most recent first)', style: TextStyle(color: context.adaptiveSlate500, fontSize: 13)),
                           ],
                         ),
                       ),
                       const SizedBox(height: 16),
                       prov.statusHistory.isEmpty
-                          ? const Text('No status changes yet.', style: TextStyle(color: Colors.grey))
+                          ? Text('No status changes yet.', style: TextStyle(color: context.adaptiveSlate500))
                           : SingleChildScrollView(
                               scrollDirection: Axis.horizontal,
                               child: DataTable(
-                                headingRowColor: MaterialStateProperty.all(Colors.grey.shade50),
+                                headingRowColor: WidgetStateProperty.all(context.adaptiveSlate100),
                                 columns: [
-                                  DataColumn(label: Text('CHANGE', style: TextStyle(color: Colors.grey.shade600, fontWeight: FontWeight.bold, fontSize: 12))),
-                                  DataColumn(label: Text('NOTE', style: TextStyle(color: Colors.grey.shade600, fontWeight: FontWeight.bold, fontSize: 12))),
-                                  DataColumn(label: Text('BY', style: TextStyle(color: Colors.grey.shade600, fontWeight: FontWeight.bold, fontSize: 12))),
-                                  DataColumn(label: Text('WHEN', style: TextStyle(color: Colors.grey.shade600, fontWeight: FontWeight.bold, fontSize: 12))),
+                                  DataColumn(label: Text('CHANGE', style: TextStyle(color: context.adaptiveSlate600, fontWeight: FontWeight.bold, fontSize: 12))),
+                                  DataColumn(label: Text('NOTE', style: TextStyle(color: context.adaptiveSlate600, fontWeight: FontWeight.bold, fontSize: 12))),
+                                  DataColumn(label: Text('BY', style: TextStyle(color: context.adaptiveSlate600, fontWeight: FontWeight.bold, fontSize: 12))),
+                                  DataColumn(label: Text('WHEN', style: TextStyle(color: context.adaptiveSlate600, fontWeight: FontWeight.bold, fontSize: 12))),
                                 ],
                                 rows: [
                                   for (final h in prov.statusHistory)
@@ -551,7 +552,7 @@ class _TaskEditBodyState extends State<_TaskEditBody> {
                                       DataCell(
                                         RichText(
                                           text: TextSpan(
-                                            style: const TextStyle(color: Colors.black87, fontSize: 13),
+                                            style: TextStyle(color: context.adaptiveSlate900, fontSize: 13),
                                             children: [
                                               TextSpan(text: h.fromStatus == null ? '-' : taskStatusLabel(h.fromStatus!)),
                                               const TextSpan(text: ' \u2794 '), // Right arrow

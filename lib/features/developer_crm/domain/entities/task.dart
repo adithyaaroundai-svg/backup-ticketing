@@ -104,6 +104,51 @@ class Task {
   bool get isCompleted => status == 'completed';
   bool get isCancelled => status == 'cancelled';
 
+  /// Returns a copy with selectively updated fields while preserving metadata.
+  Task copyWith({
+    String? description,
+    String? priority,
+    String? status,
+    String? taskDate,
+    String? displayDate,
+    bool? approved,
+    String? cancelReason,
+    String? lastStatusMessage,
+    String? statusUpdatedByName,
+  }) {
+    return Task(
+      id: id,
+      clientId: clientId,
+      client: client,
+      projectId: projectId,
+      description: description ?? this.description,
+      priority: priority ?? this.priority,
+      approved: approved ?? this.approved,
+      status: status ?? this.status,
+      expectedFinish: expectedFinish,
+      startDate: startDate,
+      taskDate: taskDate ?? this.taskDate,
+      completedAt: completedAt,
+      cancelReason: cancelReason ?? this.cancelReason,
+      createdBy: createdBy,
+      createdByName: createdByName,
+      statusUpdatedBy: statusUpdatedBy,
+      statusUpdatedByName: statusUpdatedByName ?? this.statusUpdatedByName,
+      statusUpdatedAt: statusUpdatedAt,
+      lastStatusMessage: lastStatusMessage ?? this.lastStatusMessage,
+      pending: pending,
+      billAmount: billAmount,
+      billed: billed,
+      timeSpentSeconds: timeSpentSeconds,
+      timerStartedAt: timerStartedAt,
+      createdAt: createdAt,
+      displayDate: displayDate ?? this.displayDate,
+      advancesTotal: advancesTotal,
+      assignees: assignees,
+      files: files,
+    );
+  }
+
   /// Live elapsed seconds: if the timer is running (status == working and
   /// timer_started_at set), add the elapsed wall-clock time since then to
   /// the stored base. Mirrors the original EJS client-side computation.

@@ -34,6 +34,74 @@ DateTime? parseServerDate(String? raw) {
   }
 }
 
+/// Formats an instant as an IST (`+05:30`) calendar date `'YYYY-MM-DD'`.
+String formatIstDateKey(DateTime dt) {
+  final ist = dt.toUtc().add(kIstOffset);
+  return '${ist.year.toString().padLeft(4, '0')}-'
+      '${ist.month.toString().padLeft(2, '0')}-'
+      '${ist.day.toString().padLeft(2, '0')}';
+}
+
+/// Returns today's calendar date in IST (`'YYYY-MM-DD'`).
+String todayIstDateKey({DateTime? now}) {
+  return formatIstDateKey(now ?? DateTime.now());
+}
+
+/// Resolves the grouping date key (`'YYYY-MM-DD'` or `'No date'`) for a task.
+/// Uses `displayDate` when present and falls back to `createdAt` in IST.
+String resolveTaskDisplayDateKey({
+  String? displayDate,
+  String? createdAt,
+}) {
+  if (displayDate != null && displayDate.isNotEmpty) return displayDate;
+  final dt = parseServerTimestamp(createdAt);
+  if (dt == null) return 'No date';
+  return formatIstDateKey(dt);
+}
+
+/// Returns `true` when a task's current board/task date precedes [todayIst].
+bool isTaskDateBeforeToday({
+  String? displayDate,
+  String? taskDate,
+  String? createdAt,
+  required String todayIst,
+}) {
+  final displayKey = resolveTaskDisplayDateKey(
+    displayDate: displayDate,
+    createdAt: createdAt,
+  );
+  if (displayKey != 'No date') {
+    if (displayKey.compareTo(todayIst) < 0) return true;
+    // Keep legacy `task_date` synchronized when `display_date` was updated first.
+    return displayKey == todayIst &&
+        taskDate != null &&
+        taskDate.isNotEmpty &&
+        taskDate.compareTo(todayIst) < 0;
+  }
+  return taskDate != null &&
+      taskDate.isNotEmpty &&
+      taskDate.compareTo(todayIst) < 0;
+}
+
+/// Returns `true` for active Today's Tasks in `'not_started'` ("Yet to start")
+/// from an earlier IST day that should automatically carry forward to today.
+bool shouldAutoCarryForwardNotStarted({
+  required String status,
+  required bool pending,
+  String? displayDate,
+  String? taskDate,
+  String? createdAt,
+  required String todayIst,
+}) {
+  if (pending || status != 'not_started') return false;
+  return isTaskDateBeforeToday(
+    displayDate: displayDate,
+    taskDate: taskDate,
+    createdAt: createdAt,
+    todayIst: todayIst,
+  );
+}
+
 /// Formats a timestamp for display, converted to IST.
 String fmtDateTimeIst(String? raw, {String pattern = 'dd MMM yyyy, hh:mm a'}) {
   final dt = parseServerTimestamp(raw);

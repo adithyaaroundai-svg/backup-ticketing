@@ -9,6 +9,7 @@ import '../../core/time_utils.dart';
 import '../../domain/entities/billing.dart';
 import '../providers/auth_provider.dart';
 import '../providers/billing_provider.dart';
+import '../widgets/board_chrome.dart';
 import '../widgets/common.dart';
 
 class BillingScreen extends StatefulWidget {
@@ -68,25 +69,11 @@ class _BillingBody extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Billing',
-                      style: TextStyle(
-                        fontSize: 26,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: -0.4,
-                        color: AppColors.slate900,
-                        height: 1.1,
-                      ),
-                    ),
-                    SizedBox(height: 4),
-                    Text(
-                      'Client billing ledger, advances, and outstanding balances.',
-                      style: TextStyle(fontSize: 13.5, color: AppColors.slate500, height: 1.3),
-                    ),
-                  ],
+                const Expanded(
+                  child: BoardPageHeader(
+                    title: 'Billing',
+                    subtitle: 'Client billing ledger, advances, and outstanding balances.',
+                  ),
                 ),
                 IconButton.outlined(
                   tooltip: 'Refresh',
@@ -105,13 +92,13 @@ class _BillingBody extends StatelessWidget {
                   border: Border.all(color: Colors.amber.shade300),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: const Row(
+                child: Row(
                   children: [
-                    Icon(Icons.lock_outline, size: 18, color: Colors.amber),
-                    SizedBox(width: 8),
+                    const Icon(Icons.lock_outline, size: 18, color: Colors.amber),
+                    const SizedBox(width: 8),
                     Text(
                       'Read-only view for accountants.',
-                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.slate800),
+                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: context.adaptiveSlate800),
                     ),
                   ],
                 ),
@@ -219,7 +206,7 @@ class _BillingBody extends StatelessWidget {
           return AlertDialog(
             title: Row(
               children: [
-                const Icon(Icons.receipt_long_rounded, color: AppColors.primary, size: 22),
+                Icon(Icons.receipt_long_rounded, color: adaptiveAccentColor(dialogCtx, AppColors.primary), size: 22),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
@@ -238,13 +225,13 @@ class _BillingBody extends StatelessWidget {
                   children: [
                     Text(
                       task.description,
-                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.slate800),
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: dialogCtx.adaptiveSlate900),
                     ),
                     if (task.client != null) ...[
                       const SizedBox(height: 2),
                       Text(
                         'Client: ${task.client}',
-                        style: const TextStyle(fontSize: 12, color: AppColors.slate500),
+                        style: TextStyle(fontSize: 12, color: dialogCtx.adaptiveSlate500),
                       ),
                     ],
                     const Divider(height: 24),
@@ -268,7 +255,7 @@ class _BillingBody extends StatelessWidget {
                       title: const Text('Mark as Billed', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
                       subtitle: const Text('Includes this task in completed client invoices', style: TextStyle(fontSize: 12)),
                       value: isBilled,
-                      activeThumbColor: AppColors.primary,
+                      activeThumbColor: adaptiveAccentColor(dialogCtx, AppColors.primary),
                       onChanged: (val) {
                         setStateDialog(() => isBilled = val);
                       },
@@ -277,9 +264,9 @@ class _BillingBody extends StatelessWidget {
                     const Divider(height: 24),
 
                     // Add Advance (Optional)
-                    const Text(
+                    Text(
                       'Record Advance (Optional)',
-                      style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: AppColors.slate700),
+                      style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: dialogCtx.adaptiveSlate700),
                     ),
                     const SizedBox(height: 8),
                     TextField(
@@ -371,7 +358,7 @@ class _FilterTabs extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: AppColors.slate100,
+        color: context.isDarkMode ? Colors.white.withValues(alpha: 0.06) : AppColors.slate100,
         borderRadius: BorderRadius.circular(10),
       ),
       child: Wrap(
@@ -407,10 +394,12 @@ class _TabPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = context.isDarkMode;
+    final activeBg = isDark ? Colors.white.withValues(alpha: 0.14) : Colors.white;
     return Material(
-      color: selected ? Colors.white : Colors.transparent,
+      color: selected ? activeBg : Colors.transparent,
       borderRadius: BorderRadius.circular(8),
-      elevation: selected ? 1 : 0,
+      elevation: (selected && !isDark) ? 1 : 0,
       shadowColor: Colors.black26,
       child: InkWell(
         borderRadius: BorderRadius.circular(8),
@@ -422,7 +411,7 @@ class _TabPill extends StatelessWidget {
             style: TextStyle(
               fontSize: 13,
               fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-              color: selected ? AppColors.primary : AppColors.slate600,
+              color: selected ? adaptiveAccentColor(context, AppColors.primary) : context.adaptiveSlate600,
             ),
           ),
         ),
@@ -446,13 +435,16 @@ class _SummaryStatCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = context.isDarkMode;
+    final effectiveColor = adaptiveAccentColor(context, color);
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.adaptiveCard,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.border),
-        boxShadow: AppTheme.subtleShadow,
+        border: Border.all(color: context.adaptiveBorder),
+        boxShadow: isDark ? null : AppTheme.subtleShadow,
       ),
       child: Row(
         children: [
@@ -460,10 +452,10 @@ class _SummaryStatCard extends StatelessWidget {
             width: 44,
             height: 44,
             decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.12),
+              color: effectiveColor.withValues(alpha: isDark ? 0.20 : 0.12),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: Icon(icon, size: 22, color: color),
+            child: Icon(icon, size: 22, color: effectiveColor),
           ),
           const SizedBox(width: 14),
           Expanded(
@@ -472,15 +464,15 @@ class _SummaryStatCard extends StatelessWidget {
               children: [
                 Text(
                   label,
-                  style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w500, color: AppColors.slate500),
+                  style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w500, color: context.adaptiveSlate500),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   fmtMoney(value),
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.w700,
-                    color: AppColors.slate900,
+                    color: context.adaptiveSlate900,
                     letterSpacing: -0.3,
                   ),
                 ),
@@ -506,12 +498,15 @@ class _ClientBillingCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = context.isDarkMode;
+    final successColor = isDark ? const Color(0xFF34D399) : AppColors.success;
+
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.adaptiveCard,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.border),
-        boxShadow: AppTheme.cardShadow,
+        border: Border.all(color: context.adaptiveBorder),
+        boxShadow: isDark ? null : AppTheme.cardShadow,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -525,7 +520,7 @@ class _ClientBillingCard extends StatelessWidget {
                   width: 4,
                   height: 18,
                   decoration: BoxDecoration(
-                    color: AppColors.primary,
+                    color: adaptiveAccentColor(context, AppColors.primary),
                     borderRadius: BorderRadius.circular(4),
                   ),
                 ),
@@ -533,33 +528,33 @@ class _ClientBillingCard extends StatelessWidget {
                 Expanded(
                   child: Text(
                     group.client,
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.slate900),
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: context.adaptiveSlate900),
                   ),
                 ),
                 const SizedBox(width: 8),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
                   decoration: BoxDecoration(
-                    color: AppColors.slate100,
+                    color: context.adaptiveSlate100,
                     borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: AppColors.border),
+                    border: Border.all(color: context.adaptiveBorder),
                   ),
                   child: Text(
                     'Billed ${fmtMoney(group.billed)}  \u2022  Advances ${fmtMoney(group.advances)}  \u2022  Balance ${fmtMoney(group.balance)}',
-                    style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: AppColors.slate700),
+                    style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: context.adaptiveSlate700),
                   ),
                 ),
               ],
             ),
           ),
-          const Divider(height: 1, thickness: 1, color: AppColors.border),
+          Divider(height: 1, thickness: 1, color: context.adaptiveBorder),
 
           // Horizontal scrollable table container (scrolls ONLY if table overflows card)
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: DataTable(
-              headingRowColor: const WidgetStatePropertyAll(AppColors.slate100),
-              headingTextStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.slate800),
+              headingRowColor: WidgetStatePropertyAll(context.adaptiveSlate100),
+              headingTextStyle: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: context.adaptiveSlate800),
               dataRowMinHeight: 48,
               dataRowMaxHeight: 52,
               horizontalMargin: 16,
@@ -591,7 +586,7 @@ class _ClientBillingCard extends StatelessWidget {
                                 t.description,
                                 overflow: TextOverflow.ellipsis,
                                 maxLines: 1,
-                                style: const TextStyle(fontSize: 13, color: AppColors.slate800, fontWeight: FontWeight.w500),
+                                style: TextStyle(fontSize: 13, color: context.adaptiveSlate800, fontWeight: FontWeight.w500),
                               ),
                             ),
                           ),
@@ -605,11 +600,11 @@ class _ClientBillingCard extends StatelessWidget {
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                           decoration: BoxDecoration(
                             color: t.billed
-                                ? AppColors.success.withValues(alpha: 0.12)
-                                : AppColors.slate200,
+                                ? successColor.withValues(alpha: 0.14)
+                                : context.adaptiveSlate200,
                             borderRadius: BorderRadius.circular(6),
                             border: Border.all(
-                              color: t.billed ? AppColors.success.withValues(alpha: 0.3) : AppColors.border,
+                              color: t.billed ? successColor.withValues(alpha: 0.35) : context.adaptiveBorder,
                             ),
                           ),
                           child: Text(
@@ -617,7 +612,7 @@ class _ClientBillingCard extends StatelessWidget {
                             style: TextStyle(
                               fontSize: 11,
                               fontWeight: FontWeight.w600,
-                              color: t.billed ? AppColors.success : AppColors.slate600,
+                              color: t.billed ? successColor : context.adaptiveSlate600,
                             ),
                           ),
                         ),
@@ -626,14 +621,14 @@ class _ClientBillingCard extends StatelessWidget {
                       DataCell(
                         Text(
                           fmtMoney(t.billAmount),
-                          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.slate900),
+                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: context.adaptiveSlate900),
                         ),
                       ),
                       // Advances
                       DataCell(
                         Text(
                           fmtMoney(t.advancesTotal),
-                          style: const TextStyle(fontSize: 13, color: AppColors.slate700),
+                          style: TextStyle(fontSize: 13, color: context.adaptiveSlate700),
                         ),
                       ),
                       // Balance
@@ -643,7 +638,7 @@ class _ClientBillingCard extends StatelessWidget {
                           style: TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w600,
-                            color: t.balance > 0 ? AppColors.slate900 : AppColors.slate500,
+                            color: t.balance > 0 ? context.adaptiveSlate900 : context.adaptiveSlate500,
                           ),
                         ),
                       ),
@@ -651,7 +646,7 @@ class _ClientBillingCard extends StatelessWidget {
                       DataCell(
                         Text(
                           t.completedAt == null ? '-' : fmtDateTimeIst(t.completedAt),
-                          style: const TextStyle(fontSize: 12.5, color: AppColors.slate600),
+                          style: TextStyle(fontSize: 12.5, color: context.adaptiveSlate600),
                         ),
                       ),
                       // Actions (Edit Billing)
@@ -684,6 +679,8 @@ class _EmptyBillingState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = context.isDarkMode;
+    final accent = adaptiveAccentColor(context, AppColors.primary);
     final message = filter == 'billed'
         ? 'No billed tasks found.'
         : filter == 'unbilled'
@@ -693,9 +690,9 @@ class _EmptyBillingState extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 48, horizontal: 24),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.adaptiveCard,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: context.adaptiveBorder),
       ),
       child: Column(
         children: [
@@ -703,15 +700,15 @@ class _EmptyBillingState extends StatelessWidget {
             width: 48,
             height: 48,
             decoration: BoxDecoration(
-              color: AppColors.primarySurface,
+              color: isDark ? accent.withValues(alpha: 0.18) : AppColors.primarySurface,
               borderRadius: BorderRadius.circular(12),
             ),
-            child: const Icon(Icons.receipt_long_outlined, color: AppColors.primary),
+            child: Icon(Icons.receipt_long_outlined, color: accent),
           ),
           const SizedBox(height: 12),
           Text(
             message,
-            style: const TextStyle(color: AppColors.slate500, fontWeight: FontWeight.w500),
+            style: TextStyle(color: context.adaptiveSlate500, fontWeight: FontWeight.w500),
           ),
         ],
       ),

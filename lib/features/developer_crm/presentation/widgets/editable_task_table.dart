@@ -63,7 +63,6 @@ class _EditableTaskTableState extends State<EditableTaskTable> {
     }
 
     final displayTasks = _filterState.apply(widget.tasks);
-    final theme = Theme.of(context);
 
     const double headingHeight = 56.0;
     const double rowHeight = 52.0;
@@ -114,9 +113,9 @@ class _EditableTaskTableState extends State<EditableTaskTable> {
               Container(
                 width: clientColumnWidth,
                 decoration: BoxDecoration(
-                  color: theme.colorScheme.surface,
-                  border: const Border(
-                    right: BorderSide(color: AppColors.border, width: 1),
+                  color: Colors.transparent,
+                  border: Border(
+                    right: BorderSide(color: context.adaptiveBorder, width: 1),
                   ),
                 ),
                 child: Column(
@@ -127,9 +126,9 @@ class _EditableTaskTableState extends State<EditableTaskTable> {
                       height: headingHeight,
                       padding: const EdgeInsets.symmetric(horizontal: 12),
                       alignment: Alignment.centerLeft,
-                      decoration: const BoxDecoration(
-                        color: AppColors.slate100,
-                        border: Border(bottom: BorderSide(color: AppColors.border)),
+                      decoration: BoxDecoration(
+                        color: context.adaptiveSlate100,
+                        border: Border(bottom: BorderSide(color: context.adaptiveBorder)),
                       ),
                       child: TaskTableColumnHeader(
                         column: TaskColumn.client,
@@ -146,12 +145,15 @@ class _EditableTaskTableState extends State<EditableTaskTable> {
                           height: rowHeight,
                           padding: const EdgeInsets.symmetric(horizontal: 16),
                           alignment: Alignment.centerLeft,
-                          color: i.isOdd ? AppColors.slate50 : Colors.white,
+                          decoration: BoxDecoration(
+                            color: i.isOdd ? context.adaptiveSlate50 : Colors.transparent,
+                            border: Border(bottom: BorderSide(color: context.adaptiveBorder, width: 0.6)),
+                          ),
                           child: Tooltip(
                             message: displayTasks[i].client ?? '-',
                             child: Text(
                               displayTasks[i].client ?? '-',
-                              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: AppColors.slate800),
+                              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: context.adaptiveSlate900),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -223,24 +225,24 @@ class _EditableTaskTableState extends State<EditableTaskTable> {
         _TableBand(
           height: headingHeight,
           widths: widths,
-          color: AppColors.slate100,
-          border: const Border(bottom: BorderSide(color: AppColors.border)),
-            children: [
-              _fit(_headerFor(TaskColumn.description)),
-              _fit(_headerFor(TaskColumn.priority)),
-              _fit(_headerFor(TaskColumn.status)),
-              _fit(_headerFor(TaskColumn.due)),
-              _fit(_headerFor(TaskColumn.assignees)),
-              _fit(_headerFor(TaskColumn.time)),
-              _fit(const Text('Actions', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13))),
-            ],
+          color: context.adaptiveSlate100,
+          border: Border(bottom: BorderSide(color: context.adaptiveBorder)),
+          children: [
+            _fit(_headerFor(TaskColumn.description)),
+            _fit(_headerFor(TaskColumn.priority)),
+            _fit(_headerFor(TaskColumn.status)),
+            _fit(_headerFor(TaskColumn.due)),
+            _fit(_headerFor(TaskColumn.assignees)),
+            _fit(_headerFor(TaskColumn.time)),
+            _fit(Text('Actions', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: context.adaptiveSlate800))),
+          ],
         ),
         for (var i = 0; i < displayTasks.length; i++)
           _TableBand(
             height: rowHeight,
             widths: widths,
-            color: i.isOdd ? AppColors.slate50 : Colors.white,
-            border: const Border(bottom: BorderSide(color: AppColors.border, width: 0.6)),
+            color: i.isOdd ? context.adaptiveSlate50 : Colors.transparent,
+            border: Border(bottom: BorderSide(color: context.adaptiveBorder, width: 0.6)),
             children: [
               InkWell(
                 onTap: () => context.push('/dev-crm/tasks/${displayTasks[i].id}'),
@@ -251,7 +253,7 @@ class _EditableTaskTableState extends State<EditableTaskTable> {
                     displayTasks[i].description,
                     overflow: TextOverflow.ellipsis,
                     maxLines: 1,
-                    style: const TextStyle(fontSize: 13, color: AppColors.slate700),
+                    style: TextStyle(fontSize: 13, color: context.adaptiveSlate700),
                   ),
                 ),
               ),
@@ -268,7 +270,7 @@ class _EditableTaskTableState extends State<EditableTaskTable> {
                 waitDuration: const Duration(milliseconds: 250),
                 child: Text(
                   displayTasks[i].expectedFinish == null ? '-' : fmtDate(displayTasks[i].expectedFinish),
-                  style: const TextStyle(fontSize: 13, color: AppColors.slate700),
+                  style: TextStyle(fontSize: 13, color: context.adaptiveSlate700),
                 ),
               ),
               Tooltip(
@@ -278,12 +280,12 @@ class _EditableTaskTableState extends State<EditableTaskTable> {
                   displayTasks[i].assignees.map((a) => a.name ?? '#${a.id}').join(', '),
                   overflow: TextOverflow.ellipsis,
                   maxLines: 1,
-                  style: const TextStyle(fontSize: 13, color: AppColors.slate700),
+                  style: TextStyle(fontSize: 13, color: context.adaptiveSlate700),
                 ),
               ),
               Text(
                 fmtDuration(displayTasks[i].liveSeconds()),
-                style: const TextStyle(fontSize: 13, color: AppColors.slate700),
+                style: TextStyle(fontSize: 13, color: context.adaptiveSlate700),
               ),
               Row(mainAxisSize: MainAxisSize.min, children: widget.rowActionsBuilder(displayTasks[i])),
             ],
@@ -381,7 +383,7 @@ class _StatusDropdown extends StatelessWidget {
         for (final s in kAllTaskStatuses)
           DropdownMenuItem(
             value: s,
-            child: Text(taskStatusLabel(s), style: const TextStyle(fontSize: 13, color: AppColors.slate800)),
+            child: Text(taskStatusLabel(s), style: TextStyle(fontSize: 13, color: context.adaptiveSlate800)),
           ),
       ],
       onChanged: onChanged,
@@ -394,37 +396,39 @@ class _StatusPill extends StatelessWidget {
 
   final String status;
 
-  Color get _color {
+  Color _colorFor(bool isDark) {
     switch (status) {
       case 'working':
-        return AppColors.primary;
+        return isDark ? const Color(0xFF60A5FA) : AppColors.primary;
       case 'ready_for_testing':
       case 'ready_for_implementation':
-        return AppColors.accent;
+        return isDark ? const Color(0xFF2DD4BF) : AppColors.accent;
       case 'awaiting_confirmation':
-        return AppColors.statusWaiting;
+        return isDark ? const Color(0xFFA78BFA) : AppColors.statusWaiting;
       case 'completed':
-        return AppColors.success;
+        return isDark ? const Color(0xFF34D399) : AppColors.success;
       case 'paused':
-        return AppColors.warning;
+        return isDark ? const Color(0xFFFBBF24) : AppColors.warning;
       case 'cancelled':
-        return AppColors.slate500;
+        return isDark ? AppColors.slate400 : AppColors.slate500;
       default:
-        return AppColors.slate600;
+        return isDark ? AppColors.slate300 : AppColors.slate600;
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final isDark = context.isDarkMode;
+    final color = _colorFor(isDark);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: _color.withValues(alpha: 0.12),
+        color: color.withValues(alpha: isDark ? 0.16 : 0.12),
         borderRadius: BorderRadius.circular(6),
       ),
       child: Text(
         taskStatusLabel(status),
-        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: _color),
+        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: color),
       ),
     );
   }

@@ -144,23 +144,23 @@ class _ClientsBodyState extends State<_ClientsBody> {
             const SizedBox(height: 16),
             Container(
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: context.adaptiveCard,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.border),
-                boxShadow: AppTheme.subtleShadow,
+                border: Border.all(color: context.adaptiveBorder),
+                boxShadow: context.isDarkMode ? null : AppTheme.subtleShadow,
               ),
               child: TextField(
                 controller: _searchCtrl,
                 onChanged: (value) => setState(() => _searchQuery = value),
-                style: const TextStyle(fontSize: 14, color: AppColors.slate900),
+                style: TextStyle(fontSize: 14, color: context.adaptiveSlate900),
                 decoration: InputDecoration(
                   hintText: 'Search clients by name',
-                  hintStyle: const TextStyle(fontSize: 14, color: AppColors.slate400),
-                  prefixIcon: const Icon(Icons.search, color: AppColors.slate400, size: 20),
+                  hintStyle: TextStyle(fontSize: 14, color: context.adaptiveSlate500),
+                  prefixIcon: Icon(Icons.search, color: context.adaptiveSlate500, size: 20),
                   suffixIcon: _searchQuery.isNotEmpty
                       ? IconButton(
                           tooltip: 'Clear search',
-                          icon: const Icon(Icons.clear, size: 18, color: AppColors.slate400),
+                          icon: Icon(Icons.clear, size: 18, color: context.adaptiveSlate500),
                           onPressed: () {
                             _searchCtrl.clear();
                             setState(() => _searchQuery = '');
@@ -234,18 +234,18 @@ class _NewClientForm extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.adaptiveCard,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.border),
-        boxShadow: AppTheme.subtleShadow,
+        border: Border.all(color: context.adaptiveBorder),
+        boxShadow: context.isDarkMode ? null : AppTheme.subtleShadow,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('New customer', style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.slate800)),
+          Text('New customer', style: TextStyle(fontWeight: FontWeight.w700, color: context.adaptiveSlate800)),
           if (error != null) ...[
             const SizedBox(height: 8),
-            Text(error!, style: const TextStyle(color: AppColors.error)),
+            Text(error!, style: TextStyle(color: context.adaptiveError)),
           ],
           const SizedBox(height: 12),
           Row(
@@ -291,22 +291,25 @@ class _ClientLine extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = context.isDarkMode;
     final style = TextStyle(
       fontSize: 13,
       fontWeight: header ? FontWeight.w700 : FontWeight.w500,
-      color: header ? AppColors.slate600 : AppColors.slate800,
+      color: header ? context.adaptiveSlate800 : context.adaptiveSlate900,
     );
+    final activeBadgeColor = isDark ? const Color(0xFF34D399) : AppColors.success;
+
     return Container(
       constraints: const BoxConstraints(minHeight: 48),
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
       decoration: BoxDecoration(
-        color: header ? AppColors.slate100 : (shaded ? AppColors.slate50 : Colors.white),
-        border: const Border(bottom: BorderSide(color: AppColors.border, width: 0.6)),
+        color: header ? context.adaptiveSlate100 : (shaded ? context.adaptiveSlate50 : Colors.transparent),
+        border: Border(bottom: BorderSide(color: context.adaptiveBorder, width: 0.6)),
       ),
       child: Row(
         children: [
           Expanded(flex: 4, child: _text(name, style)),
-          Expanded(flex: 3, child: _text(contact, style.copyWith(color: header ? AppColors.slate600 : AppColors.slate600))),
+          Expanded(flex: 3, child: _text(contact, style.copyWith(color: header ? context.adaptiveSlate800 : context.adaptiveSlate600))),
           Expanded(flex: 2, child: _text(open, style, align: TextAlign.right)),
           Expanded(
             flex: 2,
@@ -317,7 +320,7 @@ class _ClientLine extends StatelessWidget {
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                       decoration: BoxDecoration(
-                        color: (ongoingActive ? AppColors.success : AppColors.slate400).withValues(alpha: 0.12),
+                        color: (ongoingActive ? activeBadgeColor : AppColors.slate400).withValues(alpha: 0.14),
                         borderRadius: BorderRadius.circular(99),
                       ),
                       child: Text(
@@ -325,7 +328,7 @@ class _ClientLine extends StatelessWidget {
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
-                          color: ongoingActive ? AppColors.success : AppColors.slate500,
+                          color: ongoingActive ? activeBadgeColor : context.adaptiveSlate500,
                         ),
                       ),
                     ),

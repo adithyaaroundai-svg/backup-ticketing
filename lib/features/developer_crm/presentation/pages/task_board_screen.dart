@@ -32,7 +32,7 @@ class _TaskBoardScreenState extends State<TaskBoardScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         final prov = context.read<TaskBoardProvider>();
-        if (prov.tasks.isEmpty && !prov.loading) {
+        if ((prov.tasks.isEmpty || prov.today != todayIstDateKey()) && !prov.loading) {
           prov.load();
         }
         final clientsProv = context.read<ClientsProvider>();
@@ -61,6 +61,7 @@ class _TaskBoardBodyState extends State<_TaskBoardBody> {
   List<UserRef> _assigneeOptions = [];
   bool _capturedOptions = false;
   bool _carryingForward = false;
+  String? _rolloverReloadDay;
 
   @override
   void dispose() {
@@ -110,25 +111,33 @@ class _TaskBoardBodyState extends State<_TaskBoardBody> {
       return ErrorBanner(message: prov.error!, onRetry: () => prov.load());
     }
 
-    // Group by display_date (plain YYYY-MM-DD string).
-    // display_date = created_at date by default; updates to today when carried forward.
-    String displayDateKey(Task t) {
-      if (t.displayDate != null && t.displayDate!.isNotEmpty) return t.displayDate!;
-      // Fallback to created_at date if display_date not yet populated
-      final dt = parseServerTimestamp(t.createdAt);
-      if (dt == null) return 'No date';
-      final ist = dt.add(kIstOffset);
-      return '${ist.year.toString().padLeft(4, '0')}-'
-          '${ist.month.toString().padLeft(2, '0')}-'
-          '${ist.day.toString().padLeft(2, '0')}';
+    final todayKey = todayIstDateKey();
+    if (prov.today != null &&
+        prov.today != todayKey &&
+        !prov.loading &&
+        _rolloverReloadDay != todayKey) {
+      _rolloverReloadDay = todayKey;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && !prov.loading) {
+          prov.load(silent: true);
+        }
+      });
     }
 
+    // Group by display_date (plain YYYY-MM-DD string).
+    // display_date = created_at date by default; updates to today automatically
+    // for yet-to-start tasks or manually on carry forward.
+    String displayDateKey(Task t) => resolveTaskDisplayDateKey(
+          displayDate: t.displayDate,
+          createdAt: t.createdAt,
+        );
+
     final sortedTasks = [...prov.filteredTasks]..sort((a, b) {
-        final keyA = a.displayDate ?? '';
-        final keyB = b.displayDate ?? '';
-        if (keyA.isEmpty && keyB.isEmpty) return 0;
-        if (keyA.isEmpty) return 1;
-        if (keyB.isEmpty) return -1;
+        final keyA = displayDateKey(a);
+        final keyB = displayDateKey(b);
+        if (keyA == keyB) return 0;
+        if (keyA == 'No date') return 1;
+        if (keyB == 'No date') return -1;
         return keyB.compareTo(keyA); // newest date group first
       });
 
@@ -137,11 +146,6 @@ class _TaskBoardBodyState extends State<_TaskBoardBody> {
       final key = displayDateKey(t);
       (grouped[key] ??= []).add(t);
     }
-
-    final todayIst = DateTime.now().toUtc().add(kIstOffset);
-    final todayKey = '${todayIst.year.toString().padLeft(4, '0')}-'
-        '${todayIst.month.toString().padLeft(2, '0')}-'
-        '${todayIst.day.toString().padLeft(2, '0')}';
 
     final emptyMessage = prov.statusFilter == 'completed'
         ? 'No completed tasks found.'
@@ -291,18 +295,22 @@ class _TaskBoardBodyState extends State<_TaskBoardBody> {
                         }
                       },
                     ),
-                    IconButton(
-                      tooltip: 'Carry forward to today',
-                      icon: const Icon(Icons.refresh, size: 18),
-                      onPressed: () async {
-                        try {
-                          await prov.carryForwardOne(task.id, taskDescription: task.description, currentUserId: authProv.user?.id, currentUserName: authProv.user?.name);
-                          if (mounted) showSavedSnack(context, message: 'Moved to today \u2713');
-                        } catch (e) {
-                          if (mounted) showSavedSnack(context, ok: false, message: e.toString());
-                        }
-                      },
-                    ),
+                    if (task.status != 'not_started' &&
+                        !task.isCompleted &&
+                        !task.isCancelled &&
+                        entry.key != todayKey)
+                      IconButton(
+                        tooltip: 'Carry forward to today',
+                        icon: const Icon(Icons.refresh, size: 18),
+                        onPressed: () async {
+                          try {
+                            await prov.carryForwardOne(task.id, taskDescription: task.description, currentUserId: authProv.user?.id, currentUserName: authProv.user?.name);
+                            if (mounted) showSavedSnack(context, message: 'Moved to today \u2713');
+                          } catch (e) {
+                            if (mounted) showSavedSnack(context, ok: false, message: e.toString());
+                          }
+                        },
+                      ),
                   ],
                 ),
               ),
@@ -397,8 +405,11 @@ class _SearchableClientFilterState extends State<_SearchableClientFilter> {
         ),
       ],
       builder: (context, controller, child) {
+        final filterFill = context.isDarkMode
+            ? Colors.white.withValues(alpha: 0.06)
+            : AppColors.slate50;
         return Material(
-          color: Colors.white,
+          color: filterFill,
           borderRadius: BorderRadius.circular(8),
           child: InkWell(
             borderRadius: BorderRadius.circular(8),
@@ -406,24 +417,23 @@ class _SearchableClientFilterState extends State<_SearchableClientFilter> {
             child: Container(
               padding: const EdgeInsets.fromLTRB(10, 8, 4, 8),
               decoration: BoxDecoration(
-                border: Border.all(color: AppColors.border),
+                border: Border.all(color: context.adaptiveBorder),
                 borderRadius: BorderRadius.circular(8),
-                color: AppColors.slate50,
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.search, size: 16, color: Colors.grey.shade600),
+                  Icon(Icons.search, size: 16, color: context.adaptiveSlate500),
                   const SizedBox(width: 6),
                   ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 160),
                     child: Text(
                       label,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 14),
+                      style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w500, color: context.adaptiveSlate800),
                     ),
                   ),
-                  Icon(Icons.arrow_drop_down, color: Colors.grey.shade700),
+                  Icon(Icons.arrow_drop_down, color: context.adaptiveSlate600),
                 ],
               ),
             ),

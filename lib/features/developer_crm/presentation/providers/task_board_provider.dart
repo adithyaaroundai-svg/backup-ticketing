@@ -1,10 +1,10 @@
 import 'dart:async';
 import '../../core/crm_storage_service.dart';
 import '../../core/dev_task_chat_helper.dart';
+import '../../core/time_utils.dart';
 import '../../core/upload_part.dart';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:intl/intl.dart';
 
 import '../../domain/entities/task.dart';
 
@@ -117,7 +117,8 @@ class TaskBoardProvider extends ChangeNotifier {
     
     try {
       final supabase = Supabase.instance.client;
-      today = DateFormat('yyyy-MM-dd').format(DateTime.now());
+      final todayIst = todayIstDateKey();
+      today = todayIst;
 
       var query = supabase.schema('aroundtally').from('tasks').select('''
         id,
@@ -171,7 +172,11 @@ class TaskBoardProvider extends ChangeNotifier {
         });
       }
 
-      tasks = mapped.map((e) => Task.fromJson(e)).toList();
+      var loaded = mapped.map((e) => Task.fromJson(e)).toList();
+      if (!pendingBoard) {
+        loaded = await _autoCarryForwardYetToStart(loaded, todayIst);
+      }
+      tasks = loaded;
     } catch (e) {
       debugPrint('Error loading tasks: $e');
       error = e.toString();
@@ -203,30 +208,14 @@ class TaskBoardProvider extends ChangeNotifier {
     final idx = tasks.indexWhere((t) => t.id == taskId);
     final oldTask = (idx != -1) ? tasks[idx] : null;
     if (idx != -1 && oldTask != null) {
-      tasks[idx] = Task(
-        id: oldTask.id,
-        clientId: oldTask.clientId,
-        client: oldTask.client,
-        description: taskDescription ?? oldTask.description,
-        priority: priority ?? oldTask.priority,
-        status: status ?? oldTask.status,
-        expectedFinish: oldTask.expectedFinish,
-        startDate: oldTask.startDate,
-        taskDate: oldTask.taskDate,
-        pending: oldTask.pending,
-        approved: approved ?? oldTask.approved,
-        billed: oldTask.billed,
-        timeSpentSeconds: oldTask.timeSpentSeconds,
-        timerStartedAt: oldTask.timerStartedAt,
-        createdAt: oldTask.createdAt,
-        displayDate: oldTask.displayDate,
-        assignees: oldTask.assignees,
-        files: oldTask.files,
-        advancesTotal: oldTask.advancesTotal,
-        cancelReason: cancelReason ?? oldTask.cancelReason,
-        lastStatusMessage: statusMessage ?? oldTask.lastStatusMessage,
-        createdByName: oldTask.createdByName,
-        statusUpdatedByName: currentUserName ?? oldTask.statusUpdatedByName,
+      tasks[idx] = oldTask.copyWith(
+        description: taskDescription,
+        priority: priority,
+        status: status,
+        approved: approved,
+        cancelReason: cancelReason,
+        lastStatusMessage: statusMessage,
+        statusUpdatedByName: currentUserName,
       );
       notifyListeners();
     }
@@ -330,7 +319,7 @@ class TaskBoardProvider extends ChangeNotifier {
     String? currentUserName,
   }) async {
     final supabase = Supabase.instance.client;
-    final taskDate = DateFormat('yyyy-MM-dd').format(DateTime.now().toUtc());
+    final taskDate = todayIstDateKey();
 
     final resp = await supabase.schema('aroundtally').from('tasks').insert({
       'client_id': clientId,
@@ -413,12 +402,63 @@ class TaskBoardProvider extends ChangeNotifier {
     await load();
   }
 
+  Future<List<Task>> _autoCarryForwardYetToStart(
+    List<Task> loaded,
+    String todayIst,
+  ) async {
+    final staleIds = loaded
+        .where((t) => shouldAutoCarryForwardNotStarted(
+              status: t.status,
+              pending: t.pending,
+              displayDate: t.displayDate,
+              taskDate: t.taskDate,
+              createdAt: t.createdAt,
+              todayIst: todayIst,
+            ))
+        .map((t) => t.id)
+        .toList();
+    if (staleIds.isEmpty) return loaded;
+
+    try {
+      final resp = await Supabase.instance.client
+          .schema('aroundtally')
+          .from('tasks')
+          .update({
+            'task_date': todayIst,
+            'display_date': todayIst,
+          })
+          .inFilter('id', staleIds)
+          .eq('pending', 0)
+          .eq('status', 'not_started')
+          .select('id');
+
+      final updatedIds = (resp as List)
+          .map((row) => row['id'])
+          .whereType<num>()
+          .map((n) => n.toInt())
+          .toSet();
+      if (updatedIds.isEmpty) return loaded;
+
+      return loaded
+          .map((t) => updatedIds.contains(t.id)
+              ? t.copyWith(taskDate: todayIst, displayDate: todayIst)
+              : t)
+          .toList();
+    } catch (e) {
+      debugPrint('Error auto-carrying forward yet-to-start tasks: $e');
+      return loaded;
+    }
+  }
+
   Future<void> carryForwardOne(int taskId, {String? taskDescription, int? currentUserId, String? currentUserName}) async {
-    final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
+    final today = todayIstDateKey();
     await Supabase.instance.client.schema('aroundtally').rpc('carry_forward_one', params: {'p_task_id': taskId});
-    // Also update display_date directly so grouping reflects the carry-forward
-    await Supabase.instance.client.schema('aroundtally').from('tasks')
-        .update({'display_date': today}).eq('id', taskId);
+    // Keep both task_date and display_date synchronized to today's IST date.
+    await Supabase.instance.client
+        .schema('aroundtally')
+        .from('tasks')
+        .update({'display_date': today, 'task_date': today})
+        .eq('id', taskId);
     if (currentUserId != null && currentUserName != null) {
       try {
         final tDesc = taskDescription ?? '#$taskId';
@@ -433,21 +473,64 @@ class TaskBoardProvider extends ChangeNotifier {
   }
 
   Future<int> carryForwardAll({int? currentUserId, String? currentUserName}) async {
-    final resp = await Supabase.instance.client.schema('aroundtally').rpc('carry_forward_all');
-    await load();
-    if (resp is num) {
-      final count = resp.toInt();
-      if (count > 0 && currentUserId != null && currentUserName != null) {
-        try {
-          await Supabase.instance.client.schema('aroundtally').from('activity_log').insert({
-            'user_id': currentUserId,
-            'user_name': currentUserName,
-            'message': 'carried forward $count unfinished tasks into today',
-          });
-        } catch (e) {}
-      }
-      return count;
+    final supabase = Supabase.instance.client;
+    final todayIst = todayIstDateKey();
+
+    final nullDisplayIds = tasks
+        .where((t) =>
+            !t.pending &&
+            t.status != 'completed' &&
+            t.status != 'cancelled' &&
+            (t.displayDate == null || t.displayDate!.isEmpty) &&
+            isTaskDateBeforeToday(
+              displayDate: t.displayDate,
+              taskDate: t.taskDate,
+              createdAt: t.createdAt,
+              todayIst: todayIst,
+            ))
+        .map((t) => t.id)
+        .toList();
+
+    final resp = await supabase.schema('aroundtally').rpc('carry_forward_all');
+    var count = (resp is num) ? resp.toInt() : 0;
+
+    // Ensure display_date (not just task_date) moves to todayIst for unfinished tasks.
+    final updatedByDisplay = await supabase
+        .schema('aroundtally')
+        .from('tasks')
+        .update({'task_date': todayIst, 'display_date': todayIst})
+        .eq('pending', 0)
+        .neq('status', 'completed')
+        .neq('status', 'cancelled')
+        .lt('display_date', todayIst)
+        .select('id');
+    final displayUpdatedCount = (updatedByDisplay as List).length;
+    if (displayUpdatedCount > count) count = displayUpdatedCount;
+
+    if (nullDisplayIds.isNotEmpty) {
+      final updatedNulls = await supabase
+          .schema('aroundtally')
+          .from('tasks')
+          .update({'task_date': todayIst, 'display_date': todayIst})
+          .inFilter('id', nullDisplayIds)
+          .eq('pending', 0)
+          .neq('status', 'completed')
+          .neq('status', 'cancelled')
+          .select('id');
+      final nullUpdatedCount = (updatedNulls as List).length;
+      if (nullUpdatedCount > count) count = nullUpdatedCount;
     }
-    return 0;
+
+    await load();
+    if (count > 0 && currentUserId != null && currentUserName != null) {
+      try {
+        await supabase.schema('aroundtally').from('activity_log').insert({
+          'user_id': currentUserId,
+          'user_name': currentUserName,
+          'message': 'carried forward $count unfinished tasks into today',
+        });
+      } catch (e) {}
+    }
+    return count;
   }
 }

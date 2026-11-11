@@ -83,7 +83,6 @@ class _TaskTableState extends State<TaskTable> {
     }
 
     final displayTasks = _filterState.apply(widget.tasks);
-    final theme = Theme.of(context);
 
     const double headingHeight = 56.0;
     const double rowHeight = 52.0;
@@ -134,9 +133,9 @@ class _TaskTableState extends State<TaskTable> {
               Container(
                 width: clientColumnWidth,
                 decoration: BoxDecoration(
-                  color: theme.colorScheme.surface,
-                  border: const Border(
-                    right: BorderSide(color: AppColors.border, width: 1),
+                  color: Colors.transparent,
+                  border: Border(
+                    right: BorderSide(color: context.adaptiveBorder, width: 1),
                   ),
                 ),
                 child: Column(
@@ -146,9 +145,9 @@ class _TaskTableState extends State<TaskTable> {
                       height: headingHeight,
                       padding: const EdgeInsets.symmetric(horizontal: 12),
                       alignment: Alignment.centerLeft,
-                      decoration: const BoxDecoration(
-                        color: AppColors.slate100,
-                        border: Border(bottom: BorderSide(color: AppColors.border)),
+                      decoration: BoxDecoration(
+                        color: context.adaptiveSlate100,
+                        border: Border(bottom: BorderSide(color: context.adaptiveBorder)),
                       ),
                       child: TaskTableColumnHeader(
                         column: TaskColumn.client,
@@ -165,14 +164,14 @@ class _TaskTableState extends State<TaskTable> {
                           padding: const EdgeInsets.symmetric(horizontal: 16),
                           alignment: Alignment.centerLeft,
                           decoration: BoxDecoration(
-                            color: i.isOdd ? AppColors.slate50 : Colors.white,
-                            border: const Border(bottom: BorderSide(color: AppColors.border, width: 0.6)),
+                            color: i.isOdd ? context.adaptiveSlate50 : Colors.transparent,
+                            border: Border(bottom: BorderSide(color: context.adaptiveBorder, width: 0.6)),
                           ),
                           child: Tooltip(
                             message: displayTasks[i].client ?? '-',
                             child: Text(
                               displayTasks[i].client ?? '-',
-                              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: AppColors.slate800),
+                              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: context.adaptiveSlate900),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -217,8 +216,8 @@ class _TaskTableState extends State<TaskTable> {
         _TableBand(
           height: headingHeight,
           widths: widths,
-          color: AppColors.slate100,
-          border: const Border(bottom: BorderSide(color: AppColors.border)),
+          color: context.adaptiveSlate100,
+          border: Border(bottom: BorderSide(color: context.adaptiveBorder)),
           children: [
             _fit(_headerFor(TaskColumn.description)),
             _fit(_headerFor(TaskColumn.priority)),
@@ -234,8 +233,8 @@ class _TaskTableState extends State<TaskTable> {
             child: _TableBand(
               height: rowHeight,
               widths: widths,
-              color: i.isOdd ? AppColors.slate50 : Colors.white,
-              border: const Border(bottom: BorderSide(color: AppColors.border, width: 0.6)),
+              color: i.isOdd ? context.adaptiveSlate50 : Colors.transparent,
+              border: Border(bottom: BorderSide(color: context.adaptiveBorder, width: 0.6)),
               children: [
                 Tooltip(
                   message: displayTasks[i].description,
@@ -244,7 +243,7 @@ class _TaskTableState extends State<TaskTable> {
                     displayTasks[i].description,
                     overflow: TextOverflow.ellipsis,
                     maxLines: 1,
-                    style: const TextStyle(fontSize: 13, color: AppColors.slate700),
+                    style: TextStyle(fontSize: 13, color: context.adaptiveSlate700),
                   ),
                 ),
                 PriorityChip(priority: displayTasks[i].priority),
@@ -254,7 +253,7 @@ class _TaskTableState extends State<TaskTable> {
                   waitDuration: const Duration(milliseconds: 250),
                   child: Text(
                     displayTasks[i].expectedFinish == null ? '-' : fmtDate(displayTasks[i].expectedFinish),
-                    style: const TextStyle(fontSize: 13, color: AppColors.slate700),
+                    style: TextStyle(fontSize: 13, color: context.adaptiveSlate700),
                   ),
                 ),
                 Tooltip(
@@ -264,12 +263,12 @@ class _TaskTableState extends State<TaskTable> {
                     displayTasks[i].assignees.map((a) => a.name ?? '#${a.id}').join(', '),
                     overflow: TextOverflow.ellipsis,
                     maxLines: 1,
-                    style: const TextStyle(fontSize: 13, color: AppColors.slate700),
+                    style: TextStyle(fontSize: 13, color: context.adaptiveSlate700),
                   ),
                 ),
                 Text(
                   fmtDuration(displayTasks[i].liveSeconds()),
-                  style: const TextStyle(fontSize: 13, color: AppColors.slate700),
+                  style: TextStyle(fontSize: 13, color: context.adaptiveSlate700),
                 ),
               ],
             ),

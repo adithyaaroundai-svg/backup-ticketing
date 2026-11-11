@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../../core/design_system/theme/app_colors.dart';
 import '../../core/enums.dart';
 import '../../domain/entities/task.dart';
 import 'task_table_filter_models.dart';
@@ -24,8 +25,8 @@ class TaskTableColumnHeader extends StatelessWidget {
     final isFiltered = state.isColumnFiltered(column);
     final isAsc = state.sortDirection == SortDirection.asc;
 
-    final activeColor = theme.colorScheme.primary;
-    final defaultColor = theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.8) ?? Colors.black87;
+    final activeColor = context.isDarkMode ? AppColors.primaryLight : theme.colorScheme.primary;
+    final defaultColor = context.adaptiveSlate800;
 
     return Row(
       mainAxisSize: MainAxisSize.min,
@@ -61,7 +62,7 @@ class TaskTableColumnHeader extends StatelessWidget {
                   Icon(
                     Icons.unfold_more_rounded,
                     size: 14,
-                    color: Colors.grey.withValues(alpha: 0.4),
+                    color: context.adaptiveSlate500.withValues(alpha: 0.65),
                   ),
               ],
             ),
@@ -77,7 +78,7 @@ class TaskTableColumnHeader extends StatelessWidget {
               Icon(
                 isFiltered ? Icons.filter_alt_rounded : Icons.filter_list_rounded,
                 size: 15,
-                color: isFiltered ? activeColor : Colors.grey.shade500,
+                color: isFiltered ? activeColor : context.adaptiveSlate500,
               ),
               if (isFiltered)
                 Positioned(
@@ -207,11 +208,19 @@ class _ColumnFilterDialogState extends State<_ColumnFilterDialog> {
                 children: [
                   Row(
                     children: [
-                      Icon(Icons.filter_list_rounded, size: 20, color: theme.colorScheme.primary),
+                      Icon(
+                        Icons.filter_list_rounded,
+                        size: 20,
+                        color: context.isDarkMode ? AppColors.primaryLight : theme.colorScheme.primary,
+                      ),
                       const SizedBox(width: 8),
                       Text(
                         '${widget.column.label} Filter & Sort',
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                          color: context.adaptiveSlate900,
+                        ),
                       ),
                     ],
                   ),
@@ -230,9 +239,9 @@ class _ColumnFilterDialogState extends State<_ColumnFilterDialog> {
               const SizedBox(height: 14),
 
               // Column Specific Filter Section
-              const Text(
+              Text(
                 'Filter Options',
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey),
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: context.adaptiveSlate500),
               ),
               const SizedBox(height: 6),
               Flexible(
@@ -262,7 +271,7 @@ class _ColumnFilterDialogState extends State<_ColumnFilterDialog> {
                       icon: const Icon(Icons.clear, size: 16),
                       label: const Text('Reset filter'),
                       style: TextButton.styleFrom(
-                        foregroundColor: Colors.red.shade700,
+                        foregroundColor: context.adaptiveError,
                         visualDensity: VisualDensity.compact,
                       ),
                     )
@@ -333,9 +342,9 @@ class _ColumnFilterDialogState extends State<_ColumnFilterDialog> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           'Sort Order',
-          style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey),
+          style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: context.adaptiveSlate500),
         ),
         const SizedBox(height: 6),
         Wrap(

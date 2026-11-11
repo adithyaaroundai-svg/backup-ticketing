@@ -1,9 +1,9 @@
 import '../../core/crm_storage_service.dart';
 import '../../core/dev_task_chat_helper.dart';
+import '../../core/time_utils.dart';
 import '../../core/upload_part.dart';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:intl/intl.dart';
 
 import '../../domain/entities/advance.dart';
 import '../../domain/entities/status_history.dart';
@@ -31,7 +31,7 @@ class TaskEditProvider extends ChangeNotifier {
     notifyListeners();
     try {
       final supabase = Supabase.instance.client;
-      today = DateFormat('yyyy-MM-dd').format(DateTime.now());
+      today = todayIstDateKey();
 
       final tResp = await supabase.schema('aroundtally').from('tasks').select('''
         *,
@@ -315,7 +315,13 @@ class TaskEditProvider extends ChangeNotifier {
   }
 
   Future<void> carryForward({int? currentUserId, String? currentUserName}) async {
+    final todayIst = todayIstDateKey();
     await Supabase.instance.client.schema('aroundtally').rpc('carry_forward_one', params: {'p_task_id': taskId});
+    await Supabase.instance.client
+        .schema('aroundtally')
+        .from('tasks')
+        .update({'display_date': todayIst, 'task_date': todayIst})
+        .eq('id', taskId);
     if (currentUserId != null && currentUserName != null) {
       try {
         final tDesc = task?.description ?? '#$taskId';

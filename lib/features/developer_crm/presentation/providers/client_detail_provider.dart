@@ -1,8 +1,8 @@
 import '../../core/crm_storage_service.dart';
+import '../../core/time_utils.dart';
 import '../../core/upload_part.dart';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:intl/intl.dart';
 
 import '../../domain/entities/client.dart';
 import '../../domain/entities/task.dart';
@@ -70,7 +70,7 @@ class ClientDetailProvider extends ChangeNotifier {
     notifyListeners();
     try {
       final supabase = Supabase.instance.client;
-      today = DateFormat('yyyy-MM-dd').format(DateTime.now());
+      today = todayIstDateKey();
 
       final clientResp = await supabase.schema('aroundtally').from('clients').select('*').eq('id', clientId).single();
       customer = Client.fromJson(clientResp);
@@ -162,7 +162,7 @@ class ClientDetailProvider extends ChangeNotifier {
     String? currentUserName,
   }) async {
     final supabase = Supabase.instance.client;
-    final taskDate = DateFormat('yyyy-MM-dd').format(DateTime.now().toUtc());
+    final taskDate = todayIstDateKey();
 
     final resp = await supabase.schema('aroundtally').from('tasks').insert({
       'client_id': clientId,
@@ -172,6 +172,7 @@ class ClientDetailProvider extends ChangeNotifier {
       'expected_finish': expectedFinish,
       'start_date': startDate,
       'task_date': taskDate,
+      'display_date': taskDate,
       'approved': approved ? 1 : 0,
       'pending': pending ? 1 : 0,
       'created_by': currentUserId,
