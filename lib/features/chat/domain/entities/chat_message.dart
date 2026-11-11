@@ -4,6 +4,10 @@ import '../../../../core/utils/json_converters.dart';
 part 'chat_message.freezed.dart';
 part 'chat_message.g.dart';
 
+/// Returns true for canonical `'dm'` rows and legacy forwarded `'dm_<uid1>_<uid2>'` rows.
+bool isDmChannel(String? channel) =>
+    channel != null && (channel == 'dm' || channel.startsWith('dm_'));
+
 @freezed
 abstract class ChatMessage with _$ChatMessage {
   const factory ChatMessage({

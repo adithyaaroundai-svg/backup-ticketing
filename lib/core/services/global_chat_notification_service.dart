@@ -5,6 +5,7 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'local_notification_service.dart';
 import '../../features/auth/presentation/providers/auth_provider.dart';
+import '../../features/chat/domain/entities/chat_message.dart';
 import 'web_notification_helper.dart';
 
 class GlobalChatNotificationService {
@@ -106,7 +107,7 @@ class GlobalChatNotificationService {
         channel != 'sales-channel' && 
         channel != 'sales-team' && 
         channel != 'mobile-app-sales' && 
-        channel != 'dm') {
+        !isDmChannel(channel)) {
       try {
         final isUuid = RegExp(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$').hasMatch(channel);
         final dynamic response;

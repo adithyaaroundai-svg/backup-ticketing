@@ -658,7 +658,7 @@ class DmStream extends _$DmStream {
   }
 
   bool _belongsToConversation(ChatMessage message, String myId) {
-    if (message.channel != 'dm') return false;
+    if (!isDmChannel(message.channel)) return false;
     final normalizedMyId = myId.trim().toLowerCase();
     final normalizedPartnerId = chatPartnerId.trim().toLowerCase();
     final normalizedSenderId = message.senderId.trim().toLowerCase();
@@ -2546,7 +2546,7 @@ class DmConversationEngine extends Notifier<Map<String, DmConversationState>> {
     if (payload.eventType == PostgresChangeEvent.insert || payload.eventType == PostgresChangeEvent.update) {
       final msg = ChatMessage.tryParseRecord(payload.newRecord);
       if (msg == null) return;
-      if (msg.channel != 'dm') return;
+      if (!isDmChannel(msg.channel)) return;
       _ingest(msg, currentUserId, notify: true);
     } else if (payload.eventType == PostgresChangeEvent.delete) {
       final deletedId = payload.oldRecord['id']?.toString();
@@ -2773,7 +2773,7 @@ class DmConversationEngine extends Notifier<Map<String, DmConversationState>> {
   }
 
   void _ingest(ChatMessage msg, String currentUserId, {required bool notify}) {
-    if (msg.channel != 'dm') return;
+    if (!isDmChannel(msg.channel)) return;
     if (msg.receiverId == null || msg.receiverId!.isEmpty) return;
 
     final normalizedMyId = currentUserId.trim().toLowerCase();
@@ -2869,7 +2869,7 @@ class DmConversationEngine extends Notifier<Map<String, DmConversationState>> {
   }
 
   void onOptimisticMessageSent(ChatMessage message) {
-    if (message.channel != 'dm') return;
+    if (!isDmChannel(message.channel)) return;
     final authUser = _ref.read(authProvider);
     if (authUser == null || message.receiverId == null) return;
     final myId = authUser.id.trim().toLowerCase();

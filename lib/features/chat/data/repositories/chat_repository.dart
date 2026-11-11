@@ -15,6 +15,14 @@ class ChatRepository {
 
   ChatRepository(this._client);
 
+  /// Returns the canonical `'dm'` channel together with the legacy sorted
+  /// composite channel ID used by older forwarded DM rows for a user pair.
+  List<String> _dmChannelCandidates(String? currentUserId, String? chatPartnerId) {
+    if (currentUserId == null || chatPartnerId == null) return const ['dm'];
+    final ids = [currentUserId, chatPartnerId]..sort();
+    return ['dm', 'dm_${ids[0]}_${ids[1]}'];
+  }
+
   // ── Paginated fetch for chat messages ────────────────────────────────────────
   Future<List<ChatMessage>> getPaginatedMessages({
     String? currentUserId,
@@ -35,7 +43,7 @@ class ChatRepository {
     } else {
       // DM
       query = query
-          .eq('channel', 'dm')
+          .inFilter('channel', _dmChannelCandidates(currentUserId, chatPartnerId))
           .or('and(sender_id.eq.$currentUserId,receiver_id.eq.$chatPartnerId),and(sender_id.eq.$chatPartnerId,receiver_id.eq.$currentUserId)');
     }
 
@@ -82,7 +90,7 @@ class ChatRepository {
       }
     } else {
       query = query
-          .eq('channel', 'dm')
+          .inFilter('channel', _dmChannelCandidates(currentUserId, chatPartnerId))
           .or('and(sender_id.eq.$currentUserId,receiver_id.eq.$chatPartnerId),and(sender_id.eq.$chatPartnerId,receiver_id.eq.$currentUserId)');
     }
 
@@ -130,7 +138,7 @@ class ChatRepository {
       query = query.eq('channel', channelName).isFilter('receiver_id', null);
     } else {
       query = query
-          .eq('channel', 'dm')
+          .inFilter('channel', _dmChannelCandidates(currentUserId, chatPartnerId))
           .or('and(sender_id.eq.$currentUserId,receiver_id.eq.$chatPartnerId),and(sender_id.eq.$chatPartnerId,receiver_id.eq.$currentUserId)');
     }
 
@@ -152,7 +160,7 @@ class ChatRepository {
       query = query.eq('channel', channelName).isFilter('receiver_id', null);
     } else {
       query = query
-          .eq('channel', 'dm')
+          .inFilter('channel', _dmChannelCandidates(currentUserId, chatPartnerId))
           .or('and(sender_id.eq.$currentUserId,receiver_id.eq.$chatPartnerId),and(sender_id.eq.$chatPartnerId,receiver_id.eq.$currentUserId)');
     }
 
@@ -455,7 +463,7 @@ class ChatRepository {
     final response = await _client
         .from('chat_messages')
         .select('id, sender_id, receiver_id, sender_name, sender_role, sender_avatar_url, content, created_at, is_deleted, reactions, reply_to_message_id, reply_to_sender_name, reply_to_content, file_url, file_name, file_type, channel, is_forwarded, is_edited, edited_at')
-        .eq('channel', 'dm')
+        .or('channel.eq.dm,channel.like.dm_*')
         .not('receiver_id', 'is', null)
         .or('sender_id.eq.$currentUserId,receiver_id.eq.$currentUserId')
         .order('created_at', ascending: false)
@@ -491,6 +499,7 @@ class ChatRepository {
 
     for (final json in data) {
       final msg = ChatMessage.fromJson(json);
+      if (!isDmChannel(msg.channel)) continue;
       final senderNorm = msg.senderId.trim().toLowerCase();
       final receiverNorm = msg.receiverId?.trim().toLowerCase();
       if (senderNorm != normUserId && receiverNorm != normUserId) continue;
@@ -536,7 +545,7 @@ class ChatRepository {
     final data = await _client
         .from('chat_messages')
         .select('id, sender_id, receiver_id, sender_name, sender_role, sender_avatar_url, content, created_at, is_deleted, reactions, reply_to_message_id, reply_to_sender_name, reply_to_content, file_url, file_name, file_type, channel, is_forwarded, is_edited, edited_at')
-        .eq('channel', 'dm')
+        .or('channel.eq.dm,channel.like.dm_*')
         .not('receiver_id', 'is', null)
         .or('sender_id.eq.$currentUserId,receiver_id.eq.$currentUserId')
         .order('created_at', ascending: false)
@@ -545,7 +554,7 @@ class ChatRepository {
     final messages = <ChatMessage>[];
     for (final row in data) {
       final msg = ChatMessage.tryParseRecord(row);
-      if (msg != null) messages.add(msg);
+      if (msg != null && isDmChannel(msg.channel)) messages.add(msg);
     }
     messages.sort((a, b) {
       final t = a.createdAt.toUtc().compareTo(b.createdAt.toUtc());

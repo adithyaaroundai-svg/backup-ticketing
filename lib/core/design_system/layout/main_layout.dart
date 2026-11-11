@@ -1359,7 +1359,7 @@ class _GlobalSearchDialogState extends ConsumerState<_GlobalSearchDialog> {
                                             context.push('/mobile-app-sales?highlightMsgId=${m.id}');
                                           } else if (m.channel == 'all-aroundtally') {
                                             context.push('/channel/all-aroundtally?highlightMsgId=${m.id}');
-                                          } else if (m.channel == 'dm') {
+                                          } else if (isDmChannel(m.channel)) {
                                             final myId = ref.read(authProvider)?.id;
                                             final partnerId = m.senderId == myId ? m.receiverId : m.senderId;
                                             context.push('/chat/dm/$partnerId?highlightMsgId=${m.id}');

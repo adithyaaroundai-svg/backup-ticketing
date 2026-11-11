@@ -268,13 +268,7 @@ class _ForwardMessageDialogState extends ConsumerState<ForwardMessageDialog> {
           );
         } else if (selectedId.startsWith('dm_')) {
           final receiverId = selectedId.substring(3);
-          final uid1 = currentUser.id;
-          final uid2 = receiverId;
-          
-          // Generate DM channel ID
-          final sortedIds = [uid1, uid2]..sort();
-          final dmChannelId = 'dm_${sortedIds[0]}_${sortedIds[1]}';
-          
+
           await chatController.sendMessage(
             senderId: currentUser.id,
             receiverId: receiverId,
@@ -282,7 +276,7 @@ class _ForwardMessageDialogState extends ConsumerState<ForwardMessageDialog> {
             senderRole: currentUser.role ?? 'agent',
             senderAvatarUrl: currentUser.avatarUrl,
             content: forwardedContent,
-            channel: dmChannelId,
+            channel: 'dm',
             fileUrl: widget.message.fileUrl,
             fileName: widget.message.fileName,
             fileType: widget.message.fileType,
