@@ -16,6 +16,8 @@ import 'custom_channel_provider.dart';
 
 import 'dart:io';
 import 'package:http/http.dart' as http;
+import 'package:file_picker/file_picker.dart';
+import '../../../../core/utils/storage_utils.dart';
 part 'chat_provider.g.dart';
 
 @riverpod
@@ -55,12 +57,14 @@ class AttachmentUploadState {
   final AttachmentUploadStatus status;
   final String? localPath;
   final String? error;
+  final double progress;
   final VoidCallback? onRetry;
 
   const AttachmentUploadState({
     required this.status,
     this.localPath,
     this.error,
+    this.progress = 0.0,
     this.onRetry,
   });
 }
@@ -373,9 +377,15 @@ class ChatStream extends _$ChatStream {
         return;
       }
 
-      final currentList = state.value ?? [];
-      if (!currentList.any((m) => m.id == newMsg.id)) {
-        _updateState([...currentList, newMsg]);
+      final currentList = List<ChatMessage>.from(state.value ?? const <ChatMessage>[]);
+      final index = currentList.indexWhere((m) => m.id == newMsg.id);
+      if (index == -1) {
+        currentList.add(newMsg);
+        currentList.sort((a, b) {
+          final t = a.createdAt.toUtc().compareTo(b.createdAt.toUtc());
+          return t != 0 ? t : a.id.compareTo(b.id);
+        });
+        _updateState(currentList);
         
         // Fire notification for custom channels (not support-chat or all-aroundtally)
         final isFromCurrentUser = currentUserId != null && 
@@ -445,10 +455,20 @@ class ChatStream extends _$ChatStream {
             }
           }
         }
+      } else if (currentList[index] != newMsg) {
+        currentList[index] = newMsg;
+        _updateState(currentList);
       }
     } else if (payload.eventType == PostgresChangeEvent.update) {
       final updatedMsg = ChatMessage.tryParseRecord(payload.newRecord);
-      if (updatedMsg == null || updatedMsg.channel != channel || updatedMsg.receiverId != null) return;
+      if (updatedMsg == null || updatedMsg.channel != channel) return;
+
+      final currentUserId = ref.read(authProvider)?.id;
+      if (updatedMsg.receiverId != null &&
+          updatedMsg.receiverId != currentUserId &&
+          updatedMsg.senderId != currentUserId) {
+        return;
+      }
 
       final currentList = state.value ?? [];
       final index = currentList.indexWhere((m) => m.id == updatedMsg.id);
@@ -471,9 +491,40 @@ class ChatStream extends _$ChatStream {
 
   void injectOptimisticMessage(ChatMessage message) {
     ref.read(chatCacheServiceProvider).upsertMessage(channel, message);
+    final currentList = List<ChatMessage>.from(state.value ?? const <ChatMessage>[]);
+    final index = currentList.indexWhere((m) => m.id == message.id);
+    if (index == -1) {
+      currentList.add(message);
+      currentList.sort((a, b) {
+        final t = a.createdAt.toUtc().compareTo(b.createdAt.toUtc());
+        return t != 0 ? t : a.id.compareTo(b.id);
+      });
+      _updateState(currentList);
+    } else {
+      currentList[index] = message;
+      _updateState(currentList);
+    }
+  }
+
+  void updateMessageFileUrl(String messageId, String newFileUrl, [String? newFileName]) {
     final currentList = state.value ?? [];
-    if (!currentList.any((m) => m.id == message.id)) {
-      _updateState([...currentList, message]);
+    final index = currentList.indexWhere((m) => m.id == messageId);
+    if (index != -1) {
+      final newList = List<ChatMessage>.from(currentList);
+      final oldMsg = newList[index];
+      newList[index] = oldMsg.copyWith(
+        fileUrl: newFileUrl,
+        fileName: newFileName ?? oldMsg.fileName,
+      );
+      _updateState(newList);
+    }
+  }
+
+  void removeMessageImmediately(String messageId) {
+    ref.read(chatCacheServiceProvider).removeMessage(channel, messageId);
+    final currentList = state.value ?? [];
+    if (currentList.any((m) => m.id == messageId)) {
+      _updateState(currentList.where((m) => m.id != messageId).toList());
     }
   }
 
@@ -878,11 +929,46 @@ class DmStream extends _$DmStream {
       final cacheKey = '${myId}_$chatPartnerId';
       ref.read(chatCacheServiceProvider).upsertMessage(cacheKey, message);
     }
-    final currentList = state.value ?? [];
-    if (!currentList.any((m) => m.id == message.id)) {
-      _updateState([...currentList, message]);
+    final currentList = List<ChatMessage>.from(state.value ?? const <ChatMessage>[]);
+    final index = currentList.indexWhere((m) => m.id == message.id);
+    if (index == -1) {
+      currentList.add(message);
+      currentList.sort((a, b) {
+        final t = a.createdAt.toUtc().compareTo(b.createdAt.toUtc());
+        return t != 0 ? t : a.id.compareTo(b.id);
+      });
+      _updateState(currentList);
+    } else {
+      currentList[index] = message;
+      _updateState(currentList);
     }
     ref.read(dmConversationsProvider.notifier).onOptimisticMessageSent(message);
+  }
+
+  void updateMessageFileUrl(String messageId, String newFileUrl, [String? newFileName]) {
+    final currentList = state.value ?? [];
+    final index = currentList.indexWhere((m) => m.id == messageId);
+    if (index != -1) {
+      final newList = List<ChatMessage>.from(currentList);
+      final oldMsg = newList[index];
+      newList[index] = oldMsg.copyWith(
+        fileUrl: newFileUrl,
+        fileName: newFileName ?? oldMsg.fileName,
+      );
+      _updateState(newList);
+    }
+  }
+
+  void removeMessageImmediately(String messageId) {
+    final myId = ref.read(authProvider)?.id;
+    if (myId != null) {
+      final cacheKey = '${myId}_$chatPartnerId';
+      ref.read(chatCacheServiceProvider).removeMessage(cacheKey, messageId);
+    }
+    final currentList = state.value ?? [];
+    if (currentList.any((m) => m.id == messageId)) {
+      _updateState(currentList.where((m) => m.id != messageId).toList());
+    }
   }
 
   void optimisticEdit(String messageId, String newContent) {
@@ -1788,9 +1874,10 @@ class ChatController extends _$ChatController {
     bool isForwarded = false,
     List<dynamic>? richTextDelta,
   }) async {
-    state = const AsyncLoading();
+    // Do NOT set state = AsyncLoading() — that blocks the UI.
+    // The optimistic message is injected synchronously; DB write happens in background.
     final messageId = const Uuid().v4();
-    
+
     // Create optimistic message
     final optimisticMessage = ChatMessage(
       id: messageId,
@@ -1812,43 +1899,39 @@ class ChatController extends _$ChatController {
       richTextDelta: richTextDelta,
     );
 
-    // Inject optimistic message immediately
+    // Inject optimistic message — appears in chat at 0ms latency
     if (receiverId != null) {
       ref.read(dmStreamProvider(receiverId).notifier).injectOptimisticMessage(optimisticMessage);
     } else {
       ref.read(chatStreamProvider(channel).notifier).injectOptimisticMessage(optimisticMessage);
     }
 
-    state = await AsyncValue.guard(
-      () async {
-        try {
-          await ref
-              .read(chatRepositoryProvider)
-              .sendMessage(
-                id: messageId,
-                senderId: senderId,
-                senderName: senderName,
-                senderRole: senderRole,
-                content: content,
-                receiverId: receiverId,
-                senderAvatarUrl: senderAvatarUrl,
-                replyToMessageId: replyToMessageId,
-                replyToSenderName: replyToSenderName,
-                richTextDelta: richTextDelta,
-                replyToContent: replyToContent,
-                fileUrl: fileUrl,
-                fileName: fileName,
-                fileType: fileType,
-                channel: channel,
-                isForwarded: isForwarded,
-              );
-        } catch (e, st) {
-          print('SEND MESSAGE ERROR: $e');
-          print('SEND MESSAGE STACKTRACE: $st');
-          rethrow;
-        }
-      },
+    // Fire-and-forget DB insert; Realtime will echo it back and
+    // the stream handler deduplicates by ID, so no double message appears.
+    unawaited(
+      ref.read(chatRepositoryProvider).sendMessage(
+        id: messageId,
+        senderId: senderId,
+        senderName: senderName,
+        senderRole: senderRole,
+        content: content,
+        receiverId: receiverId,
+        senderAvatarUrl: senderAvatarUrl,
+        replyToMessageId: replyToMessageId,
+        replyToSenderName: replyToSenderName,
+        richTextDelta: richTextDelta,
+        replyToContent: replyToContent,
+        fileUrl: fileUrl,
+        fileName: fileName,
+        fileType: fileType,
+        channel: channel,
+        isForwarded: isForwarded,
+      ).catchError((e, st) {
+        debugPrint('sendMessage DB error: $e');
+        return '';
+      }),
     );
+
     return messageId;
   }
 
@@ -1870,11 +1953,21 @@ class ChatController extends _$ChatController {
   Future<void> deleteMessage(String messageId, {String? receiverId, String channel = 'support-chat'}) async {
     state = const AsyncLoading();
 
-    // Optimistic delete
-    if (receiverId != null) {
-      ref.read(dmStreamProvider(receiverId).notifier).optimisticDelete(messageId);
+    final hasUpload = ref.read(attachmentUploadStateProvider).containsKey(messageId);
+    if (hasUpload) {
+      ref.read(attachmentUploadStateProvider.notifier).removeUploadState(messageId);
+      if (receiverId != null) {
+        ref.read(dmStreamProvider(receiverId).notifier).removeMessageImmediately(messageId);
+      } else {
+        ref.read(chatStreamProvider(channel).notifier).removeMessageImmediately(messageId);
+      }
     } else {
-      ref.read(chatStreamProvider(channel).notifier).optimisticDelete(messageId);
+      // Optimistic delete
+      if (receiverId != null) {
+        ref.read(dmStreamProvider(receiverId).notifier).optimisticDelete(messageId);
+      } else {
+        ref.read(chatStreamProvider(channel).notifier).optimisticDelete(messageId);
+      }
     }
 
     state = await AsyncValue.guard(
@@ -2096,6 +2189,281 @@ class ChatController extends _$ChatController {
       replyToSenderName: replyToSenderName,
       replyToContent: replyToContent,
       channel: channel,
+      optimisticMessage: optimisticMessage,
+    );
+  }
+
+  /// Sends one or more file attachments with 0ms instantaneous optimistic display in the chat,
+  /// background non-blocking compression and upload, and automatic persistence.
+  /// If an upload fails, the message is retained with a Retry/Delete button rather than being lost.
+  Future<List<String>> sendFileMessages({
+    required String senderId,
+    required String senderName,
+    required String senderRole,
+    required List<PlatformFile> files,
+    String? content,
+    String? receiverId,
+    String? senderAvatarUrl,
+    String? replyToMessageId,
+    String? replyToSenderName,
+    String? replyToContent,
+    String channel = 'support-chat',
+    bool isForwarded = false,
+    String? prefix,
+  }) async {
+    final messageIds = <String>[];
+
+    for (int i = 0; i < files.length; i++) {
+      final file = files[i];
+      final messageId = const Uuid().v4();
+      messageIds.add(messageId);
+
+      final isFirst = (i == 0);
+      final msgContent = isFirst ? (content?.trim() ?? '') : '';
+      final replyId = isFirst ? replyToMessageId : null;
+      final replyName = isFirst ? replyToSenderName : null;
+      final replyText = isFirst ? replyToContent : null;
+
+      final fileExt = file.extension ??
+          (file.name.contains('.') ? file.name.split('.').last : 'file');
+
+      // Temporary local URL identifier for 0ms optimistic display
+      final tempFileUrl = 'temp://$messageId/${file.name}';
+
+      // Prime memory cache with local bytes immediately if available for images
+      if (file.bytes != null && file.bytes!.isNotEmpty) {
+        ChatImageMemoryCache.put(tempFileUrl, file.bytes!);
+      } else if (!kIsWeb && file.path != null && file.path!.isNotEmpty) {
+        final extLower = fileExt.toLowerCase();
+        final isRaster = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp'].contains(extLower);
+        if (isRaster) {
+          try {
+            final fileObj = File(file.path!);
+            if (fileObj.existsSync() && fileObj.lengthSync() < 20 * 1024 * 1024) {
+              final bytes = fileObj.readAsBytesSync();
+              if (bytes.isNotEmpty) {
+                ChatImageMemoryCache.put(tempFileUrl, bytes);
+              }
+            }
+          } catch (_) {}
+        }
+      }
+
+      final optimisticMessage = ChatMessage(
+        id: messageId,
+        senderId: senderId,
+        senderName: senderName,
+        senderRole: senderRole,
+        content: msgContent,
+        receiverId: receiverId,
+        senderAvatarUrl: senderAvatarUrl,
+        createdAt: DateTime.now().toUtc(),
+        replyToMessageId: replyId,
+        replyToSenderName: replyName,
+        replyToContent: replyText,
+        fileUrl: tempFileUrl,
+        fileName: file.name,
+        fileType: fileExt,
+        channel: channel,
+        isForwarded: isForwarded,
+      );
+
+      // 0ms instant display in chat
+      if (receiverId != null) {
+        ref.read(dmStreamProvider(receiverId).notifier).injectOptimisticMessage(optimisticMessage);
+      } else {
+        ref.read(chatStreamProvider(channel).notifier).injectOptimisticMessage(optimisticMessage);
+      }
+
+      // Mark upload state as uploading
+      ref.read(attachmentUploadStateProvider.notifier).setUploadState(
+        messageId,
+        AttachmentUploadState(
+          status: AttachmentUploadStatus.uploading,
+          localPath: file.path,
+          onRetry: () => _retryFileUpload(
+            messageId: messageId,
+            file: file,
+            senderId: senderId,
+            senderName: senderName,
+            senderRole: senderRole,
+            content: msgContent,
+            receiverId: receiverId,
+            senderAvatarUrl: senderAvatarUrl,
+            replyToMessageId: replyId,
+            replyToSenderName: replyName,
+            replyToContent: replyText,
+            channel: channel,
+            isForwarded: isForwarded,
+            prefix: prefix,
+            optimisticMessage: optimisticMessage,
+          ),
+        ),
+      );
+
+      // Perform background upload and database insertion
+      _performFileUpload(
+        messageId: messageId,
+        file: file,
+        senderId: senderId,
+        senderName: senderName,
+        senderRole: senderRole,
+        content: msgContent,
+        receiverId: receiverId,
+        senderAvatarUrl: senderAvatarUrl,
+        replyToMessageId: replyId,
+        replyToSenderName: replyName,
+        replyToContent: replyText,
+        channel: channel,
+        isForwarded: isForwarded,
+        prefix: prefix,
+        optimisticMessage: optimisticMessage,
+      );
+    }
+
+    return messageIds;
+  }
+
+  Future<void> _performFileUpload({
+    required String messageId,
+    required PlatformFile file,
+    required String senderId,
+    required String senderName,
+    required String senderRole,
+    required String content,
+    required String? receiverId,
+    required String? senderAvatarUrl,
+    required String? replyToMessageId,
+    required String? replyToSenderName,
+    required String? replyToContent,
+    required String channel,
+    required bool isForwarded,
+    required String? prefix,
+    required ChatMessage optimisticMessage,
+  }) async {
+    try {
+      final uploadResult = await uploadChatAttachment(
+        file,
+        prefix: prefix ?? (receiverId != null ? 'dm_$senderId' : channel),
+        onProgress: (progress) {
+          final current = ref.read(attachmentUploadStateProvider)[messageId];
+          if (current != null) {
+            ref.read(attachmentUploadStateProvider.notifier).setUploadState(
+              messageId,
+              AttachmentUploadState(
+                status: AttachmentUploadStatus.uploading,
+                localPath: file.path,
+                progress: progress,
+                onRetry: current.onRetry,
+              ),
+            );
+          }
+        },
+      );
+
+      // Prime cache for the persistent public URL
+      if (uploadResult.bytes != null) {
+        ChatImageMemoryCache.put(uploadResult.fileUrl, uploadResult.bytes!);
+      }
+
+      // Update the optimistic message's fileUrl to the permanent public URL
+      if (receiverId != null) {
+        ref.read(dmStreamProvider(receiverId).notifier).updateMessageFileUrl(
+          messageId,
+          uploadResult.fileUrl,
+          uploadResult.fileName,
+        );
+      } else {
+        ref.read(chatStreamProvider(channel).notifier).updateMessageFileUrl(
+          messageId,
+          uploadResult.fileUrl,
+          uploadResult.fileName,
+        );
+      }
+
+      // Persist to Supabase Database
+      await ref.read(chatRepositoryProvider).sendMessage(
+        id: messageId,
+        senderId: senderId,
+        senderName: senderName,
+        senderRole: senderRole,
+        content: content,
+        receiverId: receiverId,
+        senderAvatarUrl: senderAvatarUrl,
+        replyToMessageId: replyToMessageId,
+        replyToSenderName: replyToSenderName,
+        replyToContent: replyToContent,
+        fileUrl: uploadResult.fileUrl,
+        fileName: uploadResult.fileName,
+        fileType: uploadResult.fileType,
+        channel: channel,
+        isForwarded: isForwarded,
+      );
+
+      // Clean up upload state
+      ref.read(attachmentUploadStateProvider.notifier).removeUploadState(messageId);
+    } catch (e) {
+      final cleanError = e.toString().replaceFirst('Exception: ', '').trim();
+      debugPrint('File upload background failed for $messageId (${file.name}): $cleanError');
+      final currentUploadState = ref.read(attachmentUploadStateProvider)[messageId];
+      if (currentUploadState != null) {
+        ref.read(attachmentUploadStateProvider.notifier).setUploadState(
+          messageId,
+          AttachmentUploadState(
+            status: AttachmentUploadStatus.failed,
+            localPath: file.path,
+            error: cleanError,
+            onRetry: currentUploadState.onRetry,
+          ),
+        );
+      }
+    }
+  }
+
+  void _retryFileUpload({
+    required String messageId,
+    required PlatformFile file,
+    required String senderId,
+    required String senderName,
+    required String senderRole,
+    required String content,
+    required String? receiverId,
+    required String? senderAvatarUrl,
+    required String? replyToMessageId,
+    required String? replyToSenderName,
+    required String? replyToContent,
+    required String channel,
+    required bool isForwarded,
+    required String? prefix,
+    required ChatMessage optimisticMessage,
+  }) {
+    final currentUploadState = ref.read(attachmentUploadStateProvider)[messageId];
+    if (currentUploadState != null) {
+      ref.read(attachmentUploadStateProvider.notifier).setUploadState(
+        messageId,
+        AttachmentUploadState(
+          status: AttachmentUploadStatus.uploading,
+          localPath: file.path,
+          onRetry: currentUploadState.onRetry,
+        ),
+      );
+    }
+
+    _performFileUpload(
+      messageId: messageId,
+      file: file,
+      senderId: senderId,
+      senderName: senderName,
+      senderRole: senderRole,
+      content: content,
+      receiverId: receiverId,
+      senderAvatarUrl: senderAvatarUrl,
+      replyToMessageId: replyToMessageId,
+      replyToSenderName: replyToSenderName,
+      replyToContent: replyToContent,
+      channel: channel,
+      isForwarded: isForwarded,
+      prefix: prefix,
       optimisticMessage: optimisticMessage,
     );
   }

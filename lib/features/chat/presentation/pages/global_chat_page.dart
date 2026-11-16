@@ -4,6 +4,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 import 'package:flutter/services.dart';
 
@@ -112,7 +113,6 @@ class _GlobalChatPageState extends ConsumerState<GlobalChatPage>
   late Animation<double> _breathingAnimation;
   ChatMessage? _replyingToMessage;
   List<PlatformFile> _selectedFiles = [];
-  bool _isUploadingFile = false;
   bool _isRecordingVoice = false;
   bool _isTextEmpty = true;
   bool _isDragging = false;
@@ -465,46 +465,21 @@ class _GlobalChatPageState extends ConsumerState<GlobalChatPage>
             replyToContent: replyToContent,
           );
     } else {
-      setState(() {
-        _isUploadingFile = true;
-      });
-
-      try {
-        final uploadResults = await uploadChatAttachmentsParallel(filesToSend);
-
-        for (int i = 0; i < uploadResults.length; i++) {
-          final res = uploadResults[i];
-          final newMsgId = await ref
-              .read(chatControllerProvider.notifier)
-              .sendMessage(
-                senderId: agent.id,
-                senderName: agent.fullName,
-                senderRole: agent.role,
-                content: i == 0 ? content : '',
-                senderAvatarUrl: agent.avatarUrl,
-                replyToMessageId: i == 0 ? replyToMessageId : null,
-                replyToSenderName: i == 0 ? replyToSenderName : null,
-                replyToContent: i == 0 ? replyToContent : null,
-                fileUrl: res.fileUrl,
-                fileName: res.fileName,
-                fileType: res.fileType,
-              );
-          if (i == 0) firstMsgId = newMsgId;
-        }
-      } catch (e) {
-        debugPrint('File upload error: $e');
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Failed to upload file(s): $e')),
+      final msgIds = await ref
+          .read(chatControllerProvider.notifier)
+          .sendFileMessages(
+            senderId: agent.id,
+            senderName: agent.fullName,
+            senderRole: agent.role,
+            files: filesToSend,
+            content: content,
+            senderAvatarUrl: agent.avatarUrl,
+            replyToMessageId: replyToMessageId,
+            replyToSenderName: replyToSenderName,
+            replyToContent: replyToContent,
+            channel: 'support-chat',
           );
-        }
-      } finally {
-        if (mounted) {
-          setState(() {
-            _isUploadingFile = false;
-          });
-        }
-      }
+      if (msgIds.isNotEmpty) firstMsgId = msgIds.first;
     }
 
     final String newMsgId = firstMsgId ?? '';
@@ -1654,10 +1629,10 @@ class _GlobalChatPageState extends ConsumerState<GlobalChatPage>
 
                 SizedBox(width: 4),
                 ],
-                if (_isRecordingVoice || (_isTextEmpty && _selectedFiles.isEmpty && !_isUploadingFile))
+                if (_isRecordingVoice || (_isTextEmpty && _selectedFiles.isEmpty))
                   ChatVoiceRecorder(
                     key: const ValueKey('global_chat_voice_recorder'),
-                    disabled: _selectedFiles.isNotEmpty || _isUploadingFile,
+                    disabled: _selectedFiles.isNotEmpty,
                     onRecordComplete: (path, duration) => _sendVoiceNote(path, duration),
                     onRecordingStateChanged: (isRecording) {
                       setState(() => _isRecordingVoice = isRecording);
@@ -1680,36 +1655,19 @@ class _GlobalChatPageState extends ConsumerState<GlobalChatPage>
                       ),
                     ],
                   ),
-                  child: _isUploadingFile
-                      ? SizedBox(
-                          width: 36,
-                          height: 36,
-                          child: Center(
-                            child: SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                valueColor: AlwaysStoppedAnimation<Color>(
-                                  context.adaptiveCard,
-                                ),
-                              ),
-                            ),
-                          ),
-                        )
-                      : IconButton(
-                          icon: Icon(
-                            LucideIcons.send,
-                            color: context.adaptiveCard,
-                            size: 16,
-                          ),
-                          onPressed: _sendMessage,
-                          padding: EdgeInsets.zero,
-                          constraints: BoxConstraints(
-                            minWidth: 36,
-                            minHeight: 36,
-                          ),
-                        ),
+                  child: IconButton(
+                    icon: Icon(
+                      LucideIcons.send,
+                      color: context.adaptiveCard,
+                      size: 16,
+                    ),
+                    onPressed: _sendMessage,
+                    padding: EdgeInsets.zero,
+                    constraints: BoxConstraints(
+                      minWidth: 36,
+                      minHeight: 36,
+                    ),
+                  ),
                 ),
                 ],
               ],
@@ -1784,16 +1742,45 @@ class _GlobalChatPageState extends ConsumerState<GlobalChatPage>
       final result = await FilePicker.platform.pickFiles(
         type: FileType.any,
         allowMultiple: true,
-        withData: true,
+        withData: kIsWeb,
       );
 
       if (result != null && result.files.isNotEmpty) {
-        setState(() {
-          _selectedFiles.addAll(result.files);
-        });
+        final validFiles = <PlatformFile>[];
+        final oversizedNames = <String>[];
+
+        for (final file in result.files) {
+          if (file.size > kMaxChatAttachmentSize) {
+            oversizedNames.add('${file.name} (${formatChatFileSize(file.size)})');
+          } else {
+            validFiles.add(file);
+          }
+        }
+
+        if (oversizedNames.isNotEmpty && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'File(s) exceed 50 MB limit: ${oversizedNames.join(', ')}. Please share large files via Google Drive link.',
+              ),
+              backgroundColor: AppColors.error,
+              duration: const Duration(seconds: 5),
+            ),
+          );
+        }
+
+        if (validFiles.isNotEmpty) {
+          setState(() {
+            _selectedFiles.addAll(validFiles);
+          });
+        }
       }
     } catch (e) {
-      // Handle error
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to pick file: $e')),
+        );
+      }
     }
   }
 
@@ -1801,74 +1788,6 @@ class _GlobalChatPageState extends ConsumerState<GlobalChatPage>
     setState(() {
       _selectedFiles.clear();
     });
-  }
-
-  Future<String?> _uploadFile(PlatformFile file) async {
-    try {
-      print('Starting file upload: ${file.name}');
-
-      // Check authentication
-      final auth = Supabase.instance.client.auth;
-      final currentUser = auth.currentUser;
-      print('Current user: ${currentUser?.id}');
-      print('Is authenticated: ${currentUser != null}');
-      print(
-        'Access token: ${auth.currentSession?.accessToken.substring(0, 20)}...',
-      );
-
-      if (currentUser == null) {
-        print('Error: User not authenticated');
-        return null;
-      }
-
-      final storage = Supabase.instance.client.storage;
-      final filePath = sanitizeStorageFileName(file.name);
-
-      Uint8List fileBytes;
-
-      if (file.bytes != null) {
-        // Bytes already loaded by FilePicker (withData: true)
-        fileBytes = file.bytes!;
-        print('Using file bytes from picker: ${fileBytes.length}');
-      } else if (file.path != null) {
-        // Native platform fallback — read from disk
-        fileBytes = await File(file.path!).readAsBytes();
-        print('File bytes read from path: ${fileBytes.length}');
-      } else {
-        print('Error: No file bytes or path available');
-        return null;
-      }
-
-      if (fileBytes.isEmpty) {
-        print('Error: File is empty (0 bytes) — aborting upload');
-        return null;
-      }
-
-      final mimeType = getMimeType(file.extension, file.name);
-      print('Uploading to storage: $filePath');
-      print('Bucket: chat_attachments');
-      print('Content type: $mimeType');
-
-      await storage
-          .from('chat_attachments')
-          .uploadBinary(
-            filePath,
-            fileBytes,
-            fileOptions: FileOptions(
-              contentType: mimeType,
-              upsert: false,
-            ),
-          );
-
-      print('Upload successful, getting public URL...');
-      final publicUrl = storage.from('chat_attachments').getPublicUrl(filePath);
-      print('Public URL: $publicUrl');
-      return publicUrl;
-    } catch (e) {
-      print('File upload error: $e');
-      print('Error type: ${e.runtimeType}');
-      return null;
-    }
   }
 
   void _handleStarMessage(BuildContext context, String messageId) {
@@ -4296,7 +4215,8 @@ class _InlineParser {
   });
 
   static final _tokenPattern = RegExp(
-    r'\*\*\*'
+    r'https?:\/\/[^\s<]+'
+    r'|\*\*\*'
     r'|\*\*'
     r'|__'
     r'|\*(?!\*)'
@@ -4305,6 +4225,7 @@ class _InlineParser {
     r'|<u>'
     r'|<\/u>'
     r'|`[^`]+`',
+    caseSensitive: false,
   );
 
   TextSpan parse() {
@@ -4352,6 +4273,13 @@ class _InlineParser {
             ),
           ),
         );
+        pos = tokenEnd;
+        continue;
+      }
+
+      // ── URLs with underscores/special chars (preserve intact without markdown splitting) ──
+      if (token.toLowerCase().startsWith('http://') || token.toLowerCase().startsWith('https://')) {
+        spans.add(_plain(token));
         pos = tokenEnd;
         continue;
       }

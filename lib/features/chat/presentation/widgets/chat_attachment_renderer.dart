@@ -1,3 +1,5 @@
+import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -25,24 +27,14 @@ class ChatAttachmentRenderer extends ConsumerWidget {
   final ChatMessage message;
   final bool isMe;
 
+  /// Tracks precached URLs so images are only scheduled once, eliminating scroll stutter.
+  static final Set<String> _precachedUrls = {};
+
   const ChatAttachmentRenderer({
     super.key,
     required this.message,
     this.isMe = false,
   });
-
-  IconData _getFileIcon(String? fileType) {
-    if (fileType == null) return Icons.insert_drive_file;
-    final type = fileType.toLowerCase();
-    if (type == 'pdf') return Icons.picture_as_pdf;
-    if (['jpg', 'jpeg', 'png', 'gif', 'webp'].contains(type)) return Icons.image;
-    if (['mp4', 'mov', 'avi'].contains(type)) return Icons.videocam;
-    if (['mp3', 'wav', 'webm', 'm4a', 'opus', 'voice'].contains(type)) return Icons.audio_file;
-    if (['doc', 'docx'].contains(type)) return Icons.description;
-    if (['xls', 'xlsx'].contains(type)) return Icons.table_chart;
-    if (['zip', 'rar'].contains(type)) return Icons.folder_zip;
-    return Icons.insert_drive_file;
-  }
 
   Future<void> _downloadFile(String url, String fileName) async {
     await downloadFileDirectly(url, fileName);
@@ -198,7 +190,15 @@ class ChatAttachmentRenderer extends ConsumerWidget {
                               tooltip: 'Download',
                               constraints: const BoxConstraints(),
                               padding: const EdgeInsets.all(6),
-                              onPressed: () => _downloadFile(url, _resolveFileName(fileName, null, url)),
+                              onPressed: () {
+                                if (url.startsWith('temp://')) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(content: Text('File is currently uploading, please wait...')),
+                                  );
+                                  return;
+                                }
+                                _downloadFile(url, _resolveFileName(fileName, null, url));
+                              },
                             ),
                             const SizedBox(width: 8),
                             IconButton(
@@ -231,43 +231,53 @@ class ChatAttachmentRenderer extends ConsumerWidget {
                                       fit: BoxFit.contain,
                                       gaplessPlayback: true,
                                     )
-                                  : Image.network(
-                                      url,
-                                      fit: BoxFit.contain,
-                                      gaplessPlayback: true,
-                                      loadingBuilder: (_, child, progress) =>
-                                          progress == null
-                                              ? child
-                                              : const Center(
-                                                  child: CircularProgressIndicator(
-                                                    strokeWidth: 2,
-                                                    valueColor:
-                                                        AlwaysStoppedAnimation<Color>(
-                                                      Colors.white70,
+                                  : (!kIsWeb && !url.startsWith('http') && !url.startsWith('temp://') && File(url).existsSync())
+                                      ? Image.file(
+                                          File(url),
+                                          fit: BoxFit.contain,
+                                          gaplessPlayback: true,
+                                        )
+                                      : url.startsWith('http')
+                                          ? Image.network(
+                                              url,
+                                              fit: BoxFit.contain,
+                                              gaplessPlayback: true,
+                                              loadingBuilder: (_, child, progress) =>
+                                                  progress == null
+                                                      ? child
+                                                      : const Center(
+                                                          child: CircularProgressIndicator(
+                                                            strokeWidth: 2,
+                                                            valueColor:
+                                                                AlwaysStoppedAnimation<Color>(
+                                                              Colors.white70,
+                                                            ),
+                                                          ),
+                                                        ),
+                                              errorBuilder: (_, __, ___) => const Center(
+                                                child: Column(
+                                                  mainAxisSize: MainAxisSize.min,
+                                                  children: [
+                                                    Icon(
+                                                      Icons.broken_image,
+                                                      color: Colors.white38,
+                                                      size: 48,
                                                     ),
-                                                  ),
+                                                    SizedBox(height: 8),
+                                                    Text(
+                                                      'Failed to load image',
+                                                      style: TextStyle(
+                                                        color: Colors.white54,
+                                                        fontSize: 13,
+                                                      ),
+                                                    ),
+                                                  ],
                                                 ),
-                                      errorBuilder: (_, __, ___) => const Center(
-                                        child: Column(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            Icon(
-                                              Icons.broken_image,
-                                              color: Colors.white38,
-                                              size: 48,
-                                            ),
-                                            SizedBox(height: 8),
-                                            Text(
-                                              'Failed to load image',
-                                              style: TextStyle(
-                                                color: Colors.white54,
-                                                fontSize: 13,
                                               ),
+                                            )
+                                          : const Center(
+                                              child: Icon(Icons.image, size: 48, color: Colors.white38),
                                             ),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
                             ),
                           ),
                         ),
@@ -312,12 +322,17 @@ class ChatAttachmentRenderer extends ConsumerWidget {
         final cachedBytes = ChatImageMemoryCache.get(message.fileUrl!);
         final isGif = type == ChatAttachmentType.gif;
 
-        // Schedule background precache of full image so full-screen opens instantly
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (context.mounted && message.fileUrl != null && message.fileUrl!.isNotEmpty) {
-            precacheImage(NetworkImage(message.fileUrl!), context).catchError((_) {});
-          }
-        });
+        // Schedule background precache of full image at most once per remote URL
+        if (message.fileUrl != null &&
+            message.fileUrl!.startsWith('http') &&
+            !ChatImageMemoryCache.contains(message.fileUrl!) &&
+            _precachedUrls.add(message.fileUrl!)) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (context.mounted) {
+              precacheImage(NetworkImage(message.fileUrl!), context).catchError((_) {});
+            }
+          });
+        }
 
         Widget imageWidget;
         if (cachedBytes != null) {
@@ -328,7 +343,15 @@ class ChatAttachmentRenderer extends ConsumerWidget {
             cacheWidth: isGif ? null : 600,
             gaplessPlayback: true,
           );
-        } else {
+        } else if (!kIsWeb && message.fileUrl != null && !message.fileUrl!.startsWith('http') && !message.fileUrl!.startsWith('temp://') && File(message.fileUrl!).existsSync()) {
+          imageWidget = Image.file(
+            File(message.fileUrl!),
+            width: 200,
+            fit: BoxFit.cover,
+            cacheWidth: isGif ? null : 600,
+            gaplessPlayback: true,
+          );
+        } else if (message.fileUrl!.startsWith('http')) {
           imageWidget = Image.network(
             message.fileUrl!,
             width: 200,
@@ -361,6 +384,18 @@ class ChatAttachmentRenderer extends ConsumerWidget {
               ),
             ),
           );
+        } else {
+          imageWidget = Container(
+            width: 200,
+            height: 120,
+            decoration: BoxDecoration(
+              color: Colors.grey.shade300,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Center(
+              child: Icon(Icons.image, size: 36, color: AppColors.slate400),
+            ),
+          );
         }
 
         contentWidget = Padding(
@@ -375,19 +410,28 @@ class ChatAttachmentRenderer extends ConsumerWidget {
         );
         break;
       case ChatAttachmentType.video:
-        contentWidget = Padding(
-          padding: const EdgeInsets.only(top: 4, bottom: 4),
-          child: VideoMessageWidget(
-            videoUrl: message.fileUrl!,
-            fileName: _resolveFileName(message.fileName, message.fileType, message.fileUrl),
-            onDownload: () => _downloadFile(message.fileUrl!, _resolveFileName(message.fileName, message.fileType, message.fileUrl)),
-          ),
-        );
+        if (message.fileUrl!.startsWith('temp://')) {
+          final displayName = _resolveFileName(message.fileName, message.fileType, message.fileUrl);
+          contentWidget = _FileAttachmentCard(
+            displayName: displayName,
+            fileType: 'video',
+            fileUrl: message.fileUrl!,
+            onDownload: () async {},
+          );
+        } else {
+          contentWidget = Padding(
+            padding: const EdgeInsets.only(top: 4, bottom: 4),
+            child: VideoMessageWidget(
+              videoUrl: message.fileUrl!,
+              fileName: _resolveFileName(message.fileName, message.fileType, message.fileUrl),
+              onDownload: () => _downloadFile(message.fileUrl!, _resolveFileName(message.fileName, message.fileType, message.fileUrl)),
+            ),
+          );
+        }
         break;
       case ChatAttachmentType.document:
       case ChatAttachmentType.file:
       case ChatAttachmentType.none:
-      default:
         // Derive best available filename — prefer message.fileName, fallback to extracting from URL
         final displayName = _resolveFileName(message.fileName, message.fileType, message.fileUrl);
         contentWidget = _FileAttachmentCard(
@@ -401,6 +445,8 @@ class ChatAttachmentRenderer extends ConsumerWidget {
 
     if (uploadState != null) {
       if (uploadState.status == AttachmentUploadStatus.uploading) {
+        final pct = (uploadState.progress * 100).toInt();
+        final progressText = pct > 0 ? 'Uploading $pct%...' : 'Uploading...';
         return Stack(
           alignment: Alignment.center,
           children: [
@@ -411,22 +457,24 @@ class ChatAttachmentRenderer extends ConsumerWidget {
                 color: Colors.black.withOpacity(0.7),
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: const Row(
+              child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  SizedBox(
+                  const SizedBox(
                     width: 14,
                     height: 14,
                     child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                   ),
-                  SizedBox(width: 8),
-                  Text('Uploading...', style: TextStyle(color: Colors.white, fontSize: 12)),
+                  const SizedBox(width: 8),
+                  Text(progressText, style: const TextStyle(color: Colors.white, fontSize: 12)),
                 ],
               ),
             ),
           ],
         );
       } else if (uploadState.status == AttachmentUploadStatus.failed) {
+        final errorText = uploadState.error ?? 'Upload failed';
+        final isSizeError = errorText.toLowerCase().contains('exceed');
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -435,25 +483,37 @@ class ChatAttachmentRenderer extends ConsumerWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
-                color: AppColors.error.withOpacity(0.1),
+                color: AppColors.error.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(6),
-                border: Border.all(color: AppColors.error.withOpacity(0.3)),
+                border: Border.all(color: AppColors.error.withValues(alpha: 0.3)),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   const Icon(Icons.error_outline, color: AppColors.error, size: 14),
                   const SizedBox(width: 6),
-                  const Text('Upload failed', style: TextStyle(color: AppColors.error, fontSize: 12, fontWeight: FontWeight.w500)),
-                  const SizedBox(width: 8),
-                  InkWell(
-                    onTap: uploadState.onRetry,
-                    child: const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      child: Text('Retry', style: TextStyle(color: AppColors.primary, fontSize: 12, fontWeight: FontWeight.bold)),
+                  Flexible(
+                    child: Tooltip(
+                      message: errorText,
+                      child: Text(
+                        isSizeError ? errorText : 'Upload failed: $errorText',
+                        style: const TextStyle(color: AppColors.error, fontSize: 12, fontWeight: FontWeight.w500),
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
                   ),
-                  const Text('·', style: TextStyle(color: AppColors.slate400)),
+                  if (uploadState.onRetry != null) ...[
+                    const SizedBox(width: 8),
+                    InkWell(
+                      onTap: uploadState.onRetry,
+                      child: const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        child: Text('Retry', style: TextStyle(color: AppColors.primary, fontSize: 12, fontWeight: FontWeight.bold)),
+                      ),
+                    ),
+                    const Text('·', style: TextStyle(color: AppColors.slate400)),
+                  ],
+                  const SizedBox(width: 4),
                   InkWell(
                     onTap: () {
                       ref.read(chatControllerProvider.notifier).deleteMessage(
@@ -519,6 +579,17 @@ class _FileAttachmentCardState extends State<_FileAttachmentCard> with SingleTic
 
   Future<void> _handleDownload() async {
     if (_isDownloading) return;
+
+    if (widget.fileUrl.startsWith('temp://')) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('File is currently uploading, please wait...'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+
     setState(() => _isDownloading = true);
 
     ScaffoldMessenger.of(context).showSnackBar(

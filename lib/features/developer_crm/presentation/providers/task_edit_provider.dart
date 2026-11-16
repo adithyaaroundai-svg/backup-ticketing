@@ -136,11 +136,34 @@ class TaskEditProvider extends ChangeNotifier {
     List<int>? assigneeIds,
     List<int> removeFileIds = const [],
     List<UploadPart> newFiles = const [],
+    CrmBatchUploadProgress? onUploadProgress,
     int? currentUserId,
     String? currentUserName,
   }) async {
     final supabase = Supabase.instance.client;
-    
+
+    final uploadedPaths = await CrmStorageService.uploadBatch(
+      newFiles,
+      onProgress: onUploadProgress,
+    );
+
+    final removedStoragePaths = <String>[];
+    if (removeFileIds.isNotEmpty) {
+      try {
+        final rows = await supabase
+            .schema('aroundtally')
+            .from('task_files')
+            .select('storage_path')
+            .inFilter('id', removeFileIds);
+        for (final row in rows as List) {
+          final p = row['storage_path']?.toString();
+          if (p != null && p.isNotEmpty) removedStoragePaths.add(p);
+        }
+      } catch (e) {
+        debugPrint('Error reading storage paths for removed task files: $e');
+      }
+    }
+
     final updates = <String, dynamic>{};
     if (description != null) updates['description'] = description;
     if (priority != null) updates['priority'] = priority;
@@ -153,40 +176,47 @@ class TaskEditProvider extends ChangeNotifier {
     if (startDate != null) updates['start_date'] = startDate;
     if (status != null && currentUserId != null) updates['status_updated_by'] = currentUserId;
 
-    if (updates.isNotEmpty) {
-      await supabase.schema('aroundtally').from('tasks').update(updates).eq('id', taskId);
-    }
+    try {
+      if (updates.isNotEmpty) {
+        await supabase.schema('aroundtally').from('tasks').update(updates).eq('id', taskId);
+      }
 
-    if (statusMessage != null && statusMessage.isNotEmpty) {
-      await supabase.schema('aroundtally').from('task_status_history').insert({
-        'task_id': taskId,
-        'message': statusMessage,
-        'user_id': currentUserId,
-      });
-    }
-
-    if (assigneeIds != null) {
-      await supabase.schema('aroundtally').from('task_assignees').delete().eq('task_id', taskId);
-      for (final aId in assigneeIds) {
-        await supabase.schema('aroundtally').from('task_assignees').insert({
+      if (statusMessage != null && statusMessage.isNotEmpty) {
+        await supabase.schema('aroundtally').from('task_status_history').insert({
           'task_id': taskId,
-          'user_id': aId,
+          'message': statusMessage,
+          'user_id': currentUserId,
         });
       }
+
+      if (assigneeIds != null) {
+        await supabase.schema('aroundtally').from('task_assignees').delete().eq('task_id', taskId);
+        for (final aId in assigneeIds) {
+          await supabase.schema('aroundtally').from('task_assignees').insert({
+            'task_id': taskId,
+            'user_id': aId,
+          });
+        }
+      }
+
+      if (removeFileIds.isNotEmpty) {
+        await supabase.schema('aroundtally').from('task_files').delete().inFilter('id', removeFileIds);
+      }
+
+      for (var i = 0; i < newFiles.length; i++) {
+        await supabase.schema('aroundtally').from('task_files').insert({
+          'task_id': taskId,
+          'filename': newFiles[i].filename,
+          'storage_path': uploadedPaths[i],
+        });
+      }
+    } catch (_) {
+      await CrmStorageService.deleteFiles(uploadedPaths);
+      rethrow;
     }
 
-    if (removeFileIds.isNotEmpty) {
-      await supabase.schema('aroundtally').from('task_files').delete().inFilter('id', removeFileIds);
-    }
-
-    for (final part in newFiles) {
-      final path = await CrmStorageService.uploadFile(part);
-
-      await supabase.schema('aroundtally').from('task_files').insert({
-        'task_id': taskId,
-        'filename': part.filename,
-        'storage_path': path,
-      });
+    if (removedStoragePaths.isNotEmpty) {
+      await CrmStorageService.deleteFiles(removedStoragePaths);
     }
 
     if (currentUserId != null && currentUserName != null) {
@@ -271,7 +301,24 @@ class TaskEditProvider extends ChangeNotifier {
   }
 
   Future<void> delete({int? currentUserId, String? currentUserName}) async {
-    await Supabase.instance.client.schema('aroundtally').from('tasks').delete().eq('id', taskId);
+    final supabase = Supabase.instance.client;
+    final storagePaths = <String>[];
+    try {
+      final rows = await supabase
+          .schema('aroundtally')
+          .from('task_files')
+          .select('storage_path')
+          .eq('task_id', taskId);
+      for (final row in rows as List) {
+        final p = row['storage_path']?.toString();
+        if (p != null && p.isNotEmpty) storagePaths.add(p);
+      }
+    } catch (e) {
+      debugPrint('Error reading task file paths before delete: $e');
+    }
+
+    await supabase.schema('aroundtally').from('tasks').delete().eq('id', taskId);
+    await CrmStorageService.deleteFiles(storagePaths);
     if (currentUserId != null && currentUserName != null) {
       try {
         final tDesc = task?.description ?? '#$taskId';

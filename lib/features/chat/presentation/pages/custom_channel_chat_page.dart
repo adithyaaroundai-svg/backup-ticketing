@@ -1,7 +1,6 @@
 import 'aroundai_project_status_screen.dart';
 import '../widgets/edit_message_dialog.dart';
 import 'dart:async';
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -28,21 +27,17 @@ import '../providers/chat_provider.dart';
 import '../providers/custom_channel_provider.dart';
 import '../../domain/entities/chat_message.dart';
 import '../../domain/entities/custom_channel.dart';
-import '../../data/repositories/chat_repository.dart';
 import '../../data/repositories/custom_channel_repository.dart';
 import '../widgets/shared_media_view.dart';
 import '../widgets/markdown_text_editing_controller.dart';
 import '../widgets/add_members_page.dart';
 import '../widgets/chat_voice_recorder.dart';
-import '../widgets/video_message_widget.dart';
 import '../widgets/forward_message_dialog.dart';
 import '../widgets/chat_attachment_renderer.dart';
 import '../widgets/chat_drop_overlay.dart';
 import '../../../../core/services/chat_drag_drop_paste_helper.dart';
-import '../../../../core/utils/download_helper.dart';
-import '../../../../core/utils/storage_utils.dart';
 import '../../../../core/services/zoho_launcher.dart';
-import '../../../../core/services/zoho_api_service.dart';
+import '../../../../core/utils/storage_utils.dart';
 import '../../../../features/calls/domain/models/call_history_item.dart';
 import '../../../../features/calls/presentation/providers/call_history_provider.dart';
 
@@ -187,7 +182,6 @@ class _CustomChannelChatPageState extends ConsumerState<CustomChannelChatPage> {
 
   // File attachment state
   List<PlatformFile> _selectedFiles = [];
-  bool _isUploading = false;
   bool _isDragging = false;
   ChatDragDropPasteSubscription? _dragDropPasteSub;
 
@@ -443,13 +437,38 @@ class _CustomChannelChatPageState extends ConsumerState<CustomChannelChatPage> {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.any,
         allowMultiple: true,
-        withData: true,
+        withData: kIsWeb,
       );
       
       if (result != null && result.files.isNotEmpty) {
-        setState(() {
-          _selectedFiles.addAll(result.files);
-        });
+        final validFiles = <PlatformFile>[];
+        final oversizedNames = <String>[];
+
+        for (final file in result.files) {
+          if (file.size > kMaxChatAttachmentSize) {
+            oversizedNames.add('${file.name} (${formatChatFileSize(file.size)})');
+          } else {
+            validFiles.add(file);
+          }
+        }
+
+        if (oversizedNames.isNotEmpty && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'File(s) exceed 50 MB limit: ${oversizedNames.join(', ')}. Please share large files via Google Drive link.',
+              ),
+              backgroundColor: AppColors.error,
+              duration: const Duration(seconds: 5),
+            ),
+          );
+        }
+
+        if (validFiles.isNotEmpty) {
+          setState(() {
+            _selectedFiles.addAll(validFiles);
+          });
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -675,37 +694,17 @@ class _CustomChannelChatPageState extends ConsumerState<CustomChannelChatPage> {
         channel: widget.channelId,
       );
     } else {
-      setState(() => _isUploading = true);
-      try {
-        final uploadResults = await uploadChatAttachmentsParallel(filesToSend);
-
-        for (int i = 0; i < uploadResults.length; i++) {
-          final res = uploadResults[i];
-          await controller.sendMessage(
-            senderId: currentUser.id,
-            senderName: currentUser.fullName.isNotEmpty ? currentUser.fullName : currentUser.username,
-            senderRole: currentUser.role,
-            content: i == 0 ? text : '',
-            replyToMessageId: i == 0 ? _replyingTo : null,
-            replyToSenderName: i == 0 ? _replyToName : null,
-            replyToContent: i == 0 ? _replyToContent : null,
-            fileUrl: res.fileUrl,
-            fileName: res.fileName,
-            fileType: res.fileType,
-            channel: widget.channelId,
-          );
-        }
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Failed to upload file(s): $e')),
-          );
-        }
-      } finally {
-        if (mounted) {
-          setState(() => _isUploading = false);
-        }
-      }
+      await controller.sendFileMessages(
+        senderId: currentUser.id,
+        senderName: currentUser.fullName.isNotEmpty ? currentUser.fullName : currentUser.username,
+        senderRole: currentUser.role,
+        files: filesToSend,
+        content: text,
+        replyToMessageId: _replyingTo,
+        replyToSenderName: _replyToName,
+        replyToContent: _replyToContent,
+        channel: widget.channelId,
+      );
     }
 
     setState(() {
@@ -2061,10 +2060,10 @@ class _CustomChannelChatPageState extends ConsumerState<CustomChannelChatPage> {
                     ),
                     const SizedBox(width: 8),
                     // Send button
-                    if (_isRecordingVoice || (_isTextEmpty && _selectedFiles.isEmpty && !_isUploading))
+                    if (_isRecordingVoice || (_isTextEmpty && _selectedFiles.isEmpty))
                       ChatVoiceRecorder(
                         key: const ValueKey('custom_channel_chat_voice_recorder'),
-                        disabled: _selectedFiles.isNotEmpty || _isUploading,
+                        disabled: _selectedFiles.isNotEmpty,
                         onRecordComplete: (path, duration) => _sendVoiceNote(path, duration),
                         onRecordingStateChanged: (isRecording) {
                           setState(() => _isRecordingVoice = isRecording);

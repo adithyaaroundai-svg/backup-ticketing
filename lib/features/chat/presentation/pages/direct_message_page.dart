@@ -111,7 +111,6 @@ class _DirectMessagePageState extends ConsumerState<DirectMessagePage> {
   bool _hasInitialScrolled = false;
   ChatMessage? _replyingToMessage;
   List<PlatformFile> _selectedFiles = [];
-  bool _isUploadingFile = false;
   bool _isRecordingVoice = false;
   bool _isTextEmpty = true;
   ChatDragDropPasteSubscription? _dragDropPasteSub;
@@ -478,47 +477,21 @@ class _DirectMessagePageState extends ConsumerState<DirectMessagePage> {
             channel: 'dm',
           );
     } else {
-      setState(() {
-        _isUploadingFile = true;
-      });
-
-      try {
-        final uploadResults = await uploadChatAttachmentsParallel(filesToSend);
-
-        for (int i = 0; i < uploadResults.length; i++) {
-          final res = uploadResults[i];
-          ref
-              .read(chatControllerProvider.notifier)
-              .sendMessage(
-                senderId: agent.id,
-                senderName: agent.fullName,
-                senderRole: agent.role,
-                content: i == 0 ? plainText : '',
-                receiverId: widget.partnerId,
-                senderAvatarUrl: agent.avatarUrl,
-                replyToMessageId: i == 0 ? replyToMessageId : null,
-                replyToSenderName: i == 0 ? replyToSenderName : null,
-                replyToContent: i == 0 ? replyToContent : null,
-                fileUrl: res.fileUrl,
-                fileName: res.fileName,
-                fileType: res.fileType,
-                channel: 'dm',
-              );
-        }
-      } catch (e) {
-        debugPrint('File upload error: $e');
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Failed to upload file(s): $e')),
+      ref
+          .read(chatControllerProvider.notifier)
+          .sendFileMessages(
+            senderId: agent.id,
+            senderName: agent.fullName,
+            senderRole: agent.role,
+            files: filesToSend,
+            content: plainText,
+            receiverId: widget.partnerId,
+            senderAvatarUrl: agent.avatarUrl,
+            replyToMessageId: replyToMessageId,
+            replyToSenderName: replyToSenderName,
+            replyToContent: replyToContent,
+            channel: 'dm',
           );
-        }
-      } finally {
-        if (mounted) {
-          setState(() {
-            _isUploadingFile = false;
-          });
-        }
-      }
     }
 
     final agentsAsync = ref.read(agentsListProvider);
@@ -1815,10 +1788,10 @@ class _DirectMessagePageState extends ConsumerState<DirectMessagePage> {
                 ),
                 const SizedBox(width: 4),
                 ],
-                if (_isRecordingVoice || (_isTextEmpty && _selectedFiles.isEmpty && !_isUploadingFile))
+                if (_isRecordingVoice || (_isTextEmpty && _selectedFiles.isEmpty))
                   ChatVoiceRecorder(
                     key: const ValueKey('dm_chat_voice_recorder'),
-                    disabled: _selectedFiles.isNotEmpty || _isUploadingFile,
+                    disabled: _selectedFiles.isNotEmpty,
                     onRecordComplete: (path, duration) => _sendVoiceNote(path, duration),
                     onRecordingStateChanged: (isRecording) {
                       setState(() => _isRecordingVoice = isRecording);
@@ -1841,28 +1814,14 @@ class _DirectMessagePageState extends ConsumerState<DirectMessagePage> {
                       ),
                     ],
                   ),
-                  child: _isUploadingFile
-                      ? const SizedBox(
-                          width: 36,
-                          height: 36,
-                          child: Padding(
-                            padding: EdgeInsets.all(9.0),
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation<Color>(
-                                Colors.white,
-                              ),
-                            ),
-                          ),
-                        )
-                      : IconButton(
-                          icon: const Icon(
-                            LucideIcons.send,
-                            color: Colors.white,
-                            size: 18,
-                          ),
-                          onPressed: _sendMessage,
-                        ),
+                  child: IconButton(
+                    icon: const Icon(
+                      LucideIcons.send,
+                      color: Colors.white,
+                      size: 18,
+                    ),
+                    onPressed: _sendMessage,
+                  ),
                 ),
                 ],
               ],
@@ -1938,16 +1897,45 @@ class _DirectMessagePageState extends ConsumerState<DirectMessagePage> {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.any,
         allowMultiple: true,
-        withData: true,
+        withData: kIsWeb,
       );
 
       if (result != null && result.files.isNotEmpty) {
-        setState(() {
-          _selectedFiles.addAll(result.files);
-        });
+        final validFiles = <PlatformFile>[];
+        final oversizedNames = <String>[];
+
+        for (final file in result.files) {
+          if (file.size > kMaxChatAttachmentSize) {
+            oversizedNames.add('${file.name} (${formatChatFileSize(file.size)})');
+          } else {
+            validFiles.add(file);
+          }
+        }
+
+        if (oversizedNames.isNotEmpty && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'File(s) exceed 50 MB limit: ${oversizedNames.join(', ')}. Please share large files via Google Drive link.',
+              ),
+              backgroundColor: AppColors.error,
+              duration: const Duration(seconds: 5),
+            ),
+          );
+        }
+
+        if (validFiles.isNotEmpty) {
+          setState(() {
+            _selectedFiles.addAll(validFiles);
+          });
+        }
       }
     } catch (e) {
-      // Handle error
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to pick file: $e')),
+        );
+      }
     }
   }
 
@@ -1955,60 +1943,6 @@ class _DirectMessagePageState extends ConsumerState<DirectMessagePage> {
     setState(() {
       _selectedFiles.clear();
     });
-  }
-
-  Future<String?> _uploadFile(PlatformFile file) async {
-    try {
-      print('Starting file upload: ${file.name}');
-      final storage = Supabase.instance.client.storage;
-      final filePath = sanitizeStorageFileName(file.name);
-
-      Uint8List fileBytes;
-
-      if (file.bytes != null) {
-        // Bytes already loaded by FilePicker (withData: true)
-        fileBytes = file.bytes!;
-        print('Using file bytes from picker: ${fileBytes.length}');
-      } else if (file.path != null) {
-        // Native platform fallback — read from disk
-        fileBytes = await File(file.path!).readAsBytes();
-        print('File bytes read from path: ${fileBytes.length}');
-      } else {
-        print('Error: No file bytes or path available');
-        return null;
-      }
-
-      if (fileBytes.isEmpty) {
-        print('Error: File is empty (0 bytes)');
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Cannot upload: file appears to be empty. Please try again.')),
-          );
-        }
-        return null;
-      }
-
-      final mimeType = getMimeType(file.extension, file.name);
-      print('Uploading to storage: $filePath');
-      await storage
-          .from('chat_attachments')
-          .uploadBinary(
-            filePath,
-            fileBytes,
-            fileOptions: FileOptions(
-              contentType: mimeType,
-              upsert: false,
-            ),
-          );
-
-      print('Upload successful, getting public URL...');
-      final publicUrl = storage.from('chat_attachments').getPublicUrl(filePath);
-      print('Public URL: $publicUrl');
-      return publicUrl;
-    } catch (e) {
-      print('File upload error: $e');
-      return null;
-    }
   }
 
   void _handleStarMessage(BuildContext context, String messageId) {
@@ -5033,7 +4967,8 @@ class _InlineParser {
   });
 
   static final _tokenPattern = RegExp(
-    r'\*\*\*'
+    r'https?:\/\/[^\s<]+'
+    r'|\*\*\*'
     r'|\*\*'
     r'|__'
     r'|\*(?!\*)'
@@ -5042,6 +4977,7 @@ class _InlineParser {
     r'|<u>'
     r'|<\/u>'
     r'|`[^`]+`', // inline code
+    caseSensitive: false,
   );
 
   TextSpan parse() {
@@ -5090,6 +5026,13 @@ class _InlineParser {
             ),
           ),
         );
+        pos = tokenEnd;
+        continue;
+      }
+
+      // ── URLs with underscores/special chars (preserve intact without markdown splitting) ──
+      if (token.toLowerCase().startsWith('http://') || token.toLowerCase().startsWith('https://')) {
+        spans.add(_plain(token));
         pos = tokenEnd;
         continue;
       }

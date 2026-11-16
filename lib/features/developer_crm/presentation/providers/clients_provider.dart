@@ -94,4 +94,54 @@ class ClientsProvider extends ChangeNotifier {
       return null;
     }
   }
+
+  Future<Client?> updateClient(
+    int id, {
+    required String name,
+    String? contact,
+    int? currentUserId,
+    String? currentUserName,
+  }) async {
+    try {
+      final supabase = Supabase.instance.client;
+      final cleanName = name.trim();
+      final cleanContact = (contact != null && contact.trim().isNotEmpty) ? contact.trim() : null;
+
+      final resp = await supabase.schema('aroundtally').from('clients').update({
+        'name': cleanName,
+        'contact': cleanContact,
+      }).eq('id', id).select().single();
+
+      final updated = Client.fromJson(resp);
+
+      if (currentUserId != null && currentUserName != null) {
+        try {
+          await supabase.schema('aroundtally').from('activity_log').insert({
+            'user_id': currentUserId,
+            'user_name': currentUserName,
+            'message': 'updated client details for "$cleanName"',
+          });
+        } catch (_) {}
+      }
+
+      final index = clients.indexWhere((c) => c.id == id);
+      if (index != -1) {
+        final existing = clients[index];
+        clients[index] = Client(
+          id: updated.id,
+          name: updated.name,
+          contact: updated.contact,
+          createdAt: existing.createdAt,
+          openCount: existing.openCount,
+          ongoing: existing.ongoing,
+          lastActivity: existing.lastActivity,
+        );
+      }
+      notifyListeners();
+      return index != -1 ? clients[index] : updated;
+    } catch (e) {
+      debugPrint('Error updating client: $e');
+      rethrow;
+    }
+  }
 }

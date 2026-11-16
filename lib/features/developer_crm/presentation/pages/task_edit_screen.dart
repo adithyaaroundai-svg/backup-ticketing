@@ -1,7 +1,4 @@
-import 'package:flutter/foundation.dart';
-import '../../core/upload_part.dart';
 import 'dart:async';
-
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -9,13 +6,16 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../../../core/design_system/theme/app_colors.dart';
+import '../../core/crm_storage_service.dart';
 import '../../core/download.dart';
 import '../../core/enums.dart';
 import '../../core/money_utils.dart';
 import '../../core/time_utils.dart';
+import '../../core/upload_part.dart';
 import '../../domain/entities/advance.dart';
 import '../providers/auth_provider.dart';
 import '../providers/task_edit_provider.dart';
+import '../widgets/attachment_picker_section.dart';
 import '../widgets/common.dart';
 
 class TaskEditScreen extends StatelessWidget {
@@ -56,12 +56,15 @@ class _TaskEditBodyState extends State<_TaskEditBody> {
   final Set<int> _assignees = {};
   final Set<int> _removeFileIds = {};
   final List<PlatformFile> _newFiles = [];
+  final Map<PlatformFile, UploadPart> _partCache = {};
 
   bool _hydrated = false;
   bool _saving = false;
   bool _savingNote = false;
   bool _addingAdvance = false;
   String? _error;
+  String? _uploadLabel;
+  double? _uploadProgress;
   Timer? _ticker;
   final ScrollController _horizontalScrollController = ScrollController();
 
@@ -124,15 +127,31 @@ class _TaskEditBodyState extends State<_TaskEditBody> {
     }
   }
 
+  UploadPart _partFor(PlatformFile file) => _partCache.putIfAbsent(
+        file,
+        () => UploadPart.fromPlatformFile(file, field: 'task_files'),
+      );
+
   Future<void> _pickFiles() async {
-    final result = await FilePicker.platform.pickFiles(allowMultiple: true, withData: kIsWeb);
-    if (result != null) setState(() => _newFiles.addAll(result.files));
+    final picked = await pickCrmUploadFiles();
+    if (picked.isNotEmpty) {
+      setState(() {
+        _newFiles.addAll(picked);
+        _error = null;
+      });
+    }
   }
 
   Future<void> _save(TaskEditProvider prov, AuthProvider authProv, bool isManager) async {
+    if (hasInvalidCrmAttachments(_newFiles)) {
+      setState(() => _error = 'Remove empty or unreadable (0 B) files before saving.');
+      return;
+    }
     setState(() {
       _saving = true;
       _error = null;
+      _uploadLabel = _newFiles.isEmpty ? null : 'Preparing upload...';
+      _uploadProgress = _newFiles.isEmpty ? null : 0.0;
     });
     try {
       await prov.saveFull(
@@ -149,20 +168,34 @@ class _TaskEditBodyState extends State<_TaskEditBody> {
         assigneeIds: _assignees.toList(),
         removeFileIds: _removeFileIds.toList(),
         newFiles: [
-          for (final f in _newFiles) UploadPart.fromPlatformFile(f, field: 'task_files')
+          for (final f in _newFiles) _partFor(f)
         ],
+        onUploadProgress: (idx, total, p, filename) {
+          if (!mounted) return;
+          setState(() {
+            _uploadLabel = formatCrmUploadProgressLabel(idx, total, p, filename);
+            _uploadProgress = total <= 1 ? p : (idx + p) / total;
+          });
+        },
         currentUserId: authProv.user?.id,
         currentUserName: authProv.user?.name,
       );
       _removeFileIds.clear();
+      _partCache.clear();
       _newFiles.clear();
       _statusMessageCtrl.clear();
       _hydrated = false;
       if (mounted) showSavedSnack(context, message: 'Task saved \u2713');
     } catch (e) {
-      setState(() => _error = e.toString());
+      if (mounted) setState(() => _error = e.toString());
     } finally {
-      if (mounted) setState(() => _saving = false);
+      if (mounted) {
+        setState(() {
+          _saving = false;
+          _uploadLabel = null;
+          _uploadProgress = null;
+        });
+      }
     }
   }
 
@@ -224,12 +257,25 @@ class _TaskEditBodyState extends State<_TaskEditBody> {
           ],
         ),
         child: SafeArea(
-          child: FilledButton(
-            onPressed: _saving ? null : () => _save(prov, context.read<AuthProvider>(), isManager),
-            style: FilledButton.styleFrom(padding: const EdgeInsets.all(16)),
-            child: _saving
-                ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                : const Text('Save task', style: TextStyle(fontSize: 16)),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (_saving && _uploadLabel != null) ...[
+                CrmUploadProgressBanner(
+                  label: _uploadLabel!,
+                  progress: _uploadProgress,
+                ),
+                const SizedBox(height: 10),
+              ],
+              FilledButton(
+                onPressed: _saving ? null : () => _save(prov, context.read<AuthProvider>(), isManager),
+                style: FilledButton.styleFrom(padding: const EdgeInsets.all(16)),
+                child: _saving
+                    ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                    : const Text('Save task', style: TextStyle(fontSize: 16)),
+              ),
+            ],
           ),
         ),
       ),
@@ -390,6 +436,7 @@ class _TaskEditBodyState extends State<_TaskEditBody> {
                         CheckboxListTile(
                           contentPadding: EdgeInsets.zero,
                           value: _removeFileIds.contains(f.id),
+                          enabled: !_saving,
                           onChanged: (v) => setState(() {
                             if (v == true) {
                               _removeFileIds.add(f.id);
@@ -398,9 +445,20 @@ class _TaskEditBodyState extends State<_TaskEditBody> {
                             }
                           }),
                           title: Text(f.filename),
-                          subtitle: const Text('Check to remove'),
+                          subtitle: Text(
+                            CrmStorageService.isLegacyUnmigratedPath(f.storagePath)
+                                ? 'Check to remove \u2022 Legacy attachment (not in Supabase Storage)'
+                                : 'Check to remove',
+                          ),
                           secondary: IconButton(
-                            icon: const Icon(Icons.download),
+                            icon: Icon(
+                              CrmStorageService.isLegacyUnmigratedPath(f.storagePath)
+                                  ? Icons.cloud_off_outlined
+                                  : Icons.download,
+                            ),
+                            tooltip: CrmStorageService.isLegacyUnmigratedPath(f.storagePath)
+                                ? 'Legacy attachment not migrated to Supabase Storage'
+                                : 'Download',
                             onPressed: () => openDownload(context, f.storagePath ?? '', filename: f.filename),
                           ),
                           controlAffinity: ListTileControlAffinity.leading,
@@ -409,10 +467,25 @@ class _TaskEditBodyState extends State<_TaskEditBody> {
                       Align(
                         alignment: Alignment.centerLeft,
                         child: OutlinedButton.icon(
-                          onPressed: _pickFiles,
+                          onPressed: _saving ? null : _pickFiles,
                           icon: const Icon(Icons.attach_file),
                           label: Text('Attach new files (${_newFiles.length})'),
                         ),
+                      ),
+                      PendingAttachmentList(
+                        files: _newFiles,
+                        enabled: !_saving,
+                        padding: const EdgeInsets.only(top: 6),
+                        onRemove: (i) => setState(() {
+                          _partCache.remove(_newFiles[i]);
+                          _newFiles.removeAt(i);
+                          _error = null;
+                        }),
+                        onClearAll: () => setState(() {
+                          _partCache.clear();
+                          _newFiles.clear();
+                          _error = null;
+                        }),
                       ),
                     ],
                   ),

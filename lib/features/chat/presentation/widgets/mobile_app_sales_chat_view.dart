@@ -1,12 +1,10 @@
 import 'edit_message_dialog.dart';
 import 'dart:async';
-import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:url_launcher/url_launcher.dart' as url_launcher;
 import 'package:flutter_linkify/flutter_linkify.dart';
@@ -62,7 +60,6 @@ class _MobileAppSalesChatViewState extends ConsumerState<MobileAppSalesChatView>
 
   // File attachment state
   List<PlatformFile> _selectedFiles = [];
-  bool _isUploading = false;
 
   // Emoji / GIF picker state
   bool _showEmojiPicker = false;
@@ -262,13 +259,38 @@ class _MobileAppSalesChatViewState extends ConsumerState<MobileAppSalesChatView>
       final result = await FilePicker.platform.pickFiles(
         type: FileType.any,
         allowMultiple: true,
-        withData: true,
+        withData: kIsWeb,
       );
       
       if (result != null && result.files.isNotEmpty) {
-        setState(() {
-          _selectedFiles.addAll(result.files);
-        });
+        final validFiles = <PlatformFile>[];
+        final oversizedNames = <String>[];
+
+        for (final file in result.files) {
+          if (file.size > kMaxChatAttachmentSize) {
+            oversizedNames.add('${file.name} (${formatChatFileSize(file.size)})');
+          } else {
+            validFiles.add(file);
+          }
+        }
+
+        if (oversizedNames.isNotEmpty && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'File(s) exceed 50 MB limit: ${oversizedNames.join(', ')}. Please share large files via Google Drive link.',
+              ),
+              backgroundColor: AppColors.error,
+              duration: const Duration(seconds: 5),
+            ),
+          );
+        }
+
+        if (validFiles.isNotEmpty) {
+          setState(() {
+            _selectedFiles.addAll(validFiles);
+          });
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -491,37 +513,17 @@ class _MobileAppSalesChatViewState extends ConsumerState<MobileAppSalesChatView>
         channel: _channelId,
       );
     } else {
-      setState(() => _isUploading = true);
-      try {
-        final uploadResults = await uploadChatAttachmentsParallel(filesToSend);
-
-        for (int i = 0; i < uploadResults.length; i++) {
-          final res = uploadResults[i];
-          await controller.sendMessage(
-            senderId: currentUser.id,
-            senderName: currentUser.fullName.isNotEmpty ? currentUser.fullName : currentUser.username,
-            senderRole: currentUser.role,
-            content: i == 0 ? text : '',
-            replyToMessageId: i == 0 ? _replyingTo : null,
-            replyToSenderName: i == 0 ? _replyToName : null,
-            replyToContent: i == 0 ? _replyToContent : null,
-            fileUrl: res.fileUrl,
-            fileName: res.fileName,
-            fileType: res.fileType,
-            channel: _channelId,
-          );
-        }
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Failed to upload file(s): $e')),
-          );
-        }
-      } finally {
-        if (mounted) {
-          setState(() => _isUploading = false);
-        }
-      }
+      await controller.sendFileMessages(
+        senderId: currentUser.id,
+        senderName: currentUser.fullName.isNotEmpty ? currentUser.fullName : currentUser.username,
+        senderRole: currentUser.role,
+        files: filesToSend,
+        content: text,
+        replyToMessageId: _replyingTo,
+        replyToSenderName: _replyToName,
+        replyToContent: _replyToContent,
+        channel: _channelId,
+      );
     }
 
     setState(() {
@@ -1117,10 +1119,10 @@ class _MobileAppSalesChatViewState extends ConsumerState<MobileAppSalesChatView>
                     ),
                     const SizedBox(width: 8),
                     // Send button
-                    if (_isRecordingVoice || (_isTextEmpty && _selectedFiles.isEmpty && !_isUploading))
+                    if (_isRecordingVoice || (_isTextEmpty && _selectedFiles.isEmpty))
                       ChatVoiceRecorder(
                         key: const ValueKey('sales_chat_voice_recorder'),
-                        disabled: _selectedFiles.isNotEmpty || _isUploading,
+                        disabled: _selectedFiles.isNotEmpty,
                         onRecordComplete: (path, duration) => _sendVoiceNote(path, duration),
                         onRecordingStateChanged: (isRecording) {
                           setState(() => _isRecordingVoice = isRecording);

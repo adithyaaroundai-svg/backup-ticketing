@@ -6,8 +6,21 @@ import 'crm_storage_service.dart';
 /// Builds a clean URL with `?download=filename` and uses [downloadFileDirectly]
 /// to save the file properly on both Web and Native desktop platforms.
 Future<void> openDownload(BuildContext context, String storagePathOrUrl, {String? filename}) async {
+  final rawPath = storagePathOrUrl.trim();
+  final effectiveName = (filename != null && filename.trim().isNotEmpty)
+      ? filename.trim()
+      : rawPath.split('/').last.split('?').first;
   try {
-    final effectiveUrl = CrmStorageService.getDownloadUrl(storagePathOrUrl, filename: filename);
+    if (rawPath.isEmpty) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('File path is empty or invalid.')),
+        );
+      }
+      return;
+    }
+
+    final effectiveUrl = CrmStorageService.getDownloadUrl(rawPath, filename: effectiveName);
     if (effectiveUrl.isEmpty) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -17,7 +30,6 @@ Future<void> openDownload(BuildContext context, String storagePathOrUrl, {String
       return;
     }
 
-    final effectiveName = filename ?? storagePathOrUrl.split('/').last.split('?').first;
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -27,11 +39,34 @@ Future<void> openDownload(BuildContext context, String storagePathOrUrl, {String
       );
     }
 
-    await downloadFileDirectly(effectiveUrl, effectiveName);
+    final check = await CrmStorageService.checkDownloadable(
+      effectiveUrl,
+      storagePath: rawPath,
+    );
+    if (check.status == DownloadAvailabilityStatus.missing) {
+      if (context.mounted) {
+        final messenger = ScaffoldMessenger.of(context);
+        messenger.hideCurrentSnackBar();
+        final message = check.isLegacyPath
+            ? 'File "$effectiveName" is an older attachment that has not been migrated to Supabase Storage.'
+            : 'File "$effectiveName" is missing from storage (HTTP ${check.statusCode ?? 404}).';
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(message),
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
+      return;
+    }
+
+    await downloadFileDirectly(effectiveUrl, effectiveName, throwOnError: true);
   } catch (e) {
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not download file: $e')),
+      final messenger = ScaffoldMessenger.of(context);
+      messenger.hideCurrentSnackBar();
+      messenger.showSnackBar(
+        SnackBar(content: Text('Could not download "$effectiveName": $e')),
       );
     }
   }

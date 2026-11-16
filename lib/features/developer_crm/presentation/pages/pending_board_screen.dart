@@ -223,34 +223,38 @@ class _PendingBoardBodyState extends State<_PendingBoardBody> {
       return;
     }
     final clientId = await showChooseClientDialog(context, clients: clients);
-    if (clientId == null || !mounted) return;
-    final formResult = await showTaskFormDialog(context, users: _assigneeOptions, initialPending: true);
-    if (formResult == null || !mounted) return;
-    try {
-      final authProv = context.read<AuthProvider>();
-      final clientName = clients.firstWhere(
-        (c) => c.id == clientId,
-        orElse: () => Client(id: clientId, name: ''),
-      ).name;
+    if (clientId == null || !context.mounted) return;
+    final authProv = context.read<AuthProvider>();
+    final clientName = clients
+        .firstWhere(
+          (c) => c.id == clientId,
+          orElse: () => Client(id: clientId, name: ''),
+        )
+        .name;
 
-      await prov.createTask(
+    final formResult = await showTaskFormDialog(
+      context,
+      users: _assigneeOptions,
+      initialPending: true,
+      onSubmit: (result, onUploadProgress) => prov.createTask(
         clientId: clientId,
         clientName: clientName,
-        description: formResult.description,
-        priority: formResult.priority,
-        status: formResult.status,
-        expectedFinish: formResult.expectedFinish,
-        startDate: formResult.startDate,
-        approved: formResult.approved,
+        description: result.description,
+        priority: result.priority,
+        status: result.status,
+        expectedFinish: result.expectedFinish,
+        startDate: result.startDate,
+        approved: result.approved,
         pending: true,
-        assigneeIds: formResult.assigneeIds,
-        files: formResult.files,
+        assigneeIds: result.assigneeIds,
+        files: result.files,
+        onUploadProgress: onUploadProgress,
         currentUserId: authProv.user?.id,
         currentUserName: authProv.user?.name,
-      );
-      if (context.mounted) showSavedSnack(context, message: 'Pending task created \u2713');
-    } catch (e) {
-      if (context.mounted) showSavedSnack(context, ok: false, message: e.toString());
+      ),
+    );
+    if (formResult != null && context.mounted) {
+      showSavedSnack(context, message: 'Pending task created \u2713');
     }
   }
 }

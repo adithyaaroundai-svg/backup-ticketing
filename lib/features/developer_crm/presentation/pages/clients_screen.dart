@@ -9,6 +9,7 @@ import '../providers/auth_provider.dart';
 import '../providers/clients_provider.dart';
 import '../widgets/board_chrome.dart';
 import '../widgets/common.dart';
+import '../widgets/edit_client_dialog.dart';
 
 class ClientsScreen extends StatefulWidget {
   const ClientsScreen({super.key});
@@ -191,18 +192,38 @@ class _ClientsBodyState extends State<_ClientsBody> {
                       activity: 'Last activity',
                     ),
                     for (var i = 0; i < clients.length; i++)
-                      InkWell(
+                      _ClientLine(
+                        header: false,
+                        shaded: i.isOdd,
+                        name: clients[i].name,
+                        contact: clients[i].contact?.trim().isNotEmpty == true ? clients[i].contact! : '-',
+                        open: clients[i].openCount ?? '0',
+                        ongoing: clients[i].ongoing == true ? 'Active' : 'Idle',
+                        activity: clients[i].lastActivity == null ? '-' : fmtDateTimeIst(clients[i].lastActivity),
+                        ongoingActive: clients[i].ongoing == true,
                         onTap: () => context.push('/dev-crm/clients/${clients[i].id}'),
-                        child: _ClientLine(
-                          header: false,
-                          shaded: i.isOdd,
-                          name: clients[i].name,
-                          contact: clients[i].contact?.trim().isNotEmpty == true ? clients[i].contact! : '-',
-                          open: clients[i].openCount ?? '0',
-                          ongoing: clients[i].ongoing == true ? 'Active' : 'Idle',
-                          activity: clients[i].lastActivity == null ? '-' : fmtDateTimeIst(clients[i].lastActivity),
-                          ongoingActive: clients[i].ongoing == true,
-                        ),
+                        onEdit: () async {
+                          final authProv = context.read<AuthProvider>();
+                          final updated = await showEditClientDialog(
+                            context,
+                            client: clients[i],
+                            onSave: (newName, newContact) => prov.updateClient(
+                              clients[i].id,
+                              name: newName,
+                              contact: newContact,
+                              currentUserId: authProv.user?.id,
+                              currentUserName: authProv.user?.name,
+                            ),
+                          );
+                          if (updated == true && context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Client details updated successfully'),
+                                duration: Duration(seconds: 2),
+                              ),
+                            );
+                          }
+                        },
                       ),
                   ],
                 ),
@@ -278,6 +299,8 @@ class _ClientLine extends StatelessWidget {
     required this.activity,
     this.shaded = false,
     this.ongoingActive = false,
+    this.onTap,
+    this.onEdit,
   });
 
   final bool header;
@@ -288,6 +311,8 @@ class _ClientLine extends StatelessWidget {
   final String ongoing;
   final String activity;
   final bool ongoingActive;
+  final VoidCallback? onTap;
+  final VoidCallback? onEdit;
 
   @override
   Widget build(BuildContext context) {
@@ -299,9 +324,9 @@ class _ClientLine extends StatelessWidget {
     );
     final activeBadgeColor = isDark ? const Color(0xFF34D399) : AppColors.success;
 
-    return Container(
+    final rowContent = Container(
       constraints: const BoxConstraints(minHeight: 48),
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
       decoration: BoxDecoration(
         color: header ? context.adaptiveSlate100 : (shaded ? context.adaptiveSlate50 : Colors.transparent),
         border: Border(bottom: BorderSide(color: context.adaptiveBorder, width: 0.6)),
@@ -335,9 +360,30 @@ class _ClientLine extends StatelessWidget {
                   ),
           ),
           Expanded(flex: 3, child: _text(activity, style, align: TextAlign.right)),
+          SizedBox(
+            width: 48,
+            child: header
+                ? _text('Actions', style, align: TextAlign.center)
+                : Center(
+                    child: IconButton(
+                      icon: Icon(Icons.edit_outlined, size: 17, color: context.adaptiveSlate500),
+                      tooltip: 'Edit client details',
+                      splashRadius: 18,
+                      onPressed: onEdit,
+                    ),
+                  ),
+          ),
         ],
       ),
     );
+
+    if (onTap != null) {
+      return InkWell(
+        onTap: onTap,
+        child: rowContent,
+      );
+    }
+    return rowContent;
   }
 
   Widget _text(String value, TextStyle style, {TextAlign align = TextAlign.left}) {

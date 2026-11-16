@@ -315,27 +315,54 @@ class TaskBoardProvider extends ChangeNotifier {
     bool pending = false,
     List<int> assigneeIds = const [],
     List<UploadPart> files = const [],
+    CrmBatchUploadProgress? onUploadProgress,
     int? currentUserId,
     String? currentUserName,
   }) async {
     final supabase = Supabase.instance.client;
     final taskDate = todayIstDateKey();
 
-    final resp = await supabase.schema('aroundtally').from('tasks').insert({
-      'client_id': clientId,
-      'description': description,
-      'priority': priority,
-      'status': status,
-      'expected_finish': expectedFinish,
-      'start_date': startDate,
-      'task_date': taskDate,
-      'display_date': taskDate,
-      'approved': approved ? 1 : 0,
-      'pending': pending ? 1 : 0,
-      'created_by': currentUserId,
-    }).select().single();
-    
-    final taskId = resp['id'];
+    final uploadedPaths = await CrmStorageService.uploadBatch(
+      files,
+      onProgress: onUploadProgress,
+    );
+
+    late final Map<String, dynamic> resp;
+    try {
+      resp = await supabase.schema('aroundtally').from('tasks').insert({
+        'client_id': clientId,
+        'description': description,
+        'priority': priority,
+        'status': status,
+        'expected_finish': expectedFinish,
+        'start_date': startDate,
+        'task_date': taskDate,
+        'display_date': taskDate,
+        'approved': approved ? 1 : 0,
+        'pending': pending ? 1 : 0,
+        'created_by': currentUserId,
+      }).select().single();
+
+      final taskId = resp['id'];
+
+      for (final aId in assigneeIds) {
+        await supabase.schema('aroundtally').from('task_assignees').insert({
+          'task_id': taskId,
+          'user_id': aId,
+        });
+      }
+
+      for (var i = 0; i < files.length; i++) {
+        await supabase.schema('aroundtally').from('task_files').insert({
+          'task_id': taskId,
+          'filename': files[i].filename,
+          'storage_path': uploadedPaths[i],
+        });
+      }
+    } catch (_) {
+      await CrmStorageService.deleteFiles(uploadedPaths);
+      rethrow;
+    }
 
     if (currentUserId != null && currentUserName != null) {
       final taskType = pending ? 'pending task' : 'today\'s task';
@@ -350,24 +377,7 @@ class TaskBoardProvider extends ChangeNotifier {
         debugPrint('Error logging activity: $e');
       }
     }
-    
-    for (final aId in assigneeIds) {
-      await supabase.schema('aroundtally').from('task_assignees').insert({
-        'task_id': taskId,
-        'user_id': aId,
-      });
-    }
 
-    for (final part in files) {
-      final path = await CrmStorageService.uploadFile(part);
-
-      await supabase.schema('aroundtally').from('task_files').insert({
-        'task_id': taskId,
-        'filename': part.filename,
-        'storage_path': path,
-      });
-    }
-    
     await load();
     return resp;
   }

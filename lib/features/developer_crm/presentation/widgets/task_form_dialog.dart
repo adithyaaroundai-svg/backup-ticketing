@@ -1,10 +1,16 @@
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../../core/crm_storage_service.dart';
 import '../../core/enums.dart';
 import '../../core/upload_part.dart';
 import '../../domain/entities/user.dart';
+import 'attachment_picker_section.dart';
+
+typedef TaskFormSubmitCallback = Future<void> Function(
+  TaskFormResult result,
+  CrmBatchUploadProgress onUploadProgress,
+);
 
 class TaskFormResult {
   final String description;
@@ -36,17 +42,28 @@ Future<TaskFormResult?> showTaskFormDialog(
   BuildContext context, {
   required List<UserRef> users,
   bool initialPending = false,
+  TaskFormSubmitCallback? onSubmit,
 }) {
   return showDialog<TaskFormResult>(
     context: context,
-    builder: (_) => _TaskFormDialog(users: users, initialPending: initialPending),
+    barrierDismissible: onSubmit == null,
+    builder: (_) => _TaskFormDialog(
+      users: users,
+      initialPending: initialPending,
+      onSubmit: onSubmit,
+    ),
   );
 }
 
 class _TaskFormDialog extends StatefulWidget {
   final List<UserRef> users;
   final bool initialPending;
-  const _TaskFormDialog({required this.users, required this.initialPending});
+  final TaskFormSubmitCallback? onSubmit;
+  const _TaskFormDialog({
+    required this.users,
+    required this.initialPending,
+    this.onSubmit,
+  });
 
   @override
   State<_TaskFormDialog> createState() => _TaskFormDialogState();
@@ -63,7 +80,12 @@ class _TaskFormDialogState extends State<_TaskFormDialog> {
   late bool _pending;
   final Set<int> _assignees = {};
   final List<PlatformFile> _files = [];
+  final Map<PlatformFile, UploadPart> _partCache = {};
   bool _pickingFiles = false;
+  bool _submitting = false;
+  String? _submitError;
+  String? _progressLabel;
+  double? _progressValue;
 
   @override
   void initState() {
@@ -79,15 +101,20 @@ class _TaskFormDialogState extends State<_TaskFormDialog> {
     super.dispose();
   }
 
+  UploadPart _partFor(PlatformFile file) => _partCache.putIfAbsent(
+        file,
+        () => UploadPart.fromPlatformFile(file, field: 'task_files'),
+      );
+
   Future<void> _pickFiles() async {
     setState(() => _pickingFiles = true);
     try {
-      final result = await FilePicker.platform.pickFiles(
-        allowMultiple: true,
-        withData: kIsWeb,
-      );
-      if (result != null && result.files.isNotEmpty) {
-        setState(() => _files.addAll(result.files));
+      final picked = await pickCrmUploadFiles();
+      if (picked.isNotEmpty) {
+        setState(() {
+          _files.addAll(picked);
+          _submitError = null;
+        });
       }
     } catch (e) {
       debugPrint('Error picking files: $e');
@@ -101,37 +128,61 @@ class _TaskFormDialogState extends State<_TaskFormDialog> {
     }
   }
 
-  String _formatFileSize(int bytes) {
-    if (bytes <= 0) return '0 B';
-    if (bytes < 1024) return '$bytes B';
-    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
-    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
-  }
+  Future<void> _handleSubmit() async {
+    if (!_formKey.currentState!.validate()) return;
+    if (hasInvalidCrmAttachments(_files)) {
+      setState(() {
+        _submitError = 'Remove empty or unreadable (0 B) files before creating the task.';
+      });
+      return;
+    }
 
-  IconData _getFileIcon(String filename) {
-    final ext = filename.split('.').last.toLowerCase();
-    switch (ext) {
-      case 'pdf':
-        return Icons.picture_as_pdf_outlined;
-      case 'jpg':
-      case 'jpeg':
-      case 'png':
-      case 'webp':
-      case 'gif':
-        return Icons.image_outlined;
-      case 'doc':
-      case 'docx':
-        return Icons.description_outlined;
-      case 'xls':
-      case 'xlsx':
-      case 'csv':
-        return Icons.table_chart_outlined;
-      case 'zip':
-      case 'rar':
-      case '7z':
-        return Icons.folder_zip_outlined;
-      default:
-        return Icons.insert_drive_file_outlined;
+    final result = TaskFormResult(
+      description: _descCtrl.text.trim(),
+      priority: _priority,
+      status: _status,
+      expectedFinish: _expectedCtrl.text.isEmpty ? null : _expectedCtrl.text,
+      startDate: _startCtrl.text.isEmpty ? null : _startCtrl.text,
+      approved: _approved,
+      pending: _pending,
+      assigneeIds: _assignees.toList(),
+      files: [for (final f in _files) _partFor(f)],
+    );
+
+    if (widget.onSubmit == null) {
+      Navigator.of(context).pop(result);
+      return;
+    }
+
+    setState(() {
+      _submitting = true;
+      _submitError = null;
+      _progressLabel = _files.isEmpty ? 'Creating task...' : 'Preparing upload...';
+      _progressValue = _files.isEmpty ? null : 0.0;
+    });
+
+    try {
+      await widget.onSubmit!(result, (index, total, fileProgress, filename) {
+        if (!mounted) return;
+        setState(() {
+          _progressLabel = formatCrmUploadProgressLabel(
+            index,
+            total,
+            fileProgress,
+            filename,
+          );
+          _progressValue = total <= 1 ? fileProgress : (index + fileProgress) / total;
+        });
+      });
+      if (mounted) Navigator.of(context).pop(result);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _submitting = false;
+        _progressLabel = null;
+        _progressValue = null;
+        _submitError = e.toString();
+      });
     }
   }
 
@@ -164,6 +215,20 @@ class _TaskFormDialogState extends State<_TaskFormDialog> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               mainAxisSize: MainAxisSize.min,
               children: [
+                if (_submitError != null) ...[
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.errorContainer,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      _submitError!,
+                      style: TextStyle(color: theme.colorScheme.onErrorContainer, fontSize: 13),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                ],
                 TextFormField(
                   controller: _descCtrl,
                   decoration: const InputDecoration(labelText: 'Description'),
@@ -174,8 +239,10 @@ class _TaskFormDialogState extends State<_TaskFormDialog> {
                 Row(
                   children: [
                     Expanded(
+                      flex: 1,
                       child: DropdownButtonFormField<String>(
                         initialValue: _priority,
+                        isExpanded: true,
                         decoration: const InputDecoration(labelText: 'Priority'),
                         items: [
                           for (final p in kPriorities) DropdownMenuItem(value: p, child: Text(p))
@@ -185,12 +252,20 @@ class _TaskFormDialogState extends State<_TaskFormDialog> {
                     ),
                     const SizedBox(width: 12),
                     Expanded(
+                      flex: 2,
                       child: DropdownButtonFormField<String>(
                         initialValue: _status,
+                        isExpanded: true,
                         decoration: const InputDecoration(labelText: 'Status'),
                         items: [
                           for (final s in kAllTaskStatuses)
-                            DropdownMenuItem(value: s, child: Text(taskStatusLabel(s)))
+                            DropdownMenuItem(
+                              value: s,
+                              child: Text(
+                                taskStatusLabel(s),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            )
                         ],
                         onChanged: (v) => setState(() => _status = v ?? _status),
                       ),
@@ -259,78 +334,35 @@ class _TaskFormDialogState extends State<_TaskFormDialog> {
                 const SizedBox(height: 16),
 
                 // Attached Files Section
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text('Attachments', style: theme.textTheme.labelLarge),
-                    if (_files.isNotEmpty)
-                      TextButton(
-                        onPressed: () => setState(() => _files.clear()),
-                        style: TextButton.styleFrom(
-                          visualDensity: VisualDensity.compact,
-                          foregroundColor: Colors.red.shade700,
-                        ),
-                        child: const Text('Clear all', style: TextStyle(fontSize: 12)),
-                      ),
-                  ],
-                ),
+                Text('Attachments', style: theme.textTheme.labelLarge),
                 const SizedBox(height: 6),
                 OutlinedButton.icon(
-                  onPressed: _pickingFiles ? null : _pickFiles,
+                  onPressed: (_pickingFiles || _submitting) ? null : _pickFiles,
                   icon: _pickingFiles
                       ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
                       : const Icon(Icons.attach_file_rounded),
                   label: Text(_pickingFiles ? 'Reading files...' : 'Attach files'),
                 ),
-                if (_files.isNotEmpty) ...[
-                  const SizedBox(height: 10),
-                  Container(
-                    decoration: BoxDecoration(
-                      border: Border.all(color: theme.dividerColor.withValues(alpha: 0.6)),
-                      borderRadius: BorderRadius.circular(8),
-                      color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
-                    ),
-                    child: Column(
-                      children: [
-                        for (int i = 0; i < _files.length; i++) ...[
-                          if (i > 0) Divider(height: 1, color: theme.dividerColor.withValues(alpha: 0.4)),
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                            child: Row(
-                              children: [
-                                Icon(_getFileIcon(_files[i].name), size: 20, color: theme.colorScheme.primary),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        _files[i].name,
-                                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                      Text(
-                                        _formatFileSize(_files[i].size),
-                                        style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                IconButton(
-                                  icon: const Icon(Icons.close_rounded, size: 16),
-                                  tooltip: 'Remove',
-                                  visualDensity: VisualDensity.compact,
-                                  padding: EdgeInsets.zero,
-                                  constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
-                                  onPressed: () => setState(() => _files.removeAt(i)),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
+                PendingAttachmentList(
+                  files: _files,
+                  enabled: !_submitting,
+                  padding: const EdgeInsets.only(top: 6),
+                  onRemove: (i) => setState(() {
+                    _partCache.remove(_files[i]);
+                    _files.removeAt(i);
+                    _submitError = null;
+                  }),
+                  onClearAll: () => setState(() {
+                    _partCache.clear();
+                    _files.clear();
+                    _submitError = null;
+                  }),
+                ),
+                if (_submitting && _progressLabel != null) ...[
+                  const SizedBox(height: 12),
+                  CrmUploadProgressBanner(
+                    label: _progressLabel!,
+                    progress: _progressValue,
                   ),
                 ],
               ],
@@ -339,26 +371,15 @@ class _TaskFormDialogState extends State<_TaskFormDialog> {
         ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
+        TextButton(
+          onPressed: _submitting ? null : () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
         FilledButton(
-          onPressed: () {
-            if (!_formKey.currentState!.validate()) return;
-            Navigator.of(context).pop(TaskFormResult(
-              description: _descCtrl.text.trim(),
-              priority: _priority,
-              status: _status,
-              expectedFinish: _expectedCtrl.text.isEmpty ? null : _expectedCtrl.text,
-              startDate: _startCtrl.text.isEmpty ? null : _startCtrl.text,
-              approved: _approved,
-              pending: _pending,
-              assigneeIds: _assignees.toList(),
-              files: [
-                for (final f in _files)
-                  UploadPart.fromPlatformFile(f, field: 'task_files'),
-              ],
-            ));
-          },
-          child: const Text('Create'),
+          onPressed: _submitting ? null : _handleSubmit,
+          child: _submitting
+              ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+              : const Text('Create'),
         ),
       ],
     );

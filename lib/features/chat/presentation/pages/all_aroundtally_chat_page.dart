@@ -1,34 +1,29 @@
 import '../widgets/edit_message_dialog.dart';
 import 'dart:async';
-import 'dart:io';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:intl/intl.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:url_launcher/url_launcher.dart' as url_launcher;
 import 'package:flutter_linkify/flutter_linkify.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 
 import '../../../../core/design_system/design_system.dart';
-import '../../../../core/design_system/theme/app_colors.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
 import '../providers/chat_provider.dart';
-import '../../data/repositories/chat_repository.dart';
 import '../../../../core/utils/download_helper.dart';
-import '../../../../core/utils/storage_utils.dart';
 import '../../domain/entities/chat_message.dart';
 import '../../../tickets/presentation/providers/ticket_provider.dart';
 import '../widgets/chat_voice_recorder.dart';
 import '../widgets/video_message_widget.dart';
 import '../widgets/chat_drop_overlay.dart';
 import '../../../../core/services/chat_drag_drop_paste_helper.dart';
+import '../../../../core/utils/storage_utils.dart';
 
 IconData _getFileIcon(String? fileType) {
   if (fileType == null) return Icons.insert_drive_file;
@@ -68,7 +63,6 @@ class _AllAroundTallyChatPageState extends ConsumerState<AllAroundTallyChatPage>
 
   // File attachment state
   List<PlatformFile> _selectedFiles = [];
-  bool _isUploading = false;
   bool _isDragging = false;
   ChatDragDropPasteSubscription? _dragDropPasteSub;
 
@@ -283,40 +277,18 @@ class _AllAroundTallyChatPageState extends ConsumerState<AllAroundTallyChatPage>
         channel: 'all-aroundtally',
       );
     } else {
-      setState(() => _isUploading = true);
-      try {
-        final uploadResults = await uploadChatAttachmentsParallel(
-          filesToSend,
-          prefix: currentUser.id,
-        );
-
-        for (int i = 0; i < uploadResults.length; i++) {
-          final res = uploadResults[i];
-          await controller.sendMessage(
-            senderId: currentUser.id,
-            senderName: currentUser.fullName.isNotEmpty ? currentUser.fullName : currentUser.username,
-            senderRole: currentUser.role,
-            content: i == 0 ? text : '',
-            replyToMessageId: i == 0 ? _replyingTo : null,
-            replyToSenderName: i == 0 ? _replyToName : null,
-            replyToContent: i == 0 ? _replyToContent : null,
-            fileUrl: res.fileUrl,
-            fileName: res.fileName,
-            fileType: res.fileType,
-            channel: 'all-aroundtally',
-          );
-        }
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Failed to upload file(s): $e')),
-          );
-        }
-      } finally {
-        if (mounted) {
-          setState(() => _isUploading = false);
-        }
-      }
+      await controller.sendFileMessages(
+        senderId: currentUser.id,
+        senderName: currentUser.fullName.isNotEmpty ? currentUser.fullName : currentUser.username,
+        senderRole: currentUser.role,
+        files: filesToSend,
+        content: text,
+        replyToMessageId: _replyingTo,
+        replyToSenderName: _replyToName,
+        replyToContent: _replyToContent,
+        channel: 'all-aroundtally',
+        prefix: currentUser.id,
+      );
     }
 
     setState(() {
@@ -421,19 +393,43 @@ class _AllAroundTallyChatPageState extends ConsumerState<AllAroundTallyChatPage>
     _scrollToBottom();
   }
 
-  // ignore: unused_element
   Future<void> _pickFile() async {
     try {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.any,
         allowMultiple: true,
-        withData: true, // always load bytes — required for binary files like zip on all platforms
+        withData: kIsWeb,
       );
       
       if (result != null && result.files.isNotEmpty) {
-        setState(() {
-          _selectedFiles.addAll(result.files);
-        });
+        final validFiles = <PlatformFile>[];
+        final oversizedNames = <String>[];
+
+        for (final file in result.files) {
+          if (file.size > kMaxChatAttachmentSize) {
+            oversizedNames.add('${file.name} (${formatChatFileSize(file.size)})');
+          } else {
+            validFiles.add(file);
+          }
+        }
+
+        if (oversizedNames.isNotEmpty && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'File(s) exceed 50 MB limit: ${oversizedNames.join(', ')}. Please share large files via Google Drive link.',
+              ),
+              backgroundColor: AppColors.error,
+              duration: const Duration(seconds: 5),
+            ),
+          );
+        }
+
+        if (validFiles.isNotEmpty) {
+          setState(() {
+            _selectedFiles.addAll(validFiles);
+          });
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -1144,10 +1140,10 @@ class _AllAroundTallyChatPageState extends ConsumerState<AllAroundTallyChatPage>
                     ),
                     const SizedBox(width: 8),
                     // Send button
-                    if (_isRecordingVoice || (_isTextEmpty && _selectedFiles.isEmpty && !_isUploading))
+                    if (_isRecordingVoice || (_isTextEmpty && _selectedFiles.isEmpty))
                       ChatVoiceRecorder(
                         key: const ValueKey('all_aroundtally_chat_voice_recorder'),
-                        disabled: _selectedFiles.isNotEmpty || _isUploading,
+                        disabled: _selectedFiles.isNotEmpty,
                         onRecordComplete: (path, duration) => _sendVoiceNote(path, duration),
                         onRecordingStateChanged: (isRecording) {
                           setState(() => _isRecordingVoice = isRecording);

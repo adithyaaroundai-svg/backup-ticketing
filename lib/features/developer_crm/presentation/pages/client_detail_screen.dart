@@ -1,19 +1,19 @@
-import 'package:flutter/foundation.dart';
-
-import '../../core/upload_part.dart';
-
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/crm_storage_service.dart';
 import '../../core/download.dart';
 import '../../core/enums.dart';
 import '../../core/time_utils.dart';
+import '../../core/upload_part.dart';
 import '../../domain/entities/work_item.dart';
 import '../providers/client_detail_provider.dart';
 import '../providers/auth_provider.dart';
+import '../widgets/attachment_picker_section.dart';
 import '../widgets/common.dart';
+import '../widgets/edit_client_dialog.dart';
 import '../widgets/task_form_dialog.dart';
 import '../widgets/task_table.dart';
 
@@ -74,13 +74,46 @@ class _ClientDetailBodyState extends State<_ClientDetailBody> with SingleTickerP
                     onPressed: () => context.canPop() ? context.pop() : context.go('/dev-crm/clients'),
                   ),
                   Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    child: Row(
                       children: [
-                        Text(customer.name,
-                            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                        if (customer.contact != null && customer.contact!.isNotEmpty)
-                          Text(customer.contact!, style: const TextStyle(color: Colors.grey)),
+                        Flexible(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(customer.name,
+                                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                              if (customer.contact != null && customer.contact!.isNotEmpty)
+                                Text(customer.contact!, style: const TextStyle(color: Colors.grey)),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        IconButton(
+                          icon: const Icon(Icons.edit_outlined, size: 18),
+                          tooltip: 'Edit client details',
+                          splashRadius: 18,
+                          onPressed: () async {
+                            final authProv = context.read<AuthProvider>();
+                            final updated = await showEditClientDialog(
+                              context,
+                              client: customer,
+                              onSave: (newName, newContact) => prov.updateClientDetails(
+                                name: newName,
+                                contact: newContact,
+                                currentUserId: authProv.user?.id,
+                                currentUserName: authProv.user?.name,
+                              ),
+                            );
+                            if (updated == true && context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Client details updated successfully'),
+                                  duration: Duration(seconds: 2),
+                                ),
+                              );
+                            }
+                          },
+                        ),
                       ],
                     ),
                   ),
@@ -157,26 +190,28 @@ class _TasksTabState extends State<_TasksTab> {
                 icon: const Icon(Icons.add),
                 label: Text(widget.pending ? 'Add pending task' : 'Add task'),
                 onPressed: () async {
-                  final result =
-                      await showTaskFormDialog(context, users: prov.users, initialPending: widget.pending);
-                  if (result == null) return;
-                  try {
-                    await prov.createTask(
-                      description: result.description,
-                      priority: result.priority,
-                      status: result.status,
-                      expectedFinish: result.expectedFinish,
-                      startDate: result.startDate,
-                      approved: result.approved,
-                      pending: result.pending,
-                      assigneeIds: result.assigneeIds,
-                      files: result.files,
-                      currentUserId: context.read<AuthProvider>().user?.id,
-                      currentUserName: context.read<AuthProvider>().user?.name,
-                    );
-                    if (context.mounted) showSavedSnack(context, message: 'Task created \u2713');
-                  } catch (e) {
-                    if (context.mounted) showSavedSnack(context, ok: false, message: e.toString());
+                  final authUser = context.read<AuthProvider>().user;
+                  final result = await showTaskFormDialog(
+                    context,
+                    users: prov.users,
+                    initialPending: widget.pending,
+                    onSubmit: (formResult, onUploadProgress) => prov.createTask(
+                      description: formResult.description,
+                      priority: formResult.priority,
+                      status: formResult.status,
+                      expectedFinish: formResult.expectedFinish,
+                      startDate: formResult.startDate,
+                      approved: formResult.approved,
+                      pending: formResult.pending,
+                      assigneeIds: formResult.assigneeIds,
+                      files: formResult.files,
+                      onUploadProgress: onUploadProgress,
+                      currentUserId: authUser?.id,
+                      currentUserName: authUser?.name,
+                    ),
+                  );
+                  if (result != null && context.mounted) {
+                    showSavedSnack(context, message: 'Task created \u2713');
                   }
                 },
               ),
@@ -236,16 +271,37 @@ class _WorkHistoryTab extends StatelessWidget {
     final excel = <PlatformFile>[];
     final proposal = <PlatformFile>[];
     final other = <PlatformFile>[];
+    final partCache = <PlatformFile, UploadPart>{};
     bool submitting = false;
     String? error;
+    String? progressLabel;
+    double? progressValue;
+
+    UploadPart partFor(PlatformFile file, String field) => partCache.putIfAbsent(
+          file,
+          () => UploadPart.fromPlatformFile(file, field: field),
+        );
 
     await showDialog(
       context: context,
       builder: (dialogCtx) => StatefulBuilder(
         builder: (dialogCtx, setState) {
           Future<void> pick(List<PlatformFile> bucket) async {
-            final result = await FilePicker.platform.pickFiles(allowMultiple: true, withData: kIsWeb);
-            if (result != null) setState(() => bucket.addAll(result.files));
+            final picked = await pickCrmUploadFiles();
+            if (picked.isNotEmpty) {
+              setState(() {
+                bucket.addAll(picked);
+                error = null;
+              });
+            }
+          }
+
+          void removeAt(List<PlatformFile> bucket, int index) {
+            setState(() {
+              partCache.remove(bucket[index]);
+              bucket.removeAt(index);
+              error = null;
+            });
           }
 
           return AlertDialog(
@@ -258,7 +314,17 @@ class _WorkHistoryTab extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     if (error != null) ...[
-                      Text(error!, style: TextStyle(color: Theme.of(dialogCtx).colorScheme.error)),
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: Theme.of(dialogCtx).colorScheme.errorContainer,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          error!,
+                          style: TextStyle(color: Theme.of(dialogCtx).colorScheme.onErrorContainer),
+                        ),
+                      ),
                       const SizedBox(height: 8),
                     ],
                     TextField(controller: titleCtrl, decoration: const InputDecoration(labelText: 'Title')),
@@ -280,29 +346,52 @@ class _WorkHistoryTab extends StatelessWidget {
                     ),
                     const SizedBox(height: 12),
                     OutlinedButton.icon(
-                      onPressed: () => pick(excel),
+                      onPressed: submitting ? null : () => pick(excel),
                       icon: const Icon(Icons.table_chart),
                       label: Text('Excel files (${excel.length})'),
                     ),
+                    PendingAttachmentList(
+                      files: excel,
+                      enabled: !submitting,
+                      onRemove: (i) => removeAt(excel, i),
+                    ),
                     const SizedBox(height: 6),
                     OutlinedButton.icon(
-                      onPressed: () => pick(proposal),
+                      onPressed: submitting ? null : () => pick(proposal),
                       icon: const Icon(Icons.description),
                       label: Text('Proposal files (${proposal.length})'),
                     ),
+                    PendingAttachmentList(
+                      files: proposal,
+                      enabled: !submitting,
+                      onRemove: (i) => removeAt(proposal, i),
+                    ),
                     const SizedBox(height: 6),
                     OutlinedButton.icon(
-                      onPressed: () => pick(other),
+                      onPressed: submitting ? null : () => pick(other),
                       icon: const Icon(Icons.attach_file),
                       label: Text('Other files (${other.length})'),
                     ),
+                    PendingAttachmentList(
+                      files: other,
+                      enabled: !submitting,
+                      onRemove: (i) => removeAt(other, i),
+                    ),
+                    if (submitting && progressLabel != null) ...[
+                      const SizedBox(height: 12),
+                      CrmUploadProgressBanner(
+                        label: progressLabel!,
+                        progress: progressValue,
+                      ),
+                    ],
                   ],
                 ),
               ),
             ),
             actions: [
               TextButton(
-                  onPressed: () => Navigator.of(dialogCtx).pop(), child: const Text('Cancel')),
+                  onPressed: submitting ? null : () => Navigator.of(dialogCtx).pop(),
+                  child: const Text('Cancel')),
               FilledButton(
                 onPressed: submitting
                     ? null
@@ -311,9 +400,17 @@ class _WorkHistoryTab extends StatelessWidget {
                           setState(() => error = 'Title is required.');
                           return;
                         }
+                        if (hasInvalidCrmAttachments([...excel, ...proposal, ...other])) {
+                          setState(() =>
+                              error = 'Remove empty or unreadable (0 B) files before creating.');
+                          return;
+                        }
+                        final hasFiles = excel.isNotEmpty || proposal.isNotEmpty || other.isNotEmpty;
                         setState(() {
                           submitting = true;
                           error = null;
+                          progressLabel = hasFiles ? 'Preparing upload...' : 'Creating work item...';
+                          progressValue = hasFiles ? 0.0 : null;
                         });
                         try {
                           await prov.addWorkItem(
@@ -322,24 +419,30 @@ class _WorkHistoryTab extends StatelessWidget {
                             language: langCtrl.text.trim().isEmpty ? null : langCtrl.text.trim(),
                             codeSnippet: snippetCtrl.text.trim().isEmpty ? null : snippetCtrl.text.trim(),
                             excelFiles: [
-                              for (final f in excel)
-                                UploadPart.fromPlatformFile(f, field: 'excel_files')
+                              for (final f in excel) partFor(f, 'excel_files')
                             ],
                             proposalFiles: [
-                              for (final f in proposal)
-                                UploadPart.fromPlatformFile(f,
-                                    field: 'proposal_files')
+                              for (final f in proposal) partFor(f, 'proposal_files')
                             ],
                             otherFiles: [
-                              for (final f in other)
-                                UploadPart.fromPlatformFile(f, field: 'other_files')
+                              for (final f in other) partFor(f, 'other_files')
                             ],
+                            onUploadProgress: (idx, total, p, filename) {
+                              if (!dialogCtx.mounted) return;
+                              setState(() {
+                                progressLabel = formatCrmUploadProgressLabel(idx, total, p, filename);
+                                progressValue = total <= 1 ? p : (idx + p) / total;
+                              });
+                            },
                           );
                           if (dialogCtx.mounted) Navigator.of(dialogCtx).pop();
                         } catch (e) {
+                          if (!dialogCtx.mounted) return;
                           setState(() {
                             error = e.toString();
                             submitting = false;
+                            progressLabel = null;
+                            progressValue = null;
                           });
                         }
                       },
@@ -448,15 +551,17 @@ class _WorkItemCard extends StatelessWidget {
                   children: [
                     for (final f in byCategory[cat]!)
                       ActionChip(
-                        avatar: const Icon(Icons.download, size: 16),
+                        avatar: Icon(
+                          CrmStorageService.isLegacyUnmigratedPath(f.storagePath)
+                              ? Icons.cloud_off_outlined
+                              : Icons.download,
+                          size: 16,
+                        ),
+                        tooltip: CrmStorageService.isLegacyUnmigratedPath(f.storagePath)
+                            ? 'Legacy attachment (not migrated to Supabase Storage)'
+                            : null,
                         label: Text(f.filename),
                         onPressed: () => openDownload(context, f.storagePath ?? '', filename: f.filename),
-
-
-
-
-
-
                       ),
                   ],
                 ),

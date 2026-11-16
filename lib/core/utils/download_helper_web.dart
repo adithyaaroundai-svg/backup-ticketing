@@ -1,15 +1,19 @@
 // ignore: avoid_web_libraries_in_flutter
 import 'dart:js_interop';
-import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:web/web.dart' as web;
 import 'package:http/http.dart' as http;
 
-Future<void> downloadFileDirectly(String url, String fileName) async {
+Future<void> downloadFileDirectly(
+  String url,
+  String fileName, {
+  bool throwOnError = false,
+}) async {
   // Ensure filename has an extension so the browser knows how to save it
   final effectiveName = _ensureExtension(url, fileName);
   debugPrint('[Download] Starting download: $effectiveName from $url');
 
+  String? terminalHttpError;
   // Strategy 1: Fetch bytes → create Blob → trigger anchor download.
   // Uses the exact same pattern as backup_web_download.dart (which works).
   // Requires the Supabase "chat_attachments" bucket to be set as PUBLIC.
@@ -43,12 +47,23 @@ Future<void> downloadFileDirectly(String url, String fileName) async {
       });
       debugPrint('[Download] Success via blob strategy');
       return;
+    } else if (response.statusCode == 400 || response.statusCode == 404) {
+      terminalHttpError =
+          'File not found in storage (HTTP ${response.statusCode}).';
+      debugPrint('[Download] $terminalHttpError');
     } else {
       debugPrint('[Download] Bad response: ${response.statusCode} — falling back to window.open');
     }
   } catch (e) {
     // Network error or CORS — fall through to strategy 2
     debugPrint('[Download] Fetch failed: $e — falling back to window.open');
+  }
+
+  if (terminalHttpError != null) {
+    if (throwOnError) {
+      throw Exception(terminalHttpError);
+    }
+    return;
   }
 
   // Strategy 2: open the URL in a new tab.

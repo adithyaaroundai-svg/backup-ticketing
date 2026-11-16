@@ -1,14 +1,14 @@
-import 'package:flutter/foundation.dart';
-
-import '../../core/upload_part.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/crm_storage_service.dart';
 import '../../core/download.dart';
 import '../../core/enums.dart';
+import '../../core/upload_part.dart';
 import '../providers/work_item_edit_provider.dart';
+import '../widgets/attachment_picker_section.dart';
 import '../widgets/common.dart';
 
 class WorkItemEditScreen extends StatelessWidget {
@@ -38,9 +38,12 @@ class _WorkItemEditBodyState extends State<_WorkItemEditBody> {
   final List<PlatformFile> _excel = [];
   final List<PlatformFile> _proposal = [];
   final List<PlatformFile> _other = [];
+  final Map<PlatformFile, UploadPart> _partCache = {};
   bool _hydrated = false;
   bool _saving = false;
   String? _error;
+  String? _uploadLabel;
+  double? _uploadProgress;
 
   @override
   void dispose() {
@@ -49,15 +52,40 @@ class _WorkItemEditBodyState extends State<_WorkItemEditBody> {
     super.dispose();
   }
 
+  UploadPart _partFor(PlatformFile file, String field) => _partCache.putIfAbsent(
+        file,
+        () => UploadPart.fromPlatformFile(file, field: field),
+      );
+
   Future<void> _pick(List<PlatformFile> bucket) async {
-    final result = await FilePicker.platform.pickFiles(allowMultiple: true, withData: kIsWeb);
-    if (result != null) setState(() => bucket.addAll(result.files));
+    final picked = await pickCrmUploadFiles();
+    if (picked.isNotEmpty) {
+      setState(() {
+        bucket.addAll(picked);
+        _error = null;
+      });
+    }
+  }
+
+  void _removeAt(List<PlatformFile> bucket, int index) {
+    setState(() {
+      _partCache.remove(bucket[index]);
+      bucket.removeAt(index);
+      _error = null;
+    });
   }
 
   Future<void> _save(WorkItemEditProvider prov) async {
+    if (hasInvalidCrmAttachments([..._excel, ..._proposal, ..._other])) {
+      setState(() => _error = 'Remove empty or unreadable (0 B) files before saving.');
+      return;
+    }
+    final hasFiles = _excel.isNotEmpty || _proposal.isNotEmpty || _other.isNotEmpty;
     setState(() {
       _saving = true;
       _error = null;
+      _uploadLabel = hasFiles ? 'Preparing upload...' : null;
+      _uploadProgress = hasFiles ? 0.0 : null;
     });
     try {
       await prov.save(
@@ -65,25 +93,38 @@ class _WorkItemEditBodyState extends State<_WorkItemEditBody> {
         description: _descCtrl.text.trim(),
         removeFileIds: _removeIds.toList(),
         excelFiles: [
-          for (final f in _excel) UploadPart.fromPlatformFile(f, field: 'excel_files')
+          for (final f in _excel) _partFor(f, 'excel_files')
         ],
         proposalFiles: [
-          for (final f in _proposal)
-            UploadPart.fromPlatformFile(f, field: 'proposal_files')
+          for (final f in _proposal) _partFor(f, 'proposal_files')
         ],
         otherFiles: [
-          for (final f in _other) UploadPart.fromPlatformFile(f, field: 'other_files')
+          for (final f in _other) _partFor(f, 'other_files')
         ],
+        onUploadProgress: (idx, total, p, filename) {
+          if (!mounted) return;
+          setState(() {
+            _uploadLabel = formatCrmUploadProgressLabel(idx, total, p, filename);
+            _uploadProgress = total <= 1 ? p : (idx + p) / total;
+          });
+        },
       );
       _removeIds.clear();
+      _partCache.clear();
       _excel.clear();
       _proposal.clear();
       _other.clear();
       if (mounted) showSavedSnack(context, message: 'Work item saved \u2713');
     } catch (e) {
-      setState(() => _error = e.toString());
+      if (mounted) setState(() => _error = e.toString());
     } finally {
-      if (mounted) setState(() => _saving = false);
+      if (mounted) {
+        setState(() {
+          _saving = false;
+          _uploadLabel = null;
+          _uploadProgress = null;
+        });
+      }
     }
   }
 
@@ -136,6 +177,7 @@ class _WorkItemEditBodyState extends State<_WorkItemEditBody> {
             CheckboxListTile(
               contentPadding: EdgeInsets.zero,
               value: _removeIds.contains(f.id),
+              enabled: !_saving,
               onChanged: (v) => setState(() {
                 if (v == true) {
                   _removeIds.add(f.id);
@@ -144,9 +186,20 @@ class _WorkItemEditBodyState extends State<_WorkItemEditBody> {
                 }
               }),
               title: Text('${f.filename} (${workItemCategoryLabel(f.category)})'),
-              subtitle: const Text('Check to remove'),
+              subtitle: Text(
+                CrmStorageService.isLegacyUnmigratedPath(f.storagePath)
+                    ? 'Check to remove \u2022 Legacy attachment (not in Supabase Storage)'
+                    : 'Check to remove',
+              ),
               secondary: IconButton(
-                icon: const Icon(Icons.download),
+                icon: Icon(
+                  CrmStorageService.isLegacyUnmigratedPath(f.storagePath)
+                      ? Icons.cloud_off_outlined
+                      : Icons.download,
+                ),
+                tooltip: CrmStorageService.isLegacyUnmigratedPath(f.storagePath)
+                    ? 'Legacy attachment not migrated to Supabase Storage'
+                    : 'Download',
                 onPressed: () => openDownload(context, f.storagePath ?? '', filename: f.filename),
               ),
             ),
@@ -154,22 +207,44 @@ class _WorkItemEditBodyState extends State<_WorkItemEditBody> {
           const Text('Add new files', style: TextStyle(fontWeight: FontWeight.bold)),
           const SizedBox(height: 6),
           OutlinedButton.icon(
-            onPressed: () => _pick(_excel),
+            onPressed: _saving ? null : () => _pick(_excel),
             icon: const Icon(Icons.table_chart),
             label: Text('Excel files (${_excel.length})'),
           ),
+          PendingAttachmentList(
+            files: _excel,
+            enabled: !_saving,
+            onRemove: (i) => _removeAt(_excel, i),
+          ),
           const SizedBox(height: 6),
           OutlinedButton.icon(
-            onPressed: () => _pick(_proposal),
+            onPressed: _saving ? null : () => _pick(_proposal),
             icon: const Icon(Icons.description),
             label: Text('Proposal files (${_proposal.length})'),
           ),
+          PendingAttachmentList(
+            files: _proposal,
+            enabled: !_saving,
+            onRemove: (i) => _removeAt(_proposal, i),
+          ),
           const SizedBox(height: 6),
           OutlinedButton.icon(
-            onPressed: () => _pick(_other),
+            onPressed: _saving ? null : () => _pick(_other),
             icon: const Icon(Icons.attach_file),
             label: Text('Other files (${_other.length})'),
           ),
+          PendingAttachmentList(
+            files: _other,
+            enabled: !_saving,
+            onRemove: (i) => _removeAt(_other, i),
+          ),
+          if (_saving && _uploadLabel != null) ...[
+            const SizedBox(height: 16),
+            CrmUploadProgressBanner(
+              label: _uploadLabel!,
+              progress: _uploadProgress,
+            ),
+          ],
           const SizedBox(height: 24),
           FilledButton(
             onPressed: _saving ? null : () => _save(prov),

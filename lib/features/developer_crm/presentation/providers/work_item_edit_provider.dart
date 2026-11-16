@@ -60,20 +60,9 @@ class WorkItemEditProvider extends ChangeNotifier {
     List<UploadPart> excelFiles = const [],
     List<UploadPart> proposalFiles = const [],
     List<UploadPart> otherFiles = const [],
+    CrmBatchUploadProgress? onUploadProgress,
   }) async {
     final supabase = Supabase.instance.client;
-    final updates = <String, dynamic>{};
-    
-    if (title != null) updates['title'] = title;
-    if (description != null) updates['description'] = description;
-    
-    if (updates.isNotEmpty) {
-      await supabase.schema('aroundtally').from('work_items').update(updates).eq('id', workItemId);
-    }
-
-    if (removeFileIds.isNotEmpty) {
-      await supabase.schema('aroundtally').from('work_item_files').delete().inFilter('id', removeFileIds);
-    }
 
     final allParts = <UploadPart>[];
     final categories = <UploadPart, String>{};
@@ -97,21 +86,80 @@ class WorkItemEditProvider extends ChangeNotifier {
       categories[f] = 'other';
     }
 
-    for (final part in allParts) {
-      final path = await CrmStorageService.uploadFile(part);
+    final uploadedPaths = await CrmStorageService.uploadBatch(
+      allParts,
+      onProgress: onUploadProgress,
+    );
 
-      await supabase.schema('aroundtally').from('work_item_files').insert({
-        'work_item_id': workItemId,
-        'filename': part.filename,
-        'storage_path': path,
-        'category': categories[part] ?? 'other',
-        'comment': comments[part],
-      });
+    final removedStoragePaths = <String>[];
+    if (removeFileIds.isNotEmpty) {
+      try {
+        final rows = await supabase
+            .schema('aroundtally')
+            .from('work_item_files')
+            .select('storage_path')
+            .inFilter('id', removeFileIds);
+        for (final row in rows as List) {
+          final p = row['storage_path']?.toString();
+          if (p != null && p.isNotEmpty) removedStoragePaths.add(p);
+        }
+      } catch (e) {
+        debugPrint('Error reading storage paths for removed work item files: $e');
+      }
+    }
+
+    final updates = <String, dynamic>{};
+    if (title != null) updates['title'] = title;
+    if (description != null) updates['description'] = description;
+
+    try {
+      if (updates.isNotEmpty) {
+        await supabase.schema('aroundtally').from('work_items').update(updates).eq('id', workItemId);
+      }
+
+      if (removeFileIds.isNotEmpty) {
+        await supabase.schema('aroundtally').from('work_item_files').delete().inFilter('id', removeFileIds);
+      }
+
+      for (var i = 0; i < allParts.length; i++) {
+        final part = allParts[i];
+        await supabase.schema('aroundtally').from('work_item_files').insert({
+          'work_item_id': workItemId,
+          'filename': part.filename,
+          'storage_path': uploadedPaths[i],
+          'category': categories[part] ?? 'other',
+          'comment': comments[part],
+        });
+      }
+    } catch (_) {
+      await CrmStorageService.deleteFiles(uploadedPaths);
+      rethrow;
+    }
+
+    if (removedStoragePaths.isNotEmpty) {
+      await CrmStorageService.deleteFiles(removedStoragePaths);
     }
     await load();
   }
 
   Future<void> delete() async {
-    await Supabase.instance.client.schema('aroundtally').from('work_items').delete().eq('id', workItemId);
+    final supabase = Supabase.instance.client;
+    final storagePaths = <String>[];
+    try {
+      final rows = await supabase
+          .schema('aroundtally')
+          .from('work_item_files')
+          .select('storage_path')
+          .eq('work_item_id', workItemId);
+      for (final row in rows as List) {
+        final p = row['storage_path']?.toString();
+        if (p != null && p.isNotEmpty) storagePaths.add(p);
+      }
+    } catch (e) {
+      debugPrint('Error reading work item file paths before delete: $e');
+    }
+
+    await supabase.schema('aroundtally').from('work_items').delete().eq('id', workItemId);
+    await CrmStorageService.deleteFiles(storagePaths);
   }
 }
