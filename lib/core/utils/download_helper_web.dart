@@ -9,6 +9,13 @@ Future<void> downloadFileDirectly(
   String fileName, {
   bool throwOnError = false,
 }) async {
+  // If the file is hosted on Google Drive, open the share/download URL directly in a new browser tab.
+  if (url.contains('drive.google.com') || url.contains('docs.google.com')) {
+    debugPrint('[Download] Opening Google Drive URL in new tab: $url');
+    web.window.open(url, '_blank');
+    return;
+  }
+
   // Ensure filename has an extension so the browser knows how to save it
   final effectiveName = _ensureExtension(url, fileName);
   debugPrint('[Download] Starting download: $effectiveName from $url');

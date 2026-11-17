@@ -40,6 +40,7 @@ import '../widgets/chat_voice_recorder.dart';
 import '../widgets/chat_drop_overlay.dart';
 import '../../../../core/services/chat_drag_drop_paste_helper.dart';
 import '../../../../core/utils/storage_utils.dart';
+import '../../../../core/services/google_drive/google_drive_chat_service.dart';
 
 import '../../../dashboard/presentation/widgets/create_ticket_dialog.dart';
 
@@ -1746,11 +1747,14 @@ class _GlobalChatPageState extends ConsumerState<GlobalChatPage>
       );
 
       if (result != null && result.files.isNotEmpty) {
+        final isDriveConnected = await GoogleDriveChatService.isConfigured();
+        final maxAllowed = isDriveConnected ? kMaxDriveAttachmentSize : kMaxChatAttachmentSize;
+
         final validFiles = <PlatformFile>[];
         final oversizedNames = <String>[];
 
         for (final file in result.files) {
-          if (file.size > kMaxChatAttachmentSize) {
+          if (file.size > maxAllowed) {
             oversizedNames.add('${file.name} (${formatChatFileSize(file.size)})');
           } else {
             validFiles.add(file);
@@ -1758,11 +1762,12 @@ class _GlobalChatPageState extends ConsumerState<GlobalChatPage>
         }
 
         if (oversizedNames.isNotEmpty && mounted) {
+          final helpText = isDriveConnected
+              ? 'File(s) exceed maximum limit of 5 GB: ${oversizedNames.join(', ')}.'
+              : 'File(s) exceed 50 MB limit: ${oversizedNames.join(', ')}. Connect Company Google Drive in Settings to enable large uploads.';
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(
-                'File(s) exceed 50 MB limit: ${oversizedNames.join(', ')}. Please share large files via Google Drive link.',
-              ),
+              content: Text(helpText),
               backgroundColor: AppColors.error,
               duration: const Duration(seconds: 5),
             ),

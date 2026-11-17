@@ -506,7 +506,7 @@ class ChatStream extends _$ChatStream {
     }
   }
 
-  void updateMessageFileUrl(String messageId, String newFileUrl, [String? newFileName]) {
+  void updateMessageFileUrl(String messageId, String newFileUrl, [String? newFileName, String? newFileType]) {
     final currentList = state.value ?? [];
     final index = currentList.indexWhere((m) => m.id == messageId);
     if (index != -1) {
@@ -515,6 +515,7 @@ class ChatStream extends _$ChatStream {
       newList[index] = oldMsg.copyWith(
         fileUrl: newFileUrl,
         fileName: newFileName ?? oldMsg.fileName,
+        fileType: newFileType ?? oldMsg.fileType,
       );
       _updateState(newList);
     }
@@ -945,7 +946,7 @@ class DmStream extends _$DmStream {
     ref.read(dmConversationsProvider.notifier).onOptimisticMessageSent(message);
   }
 
-  void updateMessageFileUrl(String messageId, String newFileUrl, [String? newFileName]) {
+  void updateMessageFileUrl(String messageId, String newFileUrl, [String? newFileName, String? newFileType]) {
     final currentList = state.value ?? [];
     final index = currentList.indexWhere((m) => m.id == messageId);
     if (index != -1) {
@@ -954,6 +955,7 @@ class DmStream extends _$DmStream {
       newList[index] = oldMsg.copyWith(
         fileUrl: newFileUrl,
         fileName: newFileName ?? oldMsg.fileName,
+        fileType: newFileType ?? oldMsg.fileType,
       );
       _updateState(newList);
     }
@@ -2372,12 +2374,14 @@ class ChatController extends _$ChatController {
           messageId,
           uploadResult.fileUrl,
           uploadResult.fileName,
+          uploadResult.fileType,
         );
       } else {
         ref.read(chatStreamProvider(channel).notifier).updateMessageFileUrl(
           messageId,
           uploadResult.fileUrl,
           uploadResult.fileName,
+          uploadResult.fileType,
         );
       }
 

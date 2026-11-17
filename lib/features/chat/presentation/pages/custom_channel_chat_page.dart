@@ -38,6 +38,7 @@ import '../widgets/chat_drop_overlay.dart';
 import '../../../../core/services/chat_drag_drop_paste_helper.dart';
 import '../../../../core/services/zoho_launcher.dart';
 import '../../../../core/utils/storage_utils.dart';
+import '../../../../core/services/google_drive/google_drive_chat_service.dart';
 import '../../../../features/calls/domain/models/call_history_item.dart';
 import '../../../../features/calls/presentation/providers/call_history_provider.dart';
 
@@ -441,11 +442,14 @@ class _CustomChannelChatPageState extends ConsumerState<CustomChannelChatPage> {
       );
       
       if (result != null && result.files.isNotEmpty) {
+        final isDriveConnected = await GoogleDriveChatService.isConfigured();
+        final maxAllowed = isDriveConnected ? kMaxDriveAttachmentSize : kMaxChatAttachmentSize;
+
         final validFiles = <PlatformFile>[];
         final oversizedNames = <String>[];
 
         for (final file in result.files) {
-          if (file.size > kMaxChatAttachmentSize) {
+          if (file.size > maxAllowed) {
             oversizedNames.add('${file.name} (${formatChatFileSize(file.size)})');
           } else {
             validFiles.add(file);
@@ -453,11 +457,12 @@ class _CustomChannelChatPageState extends ConsumerState<CustomChannelChatPage> {
         }
 
         if (oversizedNames.isNotEmpty && mounted) {
+          final helpText = isDriveConnected
+              ? 'File(s) exceed maximum limit of 5 GB: ${oversizedNames.join(', ')}.'
+              : 'File(s) exceed 50 MB limit: ${oversizedNames.join(', ')}. Connect Company Google Drive in Settings to enable large uploads.';
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(
-                'File(s) exceed 50 MB limit: ${oversizedNames.join(', ')}. Please share large files via Google Drive link.',
-              ),
+              content: Text(helpText),
               backgroundColor: AppColors.error,
               duration: const Duration(seconds: 5),
             ),

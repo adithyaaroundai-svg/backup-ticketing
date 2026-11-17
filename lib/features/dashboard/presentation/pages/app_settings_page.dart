@@ -11,6 +11,7 @@ import '../../../auth/presentation/providers/auth_provider.dart';
 import '../providers/app_settings_provider.dart';
 import '../widgets/role_permissions_editor.dart';
 import '../widgets/workflow_config_editor.dart';
+import '../widgets/google_drive_settings_card.dart';
 
 class AppSettingsPage extends ConsumerStatefulWidget {
   const AppSettingsPage({super.key});
@@ -49,7 +50,7 @@ class _AppSettingsPageState extends ConsumerState<AppSettingsPage>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
+    _tabController = TabController(length: 5, vsync: this);
     _loadSettings();
   }
 
@@ -393,6 +394,10 @@ class _AppSettingsPageState extends ConsumerState<AppSettingsPage>
                               icon: Icon(LucideIcons.arrowUpCircle, size: 18),
                               text: 'App Updates',
                             ),
+                            Tab(
+                              icon: Icon(Icons.cloud_sync_rounded, size: 18),
+                              text: 'Google Drive',
+                            ),
                           ],
                         ),
                       ],
@@ -407,6 +412,7 @@ class _AppSettingsPageState extends ConsumerState<AppSettingsPage>
                         _buildRolePermissionsTab(),
                         _buildWorkflowTab(),
                         _buildVersionControlTab(),
+                        _buildGoogleDriveTab(),
                       ],
                     ),
                   ),
@@ -953,5 +959,14 @@ class _AppSettingsPageState extends ConsumerState<AppSettingsPage>
         setState(() => _isSavingVersion = false);
       }
     }
+  }
+
+  Widget _buildGoogleDriveTab() {
+    return ListView(
+      padding: const EdgeInsets.all(24),
+      children: const [
+        GoogleDriveSettingsCard(),
+      ],
+    );
   }
 }

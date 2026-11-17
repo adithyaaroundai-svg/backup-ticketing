@@ -7,10 +7,18 @@ import 'package:file_picker/file_picker.dart';
 import 'package:http/http.dart' as http;
 import 'package:image/image.dart' as img;
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../services/google_drive/google_drive_chat_service.dart';
+
+/// Maximum allowed file attachment size for direct Supabase Storage uploads (45 MB).
+/// Files larger than this threshold are automatically routed to company Google Drive (Gmail style).
+const int kGoogleDriveThreshold = 45 * 1024 * 1024; // 45 MB
 
 /// Maximum allowed file attachment size for chat uploads (50 MB standard Supabase limit).
-/// For files > 50 MB (like large 3 GB datasets), users should share via Google Drive/OneDrive link.
+/// For files > 50 MB (like large 3 GB datasets), files route to Google Drive or share via link.
 const int kMaxChatAttachmentSize = 50 * 1024 * 1024; // 50 MB
+
+/// Maximum allowed file attachment size when Google Drive is connected (5 GB).
+const int kMaxDriveAttachmentSize = 5 * 1024 * 1024 * 1024; // 5 GB
 
 /// Threshold for switching to TUS chunked resumable streaming (6 MB).
 const int kTusUploadThreshold = 6 * 1024 * 1024; // 6 MB
@@ -355,10 +363,29 @@ Future<ChatUploadResult> uploadChatAttachment(
     throw Exception('Cannot upload empty or unreadable file "${file.name}".');
   }
 
-  if (resolvedSize > kMaxChatAttachmentSize) {
-    throw Exception(
-      'File "${file.name}" (${formatChatFileSize(resolvedSize)}) exceeds the 50 MB direct upload limit. Please share large files via Google Drive link.',
-    );
+  // Large file handling (> 45 MB): Route directly to Company Google Drive (Gmail style)
+  if (resolvedSize > kGoogleDriveThreshold) {
+    final isDriveConfigured = await GoogleDriveChatService.isConfigured();
+    if (isDriveConfigured) {
+      debugPrint(
+        '[StorageUtils] File "${file.name}" (${formatChatFileSize(resolvedSize)}) exceeds 45 MB. Automatically streaming to company Google Drive...',
+      );
+      final driveResult = await GoogleDriveChatService.uploadLargeFile(
+        file: file,
+        onProgress: onProgress,
+      );
+      return ChatUploadResult(
+        fileUrl: driveResult.fileUrl,
+        fileName: driveResult.fileName,
+        fileType: 'gdrive',
+        bytes: null,
+      );
+    } else {
+      throw Exception(
+        'File "${file.name}" (${formatChatFileSize(resolvedSize)}) exceeds the 45 MB direct upload limit. '
+        'Please connect Company Google Drive in Settings -> Google Drive to enable automatic large file uploads, or share via link.',
+      );
+    }
   }
 
   // Refresh auth session if expired, or authenticate default agent if session is missing
