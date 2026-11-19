@@ -151,12 +151,34 @@ class DealSummaryService {
     try {
       final prefs = await SharedPreferences.getInstance();
       final list = prefs.getStringList('$_kPrefsKeyPrefix$senderId');
-      if (list != null) {
+      if (list != null && list.isNotEmpty) {
         return list.toSet();
       }
     } catch (e) {
       debugPrint('Error reading selected recipients: $e');
     }
+
+    // Try reading from app_settings
+    try {
+      final client = Supabase.instance.client;
+      final res = await client
+          .from('app_settings')
+          .select('setting_value')
+          .eq('setting_key', 'deal_summary_recipients_$senderId')
+          .maybeSingle();
+      if (res != null && res['setting_value'] != null) {
+        final val = res['setting_value'];
+        if (val is List) {
+          final set = val.map((e) => e.toString()).toSet();
+          if (set.isNotEmpty) {
+            return set;
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Error reading app_settings recipients: $e');
+    }
+
     // Default: for now, for all agents, Anil is the only checked recipient
     return Set.from(kDefaultCheckedRecipientIds);
   }
@@ -167,7 +189,17 @@ class DealSummaryService {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setStringList('$_kPrefsKeyPrefix$senderId', recipientIds.toList());
     } catch (e) {
-      debugPrint('Error saving selected recipients: $e');
+      debugPrint('Error saving selected recipients to prefs: $e');
+    }
+
+    try {
+      final client = Supabase.instance.client;
+      await client.from('app_settings').upsert({
+        'setting_key': 'deal_summary_recipients_$senderId',
+        'setting_value': recipientIds.toList(),
+      });
+    } catch (e) {
+      debugPrint('Error syncing selected recipients to app_settings: $e');
     }
   }
 
@@ -300,6 +332,17 @@ class DealSummaryService {
     }
   }
 
+  /// Manually triggers the centralized push for all agents today (e.g. for admin/testing)
+  static Future<Map<String, dynamic>> pushAllAgentsSummariesNow() async {
+    try {
+      final res = await Supabase.instance.client.rpc('push_all_daily_deals_summary_5pm');
+      return Map<String, dynamic>.from(res is Map ? res : {'result': res});
+    } catch (e) {
+      debugPrint('Error calling push_all_daily_deals_summary_5pm RPC: $e');
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+
   /// Internal 5:00 PM check
   static Future<void> _checkAndSendIfDue(WidgetRef ref) async {
     if (_isRunning) return;
@@ -321,13 +364,43 @@ class DealSummaryService {
       final prefs = await SharedPreferences.getInstance();
       if (prefs.getBool(prefsKey) ?? false) return;
 
-      final deals = await getSenderTodayDeals(currentAgent.id);
-      if (deals.isEmpty) {
-        // No deals logged today -> nothing to send
-        return;
+      final client = Supabase.instance.client;
+      final channelId = await getOrCreateDealRegisterChannel();
+
+      // Check if today's summary was already inserted by the server cron or another session
+      if (channelId != null) {
+        final existing = await client
+            .from('chat_messages')
+            .select('id')
+            .eq('channel', channelId)
+            .eq('sender_id', currentAgent.id)
+            .gte('created_at', '${todayStr}T00:00:00.000Z')
+            .limit(1);
+
+        if (existing.isNotEmpty) {
+          await prefs.setBool(prefsKey, true);
+          return;
+        }
       }
 
       _isRunning = true;
+
+      // Try triggering the centralized batch RPC first so ALL agents are pushed together
+      try {
+        final rpcRes = await client.rpc('push_all_daily_deals_summary_5pm');
+        debugPrint('DEBUG: Centralized 5:00 PM push RPC result: $rpcRes');
+        await prefs.setBool(prefsKey, true);
+        return;
+      } catch (rpcErr) {
+        debugPrint('Notice: push_all_daily_deals_summary_5pm RPC not executed ($rpcErr), falling back to client send.');
+      }
+
+      // Fallback: send individual summary for this agent
+      final deals = await getSenderTodayDeals(currentAgent.id);
+      if (deals.isEmpty) {
+        return;
+      }
+
       final err = await sendDailySummary(ref: ref, isManual: false);
       if (err == null) {
         debugPrint('DEBUG: Automatically sent 5:00 PM deal summary for ${currentAgent.fullName}');

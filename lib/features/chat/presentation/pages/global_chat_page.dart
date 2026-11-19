@@ -3560,26 +3560,28 @@ class _ChatBubble extends ConsumerWidget {
         Flexible(
           child: _RichMessageText(content: message.content, isMe: false),
         ),
-        SizedBox(width: 8),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-          decoration: BoxDecoration(
-            color: context.isDarkMode 
-                ? Colors.white.withValues(alpha: 0.1) 
-                : AppColors.primary.withValues(alpha: 0.05),
-            borderRadius: BorderRadius.circular(4),
-          ),
-          child: Text(
-            DateFormat('h:mm a').format(message.createdAt.toLocal()) + (message.isEdited ? ' (edited)' : ''),
-            style: TextStyle(
-              fontSize: 9,
-              fontWeight: FontWeight.w600,
+        if (message.fileUrl == null) ...[
+          SizedBox(width: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(
               color: context.isDarkMode 
-                  ? Colors.white70 
-                  : AppColors.primary,
+                  ? Colors.white.withValues(alpha: 0.1) 
+                  : AppColors.primary.withValues(alpha: 0.05),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Text(
+              DateFormat('h:mm a').format(message.createdAt.toLocal()) + (message.isEdited ? ' (edited)' : ''),
+              style: TextStyle(
+                fontSize: 9,
+                fontWeight: FontWeight.w600,
+                color: context.isDarkMode 
+                    ? Colors.white70 
+                    : AppColors.primary,
+              ),
             ),
           ),
-        ),
+        ],
       ],
     );
   }

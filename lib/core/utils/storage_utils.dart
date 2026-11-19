@@ -370,16 +370,21 @@ Future<ChatUploadResult> uploadChatAttachment(
       debugPrint(
         '[StorageUtils] File "${file.name}" (${formatChatFileSize(resolvedSize)}) exceeds 45 MB. Automatically streaming to company Google Drive...',
       );
-      final driveResult = await GoogleDriveChatService.uploadLargeFile(
-        file: file,
-        onProgress: onProgress,
-      );
-      return ChatUploadResult(
-        fileUrl: driveResult.fileUrl,
-        fileName: driveResult.fileName,
-        fileType: 'gdrive',
-        bytes: null,
-      );
+      try {
+        final driveResult = await GoogleDriveChatService.uploadLargeFile(
+          file: file,
+          onProgress: onProgress,
+        );
+        return ChatUploadResult(
+          fileUrl: driveResult.fileUrl,
+          fileName: driveResult.fileName,
+          fileType: 'gdrive',
+          bytes: null,
+        );
+      } catch (e) {
+        final errorMsg = e.toString().replaceFirst('Exception: ', '').trim();
+        throw Exception(errorMsg);
+      }
     } else {
       throw Exception(
         'File "${file.name}" (${formatChatFileSize(resolvedSize)}) exceeds the 45 MB direct upload limit. '

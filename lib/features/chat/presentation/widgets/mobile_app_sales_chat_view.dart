@@ -20,8 +20,7 @@ import '../providers/chat_provider.dart';
 import '../../domain/entities/chat_message.dart';
 import 'markdown_text_editing_controller.dart';
 import 'chat_voice_recorder.dart';
-import 'video_message_widget.dart';
-import '../../../../core/utils/download_helper.dart';
+import 'chat_attachment_renderer.dart';
 import '../../../../core/utils/storage_utils.dart';
 import '../../../../core/services/google_drive/google_drive_chat_service.dart';
 import '../../../sales/presentation/providers/lead_provider.dart';
@@ -1454,7 +1453,8 @@ class _ChatBubbleState extends ConsumerState<_ChatBubble> {
                                   ],
                                 ),
                               ),
-                            // Message text + time on the same row
+                            // Message text row
+                            if (message.content.trim().isNotEmpty || isDeleted || message.fileUrl == null)
                             Row(
                               mainAxisSize: MainAxisSize.min,
                               crossAxisAlignment: CrossAxisAlignment.end,
@@ -1493,106 +1493,29 @@ class _ChatBubbleState extends ConsumerState<_ChatBubble> {
                                           ),
                                         ),
                                 ),
-                                const SizedBox(width: 8),
-                                Text(
-                                  timeStr,
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w600,
-                                    color: isMe
-                                        ? (context.isDarkMode ? Colors.white60 : AppColors.primary.withValues(alpha: 0.6))
-                                        : (context.isDarkMode ? Colors.white54 : AppColors.slate400),
+                                if (message.fileUrl == null || isDeleted) ...[
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    timeStr,
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w600,
+                                      color: isMe
+                                          ? (context.isDarkMode ? Colors.white60 : AppColors.primary.withValues(alpha: 0.6))
+                                          : (context.isDarkMode ? Colors.white54 : AppColors.slate400),
+                                    ),
                                   ),
-                                ),
+                                ],
                               ],
                             ),
                             if (message.fileUrl != null && !isDeleted)
-                              if (message.fileType?.toLowerCase() == 'gif')
-                                // Render GIF as animated inline image
-                                ClipRRect(
-                                  borderRadius: BorderRadius.circular(8),
-                                  child: Image.network(
-                                    message.fileUrl!,
-                                    width: 200,
-                                    fit: BoxFit.cover,
-                                    cacheWidth: 600,
-                                    gaplessPlayback: true,
-                                    loadingBuilder: (_, child, progress) => progress == null
-                                        ? child
-                                        : SizedBox(
-                                            width: 200,
-                                            height: 120,
-                                            child: Center(
-                                              child: CircularProgressIndicator(
-                                                strokeWidth: 2,
-                                                value: progress.expectedTotalBytes != null
-                                                    ? progress.cumulativeBytesLoaded / progress.expectedTotalBytes!
-                                                    : null,
-                                              ),
-                                            ),
-                                          ),
-                                    errorBuilder: (_, __, ___) => Container(
-                                      width: 200,
-                                      height: 80,
-                                      decoration: BoxDecoration(
-                                        color: Colors.grey.shade200,
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                      child: const Center(child: Icon(Icons.gif, size: 32, color: AppColors.slate400)),
-                                    ),
-                                  ),
-                                )
-                               else if (['mp4', 'mov', 'avi', 'mkv'].contains(message.fileType?.toLowerCase()))
-                                 Padding(
-                                   padding: const EdgeInsets.only(top: 4),
-                                   child: VideoMessageWidget(
-                                     videoUrl: message.fileUrl!,
-                                     fileName: message.fileName ?? 'video',
-                                     onDownload: () => downloadFileDirectly(message.fileUrl!, message.fileName ?? 'video'),
-                                   ),
-                                 )
-                               else
-                                 GestureDetector(
-                                  onTap: () async {
-                                    final uri = Uri.parse(message.fileUrl!);
-                                    try {
-                                      await url_launcher.launchUrl(
-                                        uri,
-                                        mode: url_launcher.LaunchMode.externalApplication,
-                                      );
-                                    } catch (e) {
-                                      debugPrint('Could not launch ${message.fileUrl}: $e');
-                                    }
-                                  },
-                                  child: Container(
-                                    margin: const EdgeInsets.only(top: 4),
-                                    padding: const EdgeInsets.all(8),
-                                    decoration: BoxDecoration(
-                                      color: Colors.white,
-                                      borderRadius: BorderRadius.circular(6),
-                                      border: Border.all(color: Colors.grey.shade300),
-                                    ),
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Icon(_getFileIcon(message.fileType),
-                                            size: 16, color: AppColors.slate500),
-                                        const SizedBox(width: 6),
-                                        Flexible(
-                                          child: Text(
-                                            message.fileName ?? 'File',
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: const TextStyle(fontSize: 12),
-                                          ),
-                                        ),
-                                        const SizedBox(width: 6),
-                                        Icon(LucideIcons.download,
-                                            size: 14, color: AppColors.slate500),
-                                      ],
-                                    ),
-                                  ),
+                              Padding(
+                                padding: const EdgeInsets.only(top: 4),
+                                child: ChatAttachmentRenderer(
+                                  message: message,
+                                  isMe: isMe,
                                 ),
+                              ),
                           ],
                         ),
                       ),

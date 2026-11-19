@@ -21,6 +21,7 @@ class _DealRegisterRecipientsTabState extends ConsumerState<DealRegisterRecipien
   Set<String> _enrolledMemberIds = {};
   bool _isLoading = true;
   bool _isSending = false;
+  bool _isBatchPushing = false;
   String _searchQuery = '';
 
   @override
@@ -260,6 +261,60 @@ class _DealRegisterRecipientsTabState extends ConsumerState<DealRegisterRecipien
     }
   }
 
+  Future<void> _handleBatchPushAll() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Push All Agents\' Deals Now?'),
+        content: const Text(
+          'This will trigger the server-side batch push immediately, generating and delivering 5:00 PM deal summaries simultaneously for ALL agents who logged deals today.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel', style: TextStyle(color: AppColors.slate600)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF10B981),
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Push All Now'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    setState(() => _isBatchPushing = true);
+    final res = await DealSummaryService.pushAllAgentsSummariesNow();
+    if (!mounted) return;
+    setState(() => _isBatchPushing = false);
+
+    if (res['success'] == true) {
+      final count = res['pushed_count'] ?? 0;
+      final agentsList = res['pushed_agents'];
+      final agentsStr = (agentsList is List && agentsList.isNotEmpty)
+          ? ': ${agentsList.join(", ")}'
+          : '';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Successfully pushed daily summaries for $count agent(s)$agentsStr!'),
+          backgroundColor: AppColors.success,
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Batch push: ${res['error'] ?? "No new deals pending to push."}'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final gc = GlassColors.of(context, ref);
@@ -329,6 +384,26 @@ class _DealRegisterRecipientsTabState extends ConsumerState<DealRegisterRecipien
                 ),
               ),
               const SizedBox(width: 16),
+              if (ref.watch(authProvider)?.isAdmin == true) ...[
+                OutlinedButton.icon(
+                  onPressed: _isBatchPushing ? null : _handleBatchPushAll,
+                  icon: _isBatchPushing
+                      ? const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(LucideIcons.users, size: 16, color: Color(0xFF10B981)),
+                  label: Text(_isBatchPushing ? 'Pushing All...' : 'Push All Agents Now'),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: Color(0xFF10B981)),
+                    foregroundColor: const Color(0xFF10B981),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                ),
+                const SizedBox(width: 10),
+              ],
               ElevatedButton.icon(
                 onPressed: _isSending ? null : _handleSendNow,
                 icon: _isSending
@@ -338,7 +413,7 @@ class _DealRegisterRecipientsTabState extends ConsumerState<DealRegisterRecipien
                         child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                       )
                     : const Icon(LucideIcons.send, size: 16),
-                label: Text(_isSending ? 'Sending...' : 'Send Summary Now'),
+                label: Text(_isSending ? 'Sending...' : 'Send My Summary Now'),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF10B981),
                   foregroundColor: Colors.white,

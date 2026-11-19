@@ -156,11 +156,19 @@ class _GoogleDriveSettingsCardState extends State<GoogleDriveSettingsCard> {
     } catch (e) {
       if (mounted) {
         setState(() => _isConnectingWithToken = false);
+        final err = e.toString().replaceFirst('Exception: ', '').trim();
+        final is400 = err.contains('400') || err.contains('client_secret') || err.contains('unauthorized_client');
+        final errorMsg = is400
+            ? 'Token rejected by Google (400).\n'
+              '• Web Client IDs require entering your Client Secret under Advanced OAuth Settings.\n'
+              '• The token must be generated in OAuth Playground with "Use your own OAuth credentials" enabled in the ⚙️ gear icon.\n'
+              '💡 Quick fix: In OAuth Playground Step 2, copy the Access token (starts with ya29.) for instant access.'
+            : 'Failed to connect: $err';
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to connect with token: $e'),
+            content: Text(errorMsg),
             backgroundColor: AppColors.error,
-            duration: const Duration(seconds: 6),
+            duration: const Duration(seconds: 10),
           ),
         );
       }
@@ -590,10 +598,14 @@ class _GoogleDriveSettingsCardState extends State<GoogleDriveSettingsCard> {
                           ),
                           const SizedBox(height: 6),
                           const Text(
-                            '1. In OAuth Playground Step 1, select Drive API v3 -> https://www.googleapis.com/auth/drive.file\n'
-                            '2. Click "Authorize APIs" and sign into your company Google account.\n'
-                            '3. In Step 2, click "Exchange authorization code for tokens" and copy the "Refresh token".\n'
-                            '4. Paste it in the input above and click Connect.',
+                            '• Permanent Connection:\n'
+                            '  1. In OAuth Playground, click the ⚙️ Gear icon (top right) and check "Use your own OAuth credentials".\n'
+                            '  2. Enter your Client ID and Client Secret (from Google Cloud Console).\n'
+                            '  3. In Step 1, select Drive API v3 -> https://www.googleapis.com/auth/drive.file and click "Authorize APIs".\n'
+                            '  4. In Step 2, click "Exchange authorization code for tokens" and copy the "Refresh token".\n'
+                            '  5. Under "Advanced OAuth Settings" below, enter your Client Secret, paste the Refresh token above, and click Connect.\n\n'
+                            '• ⚡ Quick Instant Fix (Temporary):\n'
+                            '  In OAuth Playground Step 2, copy the "Access token" (starts with ya29.) and paste it above to enable uploads immediately.',
                             style: TextStyle(fontSize: 11.5, color: AppColors.slate600, height: 1.4),
                           ),
                         ],

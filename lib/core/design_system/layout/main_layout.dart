@@ -109,6 +109,10 @@ class _MainLayoutState extends ConsumerState<MainLayout> with WidgetsBindingObse
         if (openPartner != null && c.exists(dmStreamProvider(openPartner))) {
           c.read(dmStreamProvider(openPartner).notifier).softRefresh();
         }
+        final openChannel = c.read(currentOpenChannelProvider);
+        if (openChannel != null && c.exists(chatStreamProvider(openChannel))) {
+          c.read(chatStreamProvider(openChannel).notifier).softRefresh();
+        }
         c.invalidate(agentsListProvider);
         c.invalidate(notificationsProvider);
         final currentUser = c.read(authProvider);

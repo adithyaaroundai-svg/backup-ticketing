@@ -119,6 +119,7 @@ class ChatStream extends _$ChatStream {
   
   bool get isLoadingMore => _isLoadingMore;
   bool get hasMore => _hasMore;
+  bool get isRealtimeConnected => _isRealtimeConnected;
 
   bool get _isThisChannelOpen {
     final open = ref.read(currentOpenChannelProvider);
@@ -183,11 +184,11 @@ class ChatStream extends _$ChatStream {
 
   void _startPolling() {
     _pollTimer?.cancel();
-    // Only poll when this channel is actively open AND Realtime is disconnected.
-    // If Realtime is connected, WebSocket delivers messages with zero delay.
-    _pollTimer = Timer.periodic(const Duration(seconds: 4), (_) {
+    // Poll continuously while this channel is actively open.
+    // Realtime delivers with zero delay; this 3-second catch-up acts as an essential guarantee
+    // against dropped WebSocket frames, sleeping background tabs, or Supabase RLS blips.
+    _pollTimer = Timer.periodic(const Duration(seconds: 3), (_) {
       if (!_alive || !_isThisChannelOpen) return;
-      if (_isRealtimeConnected) return;
       _catchUp();
     });
   }
@@ -266,6 +267,14 @@ class ChatStream extends _$ChatStream {
     final repository = ref.watch(chatRepositoryProvider);
     final myId = ref.watch(authProvider)?.id;
     
+    // When the user opens or switches to this channel, catch up immediately
+    ref.listen<String?>(currentOpenChannelProvider, (prev, next) {
+      if (!_alive) return;
+      if (next != null && next.trim().toLowerCase() == channel.trim().toLowerCase()) {
+        _catchUp();
+      }
+    });
+
     // Subscribe to Realtime before/during fetch so new events are caught
     _listen(repository);
     
@@ -682,7 +691,7 @@ class DmStream extends _$DmStream {
 
   void _startPolling() {
     _pollTimer?.cancel();
-    _pollTimer = Timer.periodic(const Duration(seconds: 4), (_) {
+    _pollTimer = Timer.periodic(const Duration(seconds: 3), (_) {
       if (!_alive) return;
       final open = ref.read(currentOpenConversationProvider)?.trim().toLowerCase();
       if (open == null || open != chatPartnerId.trim().toLowerCase()) return;
@@ -729,6 +738,14 @@ class DmStream extends _$DmStream {
     final repository = ref.watch(chatRepositoryProvider);
     final myId = ref.watch(authProvider)?.id;
     if (myId == null) return [];
+
+    // When the user opens or switches to this conversation, catch up immediately
+    ref.listen<String?>(currentOpenConversationProvider, (prev, next) {
+      if (!_alive) return;
+      if (next != null && next.trim().toLowerCase() == chatPartnerId.trim().toLowerCase()) {
+        _catchUp();
+      }
+    });
 
     final cacheKey = '${myId}_$chatPartnerId';
     final currentCache = _dmCache[cacheKey] ?? [];

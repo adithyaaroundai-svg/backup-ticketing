@@ -3190,77 +3190,81 @@ class _ChatBubbleState extends ConsumerState<_ChatBubble> {
                                   ],
                                 ),
                               ),
-                            // Message text + time on the same row
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
-                              crossAxisAlignment: CrossAxisAlignment.end,
-                              children: [
-                                Flexible(
-                                  child: isDeleted
-                                      ? Text(
-                                          'This message was deleted',
-                                          style: TextStyle(
-                                            fontStyle: FontStyle.italic,
-                                            color: AppColors.slate400,
+                            // Message text row
+                            if (message.content.trim().isNotEmpty || isDeleted || message.fileUrl == null)
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  Flexible(
+                                    child: isDeleted
+                                        ? Text(
+                                            'This message was deleted',
+                                            style: TextStyle(
+                                              fontStyle: FontStyle.italic,
+                                              color: AppColors.slate400,
+                                            ),
+                                          )
+                                        : isTicketMessage
+                                            ? _buildTicketCard(context, ref, message)
+                                            : isDealSummary
+                                                ? _buildDealSummaryCard(context, ref, message)
+                                                : SelectableLinkify(
+                                            text: message.content,
+                                            onOpen: (link) async {
+                                              final uri = Uri.parse(link.url);
+                                              if (await url_launcher.canLaunchUrl(uri)) {
+                                                await url_launcher.launchUrl(uri, mode: url_launcher.LaunchMode.externalApplication);
+                                              }
+                                            },
+                                            style: TextStyle(
+                                              color: isMe
+                                                  ? (context.isDarkMode ? Colors.white : AppColors.primary)
+                                                  : (context.isDarkMode ? Colors.white : AppColors.slate800),
+                                              fontSize: 14,
+                                            ),
+                                            linkStyle: TextStyle(
+                                              color: context.isDarkMode
+                                                  ? const Color(0xFF93C5FD)   // blue-300 readable on dark
+                                                  : const Color(0xFF1D4ED8),  // blue-700 readable on light
+                                              decoration: TextDecoration.underline,
+                                              decorationColor: context.isDarkMode
+                                                  ? const Color(0xFF93C5FD)
+                                                  : const Color(0xFF1D4ED8),
+                                            ),
                                           ),
-                                        )
-                                      : isTicketMessage
-                                          ? _buildTicketCard(context, ref, message)
-                                          : isDealSummary
-                                              ? _buildDealSummaryCard(context, ref, message)
-                                              : SelectableLinkify(
-                                          text: message.content,
-                                          onOpen: (link) async {
-                                            final uri = Uri.parse(link.url);
-                                            if (await url_launcher.canLaunchUrl(uri)) {
-                                              await url_launcher.launchUrl(uri, mode: url_launcher.LaunchMode.externalApplication);
-                                            }
-                                          },
-                                          style: TextStyle(
-                                            color: isMe
-                                                ? (context.isDarkMode ? Colors.white : AppColors.primary)
-                                                : (context.isDarkMode ? Colors.white : AppColors.slate800),
-                                            fontSize: 14,
-                                          ),
-                                          linkStyle: TextStyle(
-                                            color: context.isDarkMode
-                                                ? const Color(0xFF93C5FD)   // blue-300 readable on dark
-                                                : const Color(0xFF1D4ED8),  // blue-700 readable on light
-                                            decoration: TextDecoration.underline,
-                                            decorationColor: context.isDarkMode
-                                                ? const Color(0xFF93C5FD)
-                                                : const Color(0xFF1D4ED8),
-                                          ),
-                                        ),
-                                ),
-                                const SizedBox(width: 8),
-                                Text(
-                                  timeStr,
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    color: isMe
-                                        ? (context.isDarkMode ? Colors.white60 : AppColors.primary.withValues(alpha: 0.6))
-                                        : (context.isDarkMode ? Colors.white54 : AppColors.slate400),
                                   ),
-                                ),
-                                if (isMe && !isDeleted) ...[
-                                  const SizedBox(width: 4),
-                                  Builder(
-                                    builder: (context) {
-                                      final readBy = ReadReceiptsTracker.getReadBy(message.id);
-                                      final isRead = readBy.any((id) => id != message.senderId.trim().toLowerCase());
-                                      return Icon(
-                                        isRead ? LucideIcons.checkCheck : LucideIcons.check,
-                                        size: 13,
-                                        color: isRead
-                                            ? (context.isDarkMode ? const Color(0xFF60A5FA) : const Color(0xFF2563EB))
-                                            : (context.isDarkMode ? Colors.white60 : AppColors.primary.withValues(alpha: 0.6)),
-                                      );
-                                    },
-                                  ),
+                                  // Show timestamp in text row only if there is no attachment
+                                  if (message.fileUrl == null || isDeleted) ...[
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      timeStr,
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        color: isMe
+                                            ? (context.isDarkMode ? Colors.white60 : AppColors.primary.withValues(alpha: 0.6))
+                                            : (context.isDarkMode ? Colors.white54 : AppColors.slate400),
+                                      ),
+                                    ),
+                                    if (isMe && !isDeleted) ...[
+                                      const SizedBox(width: 4),
+                                      Builder(
+                                        builder: (context) {
+                                          final readBy = ReadReceiptsTracker.getReadBy(message.id);
+                                          final isRead = readBy.any((id) => id != message.senderId.trim().toLowerCase());
+                                          return Icon(
+                                            isRead ? LucideIcons.checkCheck : LucideIcons.check,
+                                            size: 13,
+                                            color: isRead
+                                                ? (context.isDarkMode ? const Color(0xFF60A5FA) : const Color(0xFF2563EB))
+                                                : (context.isDarkMode ? Colors.white60 : AppColors.primary.withValues(alpha: 0.6)),
+                                          );
+                                        },
+                                      ),
+                                    ],
+                                  ],
                                 ],
-                              ],
-                            ),
+                              ),
                             if (message.fileUrl != null && !isDeleted)
                               Padding(
                                 padding: const EdgeInsets.only(top: 4),

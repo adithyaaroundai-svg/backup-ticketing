@@ -4250,36 +4250,38 @@ class _ChatBubble extends ConsumerWidget {
                                     richTextDelta: message.richTextDelta,
                                   ),
                           ),
-                          const SizedBox(width: 8),
-                          Text(
-                            DateFormat(
-                              'h:mm a',
-                            ).format(message.createdAt.toLocal()),
-                            style: TextStyle(
-                              fontSize: 10,
-                              color: isMe
-                                  ? (context.isDarkMode ? Colors.white70 : AppColors.primary.withValues(alpha: 0.6))
-                                  : (context.isDarkMode
-                                        ? Colors.white54
-                                        : AppColors.slate400),
+                          if (message.fileUrl == null) ...[
+                            const SizedBox(width: 8),
+                            Text(
+                              DateFormat(
+                                'h:mm a',
+                              ).format(message.createdAt.toLocal()),
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: isMe
+                                    ? (context.isDarkMode ? Colors.white70 : AppColors.primary.withValues(alpha: 0.6))
+                                    : (context.isDarkMode
+                                          ? Colors.white54
+                                          : AppColors.slate400),
+                              ),
                             ),
-                          ),
-                          if (isMe) ...[
-                            const SizedBox(width: 4),
-                            Builder(
-                              builder: (context) {
-                                final partnerId = message.receiverId?.trim().toLowerCase();
-                                final isRead = partnerId != null &&
-                                    ReadReceiptsTracker.getReadBy(message.id).contains(partnerId);
-                                return Icon(
-                                  isRead ? Icons.done_all : Icons.check,
-                                  size: 14,
-                                  color: isRead 
-                                      ? Colors.blue 
-                                      : (context.isDarkMode ? Colors.white54 : Colors.black38),
-                                );
-                              }
-                            ),
+                            if (isMe) ...[
+                              const SizedBox(width: 4),
+                              Builder(
+                                builder: (context) {
+                                  final partnerId = message.receiverId?.trim().toLowerCase();
+                                  final isRead = partnerId != null &&
+                                      ReadReceiptsTracker.getReadBy(message.id).contains(partnerId);
+                                  return Icon(
+                                    isRead ? Icons.done_all : Icons.check,
+                                    size: 14,
+                                    color: isRead 
+                                        ? Colors.blue 
+                                        : (context.isDarkMode ? Colors.white54 : Colors.black38),
+                                  );
+                                }
+                              ),
+                            ],
                           ],
                         ],
                       ),

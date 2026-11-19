@@ -301,6 +301,11 @@ class ChatAttachmentRenderer extends ConsumerWidget {
 
     final uploadState = ref.watch(attachmentUploadStateProvider)[message.id];
     final type = _getType(message.fileType, message.fileName);
+    final timeStr = DateFormat('h:mm a').format(message.createdAt.toLocal());
+    final readBy = ReadReceiptsTracker.getReadBy(message.id);
+    final isRead = message.receiverId != null && message.receiverId!.isNotEmpty
+        ? readBy.contains(message.receiverId!.trim().toLowerCase())
+        : readBy.any((id) => id != message.senderId.trim().toLowerCase());
 
     Widget contentWidget;
     switch (type) {
@@ -313,7 +318,7 @@ class ChatAttachmentRenderer extends ConsumerWidget {
             voiceUrl: message.fileUrl!,
             duration: duration,
             isMe: isMe,
-            timestamp: DateFormat('h:mm a').format(message.createdAt.toLocal()),
+            timestamp: timeStr,
           ),
         );
         break;
@@ -402,9 +407,47 @@ class ChatAttachmentRenderer extends ConsumerWidget {
           padding: const EdgeInsets.only(top: 4, bottom: 4),
           child: GestureDetector(
             onTap: () => _showFullScreenImage(context, message.fileUrl!, message.fileName ?? 'image'),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: imageWidget,
+            child: Stack(
+              alignment: Alignment.bottomRight,
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: imageWidget,
+                ),
+                Positioned(
+                  bottom: 6,
+                  right: 6,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.55),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Text(
+                          timeStr,
+                          style: const TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w500,
+                            color: Colors.white,
+                          ),
+                        ),
+                        if (isMe) ...[
+                          const SizedBox(width: 3),
+                          Icon(
+                            isRead ? LucideIcons.checkCheck : LucideIcons.check,
+                            size: 12,
+                            color: isRead ? const Color(0xFF60A5FA) : Colors.white70,
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         );
@@ -417,6 +460,9 @@ class ChatAttachmentRenderer extends ConsumerWidget {
             fileType: 'video',
             fileUrl: message.fileUrl!,
             onDownload: () async {},
+            timestamp: timeStr,
+            isMe: isMe,
+            isRead: isRead,
           );
         } else {
           contentWidget = Padding(
@@ -425,6 +471,9 @@ class ChatAttachmentRenderer extends ConsumerWidget {
               videoUrl: message.fileUrl!,
               fileName: _resolveFileName(message.fileName, message.fileType, message.fileUrl),
               onDownload: () => _downloadFile(message.fileUrl!, _resolveFileName(message.fileName, message.fileType, message.fileUrl)),
+              timestamp: timeStr,
+              isMe: isMe,
+              isRead: isRead,
             ),
           );
         }
@@ -439,6 +488,9 @@ class ChatAttachmentRenderer extends ConsumerWidget {
           fileType: message.fileType,
           fileUrl: message.fileUrl!,
           onDownload: () => _downloadFile(message.fileUrl!, displayName),
+          timestamp: timeStr,
+          isMe: isMe,
+          isRead: isRead,
         );
         break;
     }
@@ -557,16 +609,24 @@ class ChatAttachmentRenderer extends ConsumerWidget {
                       color: context.adaptiveSlate400,
                     ),
                   ),
-                  const Row(
+                  Row(
                     children: [
-                      Icon(Icons.cloud_done_rounded, size: 11, color: Color(0xFF16A34A)),
-                      SizedBox(width: 3),
-                      Text(
+                      const Icon(Icons.cloud_done_rounded, size: 11, color: Color(0xFF16A34A)),
+                      const SizedBox(width: 3),
+                      const Text(
                         'Drive Sync',
                         style: TextStyle(
                           fontSize: 10.5,
                           color: Color(0xFF16A34A),
                           fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        timeStr,
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: context.adaptiveSlate400,
                         ),
                       ),
                     ],
@@ -578,7 +638,17 @@ class ChatAttachmentRenderer extends ConsumerWidget {
         );
       } else if (uploadState.status == AttachmentUploadStatus.failed) {
         final errorText = uploadState.error ?? 'Upload failed';
-        final isSizeError = errorText.toLowerCase().contains('exceed');
+        String displayError = errorText;
+        if (displayError.contains('DetailedApiRequestError') ||
+            displayError.contains('401') ||
+            displayError.toLowerCase().contains('invalid authentication') ||
+            displayError.toLowerCase().contains('oauth 2')) {
+          displayError = 'Google Drive session expired. Please re-connect Company Google Drive in Settings -> Google Drive.';
+        }
+        final isCleanMessage = displayError.toLowerCase().contains('exceed') ||
+            displayError.toLowerCase().contains('google drive') ||
+            displayError.toLowerCase().contains('settings');
+        final bannerText = isCleanMessage ? displayError : 'Upload failed: $displayError';
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -598,9 +668,9 @@ class ChatAttachmentRenderer extends ConsumerWidget {
                   const SizedBox(width: 6),
                   Flexible(
                     child: Tooltip(
-                      message: errorText,
+                      message: displayError,
                       child: Text(
-                        isSizeError ? errorText : 'Upload failed: $errorText',
+                        bannerText,
                         style: const TextStyle(color: AppColors.error, fontSize: 12, fontWeight: FontWeight.w500),
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -648,12 +718,18 @@ class _FileAttachmentCard extends StatefulWidget {
   final String? fileType;
   final String fileUrl;
   final Future<void> Function() onDownload;
+  final String? timestamp;
+  final bool isMe;
+  final bool isRead;
 
   const _FileAttachmentCard({
     required this.displayName,
     required this.fileType,
     required this.fileUrl,
     required this.onDownload,
+    this.timestamp,
+    this.isMe = false,
+    this.isRead = false,
   });
 
   @override
@@ -765,131 +841,166 @@ class _FileAttachmentCardState extends State<_FileAttachmentCard> with SingleTic
           width: isGoogleDrive ? 1.5 : 1.0,
         ),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: isGoogleDrive
-                  ? const Color(0xFF4285F4).withValues(alpha: 0.12)
-                  : (context.isDarkMode ? context.adaptiveSlate700 : AppColors.primary.withValues(alpha: 0.1)),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(
-              isGoogleDrive ? Icons.cloud_done_rounded : _getFileIcon(widget.fileType),
-              size: 24,
-              color: isGoogleDrive
-                  ? const Color(0xFF1A73E8)
-                  : (context.isDarkMode ? Colors.white70 : AppColors.primary),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        widget.displayName,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: context.isDarkMode ? Colors.white : Colors.black87,
-                        ),
-                      ),
-                    ),
-                    if (isGoogleDrive) ...[
-                      const SizedBox(width: 4),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF34A853).withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: const Text(
-                          'Drive',
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF1E8E3E),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ],
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: isGoogleDrive
+                      ? const Color(0xFF4285F4).withValues(alpha: 0.12)
+                      : (context.isDarkMode ? context.adaptiveSlate700 : AppColors.primary.withValues(alpha: 0.1)),
+                  borderRadius: BorderRadius.circular(10),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  _isDownloading
-                      ? (isGoogleDrive ? 'Opening Google Drive...' : 'Downloading...')
-                      : (isGoogleDrive ? 'Google Drive · Click to open' : 'Click to download'),
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: _isDownloading
-                        ? AppColors.primary
-                        : (isGoogleDrive ? const Color(0xFF1A73E8) : context.adaptiveSlate400),
-                    fontWeight: (_isDownloading || isGoogleDrive) ? FontWeight.w500 : FontWeight.normal,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 16),
-          MouseRegion(
-            onEnter: (_) => setState(() => _isHovering = true),
-            onExit: (_) => setState(() => _isHovering = false),
-            cursor: SystemMouseCursors.click,
-            child: GestureDetector(
-              onTapDown: (_) => _controller.forward(),
-              onTapUp: (_) => _controller.reverse(),
-              onTapCancel: () => _controller.reverse(),
-              onTap: _handleDownload,
-              child: ScaleTransition(
-                scale: _scaleAnimation,
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: context.isDarkMode
-                        ? (_isHovering ? context.adaptiveSlate600 : context.adaptiveSlate700)
-                        : (_isHovering
-                            ? (isGoogleDrive ? const Color(0xFF4285F4).withValues(alpha: 0.15) : AppColors.primary.withValues(alpha: 0.1))
-                            : Colors.white),
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      if (!context.isDarkMode && !_isHovering)
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.05),
-                          blurRadius: 4,
-                          offset: const Offset(0, 2),
-                        ),
-                    ],
-                  ),
-                  child: _isDownloading
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : Icon(
-                          isGoogleDrive ? LucideIcons.externalLink : LucideIcons.download,
-                          size: 16,
-                          color: _isHovering
-                              ? (isGoogleDrive ? const Color(0xFF1A73E8) : AppColors.primary)
-                              : (context.isDarkMode
-                                  ? Colors.white70
-                                  : (isGoogleDrive ? const Color(0xFF1A73E8) : AppColors.slate600)),
-                        ),
+                child: Icon(
+                  isGoogleDrive ? Icons.cloud_done_rounded : _getFileIcon(widget.fileType),
+                  size: 24,
+                  color: isGoogleDrive
+                      ? const Color(0xFF1A73E8)
+                      : (context.isDarkMode ? Colors.white70 : AppColors.primary),
                 ),
               ),
-            ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            widget.displayName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: context.isDarkMode ? Colors.white : Colors.black87,
+                            ),
+                          ),
+                        ),
+                        if (isGoogleDrive) ...[
+                          const SizedBox(width: 4),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF34A853).withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: const Text(
+                              'Drive',
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF1E8E3E),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      _isDownloading
+                          ? (isGoogleDrive ? 'Opening Google Drive...' : 'Downloading...')
+                          : (isGoogleDrive ? 'Google Drive · Click to open' : 'Click to download'),
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: _isDownloading
+                            ? AppColors.primary
+                            : (isGoogleDrive ? const Color(0xFF1A73E8) : context.adaptiveSlate400),
+                        fontWeight: (_isDownloading || isGoogleDrive) ? FontWeight.w500 : FontWeight.normal,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 16),
+              MouseRegion(
+                onEnter: (_) => setState(() => _isHovering = true),
+                onExit: (_) => setState(() => _isHovering = false),
+                cursor: SystemMouseCursors.click,
+                child: GestureDetector(
+                  onTapDown: (_) => _controller.forward(),
+                  onTapUp: (_) => _controller.reverse(),
+                  onTapCancel: () => _controller.reverse(),
+                  onTap: _handleDownload,
+                  child: ScaleTransition(
+                    scale: _scaleAnimation,
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: context.isDarkMode
+                            ? (_isHovering ? context.adaptiveSlate600 : context.adaptiveSlate700)
+                            : (_isHovering
+                                ? (isGoogleDrive ? const Color(0xFF4285F4).withValues(alpha: 0.15) : AppColors.primary.withValues(alpha: 0.1))
+                                : Colors.white),
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          if (!context.isDarkMode && !_isHovering)
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.05),
+                              blurRadius: 4,
+                              offset: const Offset(0, 2),
+                            ),
+                        ],
+                      ),
+                      child: _isDownloading
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : Icon(
+                              isGoogleDrive ? LucideIcons.externalLink : LucideIcons.download,
+                              size: 16,
+                              color: _isHovering
+                                  ? (isGoogleDrive ? const Color(0xFF1A73E8) : AppColors.primary)
+                                  : (context.isDarkMode
+                                      ? Colors.white70
+                                      : (isGoogleDrive ? const Color(0xFF1A73E8) : AppColors.slate600)),
+                            ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 36), // Buffer for the drop-down arrow
+            ],
           ),
-          const SizedBox(width: 36), // Buffer for the drop-down arrow
+          if (widget.timestamp != null && widget.timestamp!.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              mainAxisSize: MainAxisSize.max,
+              children: [
+                Text(
+                  widget.timestamp!,
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w500,
+                    color: widget.isMe
+                        ? (context.isDarkMode ? Colors.white60 : AppColors.primary.withValues(alpha: 0.6))
+                        : (context.isDarkMode ? Colors.white54 : AppColors.slate400),
+                  ),
+                ),
+                if (widget.isMe) ...[
+                  const SizedBox(width: 4),
+                  Icon(
+                    widget.isRead ? LucideIcons.checkCheck : LucideIcons.check,
+                    size: 13,
+                    color: widget.isRead
+                        ? (context.isDarkMode ? const Color(0xFF60A5FA) : const Color(0xFF2563EB))
+                        : (context.isDarkMode ? Colors.white60 : AppColors.primary.withValues(alpha: 0.6)),
+                  ),
+                ],
+              ],
+            ),
+          ],
         ],
       ),
     );

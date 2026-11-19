@@ -56,7 +56,7 @@ serve(async (req) => {
       const receiverId = record.receiver_id
       const channel = record.channel || 'support-chat'
 
-      // Direct Message
+      // Targeted Message (DM or targeted Channel message)
       if (receiverId) {
         const { data: receiverData } = await supabase
           .from('agents')
@@ -65,13 +65,32 @@ serve(async (req) => {
           .single()
 
         if (receiverData?.fcm_token) {
+          const channelStr = String(channel || '').trim()
+          const isCustomChannel = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(channelStr)
+
+          let notifTitle = senderName
+          let notifLink = `/chat/dm/${senderId}`
+          let notifType = 'dm'
+
+          if (isCustomChannel) {
+            const { data: customCh } = await supabase
+              .from('custom_channels')
+              .select('name')
+              .eq('id', channelStr)
+              .maybeSingle()
+            const chName = customCh?.name || 'deal-register'
+            notifTitle = `#${chName} • ${senderName}`
+            notifLink = `/channel/${channelStr}`
+            notifType = 'channel'
+          }
+
           messagesToSend.push({
-            title: senderName,
+            title: notifTitle,
             body: content,
             data: {
-              type: 'dm',
+              type: notifType,
               partner_id: senderId,
-              link: `/chat/dm/${senderId}`,
+              link: notifLink,
             },
             token: receiverData.fcm_token,
           })

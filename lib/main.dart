@@ -62,6 +62,8 @@ import 'package:ticketing_system/core/design_system/layout/main_layout.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:ticketing_system/firebase_options.dart';
 import 'package:ticketing_system/core/services/push_notification_service.dart';
+import 'features/chat/presentation/providers/chat_provider.dart';
+import 'core/services/global_chat_notification_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -122,11 +124,35 @@ void main() async {
   // Listen for Supabase Auth changes (like the background login completing after app reload)
   // and invalidate the key dashboard providers so they fetch data securely instead of staying empty.
   Supabase.instance.client.auth.onAuthStateChange.listen((data) {
+    final token = data.session?.accessToken;
+    if (token != null && token.isNotEmpty) {
+      try {
+        Supabase.instance.client.realtime.setAuth(token);
+      } catch (e) {
+        debugPrint('Error setting realtime auth: $e');
+      }
+    }
+
     if (data.event == AuthChangeEvent.signedIn || data.event == AuthChangeEvent.tokenRefreshed) {
       // Invalidate the critical streams so they re-fetch securely now that we're authenticated
       container.invalidate(rawTicketsStreamProvider);
       container.invalidate(rawAllTicketsStreamProvider);
       container.invalidate(ticketStatsProvider);
+
+      final openChannel = container.read(currentOpenChannelProvider);
+      if (openChannel != null && container.exists(chatStreamProvider(openChannel))) {
+        container.read(chatStreamProvider(openChannel).notifier).softRefresh();
+      }
+
+      final openPartner = container.read(currentOpenConversationProvider);
+      if (openPartner != null && container.exists(dmStreamProvider(openPartner))) {
+        container.read(dmStreamProvider(openPartner).notifier).softRefresh();
+      }
+
+      final currentUserId = container.read(authProvider)?.id;
+      if (currentUserId != null) {
+        GlobalChatNotificationService.init(currentUserId, container, force: true);
+      }
     }
   });
 

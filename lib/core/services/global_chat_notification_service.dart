@@ -12,8 +12,12 @@ class GlobalChatNotificationService {
   static RealtimeChannel? _subscription;
   static String? _currentUserId;
   
-  static void init(String currentUserId, Ref ref) {
-    if (_subscription != null) return;
+  static void init(String currentUserId, dynamic ref, {bool force = false}) {
+    if (_subscription != null && !force) return;
+    if (_subscription != null && force) {
+      _subscription?.unsubscribe();
+      _subscription = null;
+    }
     _currentUserId = currentUserId;
 
     // Ask for permissions initially on login

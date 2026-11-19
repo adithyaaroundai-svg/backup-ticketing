@@ -135,10 +135,9 @@ class GoogleDriveChatService {
     }
 
     if (config.refreshToken == null || config.refreshToken!.isEmpty) {
-      if (config.accessToken != null && config.accessToken!.isNotEmpty) {
-        return config.accessToken!;
-      }
-      throw Exception('Google Drive authorization missing refresh token. Please re-authorize.');
+      throw Exception(
+        'Google Drive authorization has expired. Please re-connect Company Google Drive in Settings -> Google Drive.',
+      );
     }
 
     debugPrint('[GoogleDrive] Refreshing access token via oauth2 token endpoint...');
@@ -171,7 +170,15 @@ class GoogleDriveChatService {
       return newAccessToken;
     } else {
       debugPrint('[GoogleDrive] Token refresh failed: ${response.statusCode} - ${response.body}');
-      throw Exception('Failed to refresh Google Drive token: ${response.body}');
+      final body = response.body;
+      if (body.contains('client_secret is missing') || body.contains('unauthorized_client')) {
+        throw Exception(
+          'Google requires a Client Secret for this Web Client ID. Please expand Advanced OAuth Settings and enter your Client Secret, or use a Desktop Client ID.',
+        );
+      }
+      throw Exception(
+        'Google Drive authorization failed (${response.statusCode}): ${response.body}',
+      );
     }
   }
 
@@ -259,19 +266,24 @@ class GoogleDriveChatService {
         ? folderName.trim()
         : GoogleDriveConfig.defaultFolderName;
 
+    final trimmedToken = refreshToken.trim();
+    final isDirectAccessToken = trimmedToken.startsWith('ya29.');
+
     var config = GoogleDriveConfig(
       connected: true,
       email: email,
       folderName: effectiveFolder,
       clientId: effectiveClientId,
       clientSecret: clientSecret?.trim(),
-      refreshToken: refreshToken.trim(),
+      refreshToken: isDirectAccessToken ? null : trimmedToken,
+      accessToken: isDirectAccessToken ? trimmedToken : null,
+      expiry: isDirectAccessToken ? DateTime.now().add(const Duration(hours: 1)) : null,
       connectedAt: DateTime.now().toUtc(),
       connectedBy: 'admin',
     );
 
-    // Verify token by refreshing it via Google token endpoint
-    debugPrint('[GoogleDrive] Validating provided refresh token...');
+    // Verify token by refreshing it or accessing the API directly
+    debugPrint('[GoogleDrive] Validating provided token...');
     final token = await _ensureValidAccessToken(config);
     final driveApi = drive.DriveApi(_BearerAuthClient(token));
 
@@ -388,11 +400,30 @@ class GoogleDriveChatService {
       ..parents = folderId != null ? [folderId] : null
       ..description = 'TallyCare Large Chat Attachment (${formatChatFileSize(totalSize)})';
 
-    final uploaded = await driveApi.files.create(
-      driveFile,
-      uploadMedia: media,
-      $fields: 'id, name, webViewLink, webContentLink, size',
-    );
+    final drive.File uploaded;
+    try {
+      uploaded = await driveApi.files.create(
+        driveFile,
+        uploadMedia: media,
+        $fields: 'id, name, webViewLink, webContentLink, size',
+      );
+    } on drive.DetailedApiRequestError catch (e) {
+      debugPrint('[GoogleDrive] API Error: ${e.status} - ${e.message}');
+      if (e.status == 401 || (e.message != null && e.message!.toLowerCase().contains('authentication'))) {
+        throw Exception(
+          'Google Drive session expired (401). Please re-connect Company Google Drive in Settings -> Google Drive.',
+        );
+      }
+      throw Exception('Google Drive upload error (${e.status}): ${e.message}');
+    } catch (e) {
+      final msg = e.toString().replaceFirst('Exception: ', '').trim();
+      if (msg.contains('401') || msg.toLowerCase().contains('unauthorized') || msg.toLowerCase().contains('credentials')) {
+        throw Exception(
+          'Google Drive session expired. Please re-connect Company Google Drive in Settings -> Google Drive.',
+        );
+      }
+      rethrow;
+    }
 
     final fileId = uploaded.id;
     if (fileId == null || fileId.isEmpty) {

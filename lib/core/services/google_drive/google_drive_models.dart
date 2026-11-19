@@ -37,13 +37,15 @@ class GoogleDriveConfig {
 
   bool get isTokenValid {
     if (accessToken == null || accessToken!.isEmpty) return false;
-    if (expiry == null) return true;
+    if (expiry == null) return false;
     return expiry!.isAfter(DateTime.now().add(const Duration(minutes: 5)));
   }
 
-  bool get canAuthenticate =>
-      (refreshToken != null && refreshToken!.isNotEmpty) ||
-      (accessToken != null && accessToken!.isNotEmpty);
+  bool get canAuthenticate {
+    if (!connected) return false;
+    if (refreshToken != null && refreshToken!.trim().isNotEmpty) return true;
+    return accessToken != null && accessToken!.trim().isNotEmpty && isTokenValid;
+  }
 
   GoogleDriveConfig copyWith({
     bool? connected,

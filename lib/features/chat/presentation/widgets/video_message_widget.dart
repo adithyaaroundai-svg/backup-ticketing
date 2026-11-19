@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:video_player/video_player.dart';
 import 'package:chewie/chewie.dart';
 import 'package:url_launcher/url_launcher.dart' as url_launcher;
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../../core/design_system/theme/app_colors.dart';
 
 /// Modal dialog for playing video in full screen on 1-tap without downloading
@@ -179,12 +180,18 @@ class VideoMessageWidget extends StatelessWidget {
   final String videoUrl;
   final String fileName;
   final VoidCallback onDownload;
+  final String? timestamp;
+  final bool isMe;
+  final bool isRead;
 
   const VideoMessageWidget({
     super.key,
     required this.videoUrl,
     required this.fileName,
     required this.onDownload,
+    this.timestamp,
+    this.isMe = false,
+    this.isRead = false,
   });
 
   void _openPlayerModal(BuildContext context) {
@@ -198,6 +205,8 @@ class VideoMessageWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final hasTimestamp = timestamp != null && timestamp!.isNotEmpty;
+
     return GestureDetector(
       onTap: () => _openPlayerModal(context),
       child: ClipRRect(
@@ -264,7 +273,7 @@ class VideoMessageWidget extends StatelessWidget {
               Positioned(
                 left: 8,
                 bottom: 8,
-                right: 40,
+                right: hasTimestamp ? 88 : 40,
                 child: Row(
                   children: [
                     const Icon(Icons.videocam, size: 14, color: AppColors.primary),
@@ -284,6 +293,42 @@ class VideoMessageWidget extends StatelessWidget {
                   ],
                 ),
               ),
+
+              // Bottom Right Timestamp Badge
+              if (hasTimestamp)
+                Positioned(
+                  bottom: 6,
+                  right: 6,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.65),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Text(
+                          timestamp!,
+                          style: const TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w500,
+                            color: Colors.white,
+                          ),
+                        ),
+                        if (isMe) ...[
+                          const SizedBox(width: 3),
+                          Icon(
+                            isRead ? LucideIcons.checkCheck : LucideIcons.check,
+                            size: 12,
+                            color: isRead ? const Color(0xFF60A5FA) : Colors.white70,
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
             ],
           ),
         ),

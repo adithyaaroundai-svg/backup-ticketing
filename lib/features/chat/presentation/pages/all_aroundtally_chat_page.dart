@@ -20,11 +20,10 @@ import '../../../../core/utils/download_helper.dart';
 import '../../domain/entities/chat_message.dart';
 import '../../../tickets/presentation/providers/ticket_provider.dart';
 import '../widgets/chat_voice_recorder.dart';
-import '../widgets/video_message_widget.dart';
+import '../widgets/chat_attachment_renderer.dart';
 import '../widgets/chat_drop_overlay.dart';
 import '../../../../core/services/chat_drag_drop_paste_helper.dart';
 import '../../../../core/utils/storage_utils.dart';
-import '../../../../core/services/google_drive/google_drive_chat_service.dart';
 
 IconData _getFileIcon(String? fileType) {
   if (fileType == null) return Icons.insert_drive_file;
@@ -403,14 +402,11 @@ class _AllAroundTallyChatPageState extends ConsumerState<AllAroundTallyChatPage>
       );
       
       if (result != null && result.files.isNotEmpty) {
-        final isDriveConnected = await GoogleDriveChatService.isConfigured();
-        final maxAllowed = isDriveConnected ? kMaxDriveAttachmentSize : kMaxChatAttachmentSize;
-
         final validFiles = <PlatformFile>[];
         final oversizedNames = <String>[];
 
         for (final file in result.files) {
-          if (file.size > maxAllowed) {
+          if (file.size > kMaxChatAttachmentSize) {
             oversizedNames.add('${file.name} (${formatChatFileSize(file.size)})');
           } else {
             validFiles.add(file);
@@ -418,12 +414,11 @@ class _AllAroundTallyChatPageState extends ConsumerState<AllAroundTallyChatPage>
         }
 
         if (oversizedNames.isNotEmpty && mounted) {
-          final helpText = isDriveConnected
-              ? 'File(s) exceed maximum limit of 5 GB: ${oversizedNames.join(', ')}.'
-              : 'File(s) exceed 50 MB limit: ${oversizedNames.join(', ')}. Connect Company Google Drive in Settings to enable large uploads.';
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(helpText),
+              content: Text(
+                'File(s) exceed 50 MB limit: ${oversizedNames.join(', ')}. Please share large files via Google Drive link.',
+              ),
               backgroundColor: AppColors.error,
               duration: const Duration(seconds: 5),
             ),
@@ -1458,316 +1453,85 @@ class _ChatBubbleState extends ConsumerState<_ChatBubble> {
                                   ],
                                 ),
                               ),
-                            // Message text + time on the same row
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
-                              crossAxisAlignment: CrossAxisAlignment.end,
-                              children: [
-                                Flexible(
-                                  child: isDeleted
-                                      ? Text(
-                                          'This message was deleted',
-                                          style: TextStyle(
-                                            fontStyle: FontStyle.italic,
-                                            color: AppColors.slate400,
-                                          ),
-                                        )
-                                      : SelectableLinkify(
-                                          text: message.content,
-                                          onOpen: (link) async {
-                                            final uri = Uri.parse(link.url);
-                                            if (await url_launcher.canLaunchUrl(uri)) {
-                                              await url_launcher.launchUrl(uri, mode: url_launcher.LaunchMode.externalApplication);
-                                            }
-                                          },
-                                          style: TextStyle(
-                                            color: isMe
-                                                ? (context.isDarkMode ? Colors.white : AppColors.primary)
-                                                : (context.isDarkMode ? Colors.white : AppColors.slate800),
-                                            fontSize: 14,
-                                          ),
-                                          linkStyle: TextStyle(
-                                            color: context.isDarkMode
-                                                ? const Color(0xFF93C5FD)
-                                                : const Color(0xFF1D4ED8),
-                                            decoration: TextDecoration.underline,
-                                            decorationColor: context.isDarkMode
-                                                ? const Color(0xFF93C5FD)
-                                                : const Color(0xFF1D4ED8),
-                                          ),
-                                        ),
-                                ),
-                                const SizedBox(width: 8),
-                                Text(
-                                  timeStr,
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    color: isMe
-                                        ? (context.isDarkMode ? Colors.white60 : AppColors.primary.withValues(alpha: 0.6))
-                                        : (context.isDarkMode ? Colors.white54 : AppColors.slate400),
-                                  ),
-                                ),
-                                if (isMe && !isDeleted) ...[
-                                  const SizedBox(width: 4),
-                                  Builder(
-                                    builder: (context) {
-                                      final readBy = ReadReceiptsTracker.getReadBy(message.id);
-                                      final isRead = readBy.any((id) => id != message.senderId.trim().toLowerCase());
-                                      return Icon(
-                                        isRead ? LucideIcons.checkCheck : LucideIcons.check,
-                                        size: 13,
-                                        color: isRead
-                                            ? (context.isDarkMode ? const Color(0xFF60A5FA) : const Color(0xFF2563EB))
-                                            : (context.isDarkMode ? Colors.white60 : AppColors.primary.withValues(alpha: 0.6)),
-                                      );
-                                    },
-                                  ),
-                                ],
-                              ],
-                            ),
-                            if (message.fileUrl != null && !isDeleted)
-                              if (message.fileType?.toLowerCase() == 'gif' || ['jpg', 'jpeg', 'png', 'webp', 'heic'].contains(message.fileType?.toLowerCase()) || (message.fileName?.toLowerCase().endsWith('.jpg') == true) || (message.fileName?.toLowerCase().endsWith('.png') == true) || (message.fileName?.toLowerCase().endsWith('.jpeg') == true))
-                                // Render image/gif
-                                GestureDetector(
-                                  onTap: () {
-                                    showDialog(
-                                      context: context,
-                                      barrierColor: Colors.black.withValues(alpha: 0.65),
-                                      builder: (ctx) {
-                                        final screenSize = MediaQuery.sizeOf(ctx);
-                                        final maxW = screenSize.width < 700
-                                            ? screenSize.width * 0.96
-                                            : (screenSize.width * 0.90).clamp(600.0, 1280.0);
-                                        final maxH = screenSize.height < 700
-                                            ? screenSize.height * 0.94
-                                            : (screenSize.height * 0.88).clamp(600.0, 920.0);
-
-                                        return GestureDetector(
-                                          behavior: HitTestBehavior.opaque,
-                                          onTap: () => Navigator.of(ctx).pop(),
-                                          child: Material(
-                                            color: Colors.transparent,
-                                            child: Center(
-                                              child: GestureDetector(
-                                                onTap: () {},
-                                                child: Container(
-                                                  width: maxW,
-                                                  height: maxH,
-                                                  margin: const EdgeInsets.all(24),
-                                                  decoration: BoxDecoration(
-                                                    color: const Color(0xFF0F172A),
-                                                    borderRadius: BorderRadius.circular(16),
-                                                    border: Border.all(
-                                                      color: Colors.white.withValues(alpha: 0.15),
-                                                    ),
-                                                    boxShadow: [
-                                                      BoxShadow(
-                                                        color: Colors.black.withValues(alpha: 0.5),
-                                                        blurRadius: 24,
-                                                        offset: const Offset(0, 8),
-                                                      ),
-                                                    ],
-                                                  ),
-                                                  clipBehavior: Clip.antiAlias,
-                                                  child: Column(
-                                                    children: [
-                                                      // Header bar
-                                                      Container(
-                                                        padding: const EdgeInsets.symmetric(
-                                                          horizontal: 16,
-                                                          vertical: 10,
-                                                        ),
-                                                        decoration: BoxDecoration(
-                                                          color: const Color(0xFF1E293B),
-                                                          border: Border(
-                                                            bottom: BorderSide(
-                                                              color: Colors.white.withValues(alpha: 0.08),
-                                                            ),
-                                                          ),
-                                                        ),
-                                                        child: Row(
-                                                          children: [
-                                                            const Icon(
-                                                              Icons.image,
-                                                              size: 18,
-                                                              color: AppColors.primary,
-                                                            ),
-                                                            const SizedBox(width: 10),
-                                                            Expanded(
-                                                              child: Text(
-                                                                message.fileName ?? 'Image Preview',
-                                                                style: const TextStyle(
-                                                                  color: Colors.white,
-                                                                  fontSize: 13,
-                                                                  fontWeight: FontWeight.w600,
-                                                                ),
-                                                                maxLines: 1,
-                                                                overflow: TextOverflow.ellipsis,
-                                                              ),
-                                                            ),
-                                                            IconButton(
-                                                              icon: const Icon(
-                                                                Icons.download,
-                                                                color: Colors.white70,
-                                                                size: 20,
-                                                              ),
-                                                              tooltip: 'Download',
-                                                              constraints: const BoxConstraints(),
-                                                              padding: const EdgeInsets.all(6),
-                                                              onPressed: () => _downloadFile(
-                                                                message.fileUrl!,
-                                                                message.fileName ?? 'image',
-                                                              ),
-                                                            ),
-                                                            const SizedBox(width: 8),
-                                                            IconButton(
-                                                              icon: const Icon(
-                                                                Icons.close,
-                                                                color: Colors.white70,
-                                                                size: 20,
-                                                              ),
-                                                              tooltip: 'Close',
-                                                              constraints: const BoxConstraints(),
-                                                              padding: const EdgeInsets.all(6),
-                                                              onPressed: () => Navigator.of(ctx).pop(),
-                                                            ),
-                                                          ],
-                                                        ),
-                                                      ),
-                                                      // Image body
-                                                      Expanded(
-                                                        child: Container(
-                                                          color: const Color(0xFF090D16),
-                                                          padding: const EdgeInsets.all(12),
-                                                          child: Center(
-                                                            child: InteractiveViewer(
-                                                              panEnabled: true,
-                                                              minScale: 0.5,
-                                                              maxScale: 4.0,
-                                                              child: Image.network(
-                                                                message.fileUrl!,
-                                                                fit: BoxFit.contain,
-                                                                loadingBuilder: (_, child, progress) =>
-                                                                    progress == null
-                                                                        ? child
-                                                                        : const Center(
-                                                                            child: CircularProgressIndicator(
-                                                                              strokeWidth: 2,
-                                                                              valueColor:
-                                                                                  AlwaysStoppedAnimation<Color>(
-                                                                                Colors.white70,
-                                                                              ),
-                                                                            ),
-                                                                          ),
-                                                                errorBuilder: (_, __, ___) => const Center(
-                                                                  child: Column(
-                                                                    mainAxisSize: MainAxisSize.min,
-                                                                    children: [
-                                                                      Icon(
-                                                                        Icons.broken_image,
-                                                                        color: Colors.white38,
-                                                                        size: 48,
-                                                                      ),
-                                                                      SizedBox(height: 8),
-                                                                      Text(
-                                                                        'Failed to load image',
-                                                                        style: TextStyle(
-                                                                          color: Colors.white54,
-                                                                          fontSize: 13,
-                                                                        ),
-                                                                      ),
-                                                                    ],
-                                                                  ),
-                                                                ),
-                                                              ),
-                                                            ),
-                                                          ),
-                                                        ),
-                                                      ),
-                                                    ],
-                                                  ),
-                                                ),
-                                              ),
+                            // Message text row
+                            if (message.content.trim().isNotEmpty || isDeleted || message.fileUrl == null)
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  Flexible(
+                                    child: isDeleted
+                                        ? Text(
+                                            'This message was deleted',
+                                            style: TextStyle(
+                                              fontStyle: FontStyle.italic,
+                                              color: AppColors.slate400,
+                                            ),
+                                          )
+                                        : SelectableLinkify(
+                                            text: message.content,
+                                            onOpen: (link) async {
+                                              final uri = Uri.parse(link.url);
+                                              if (await url_launcher.canLaunchUrl(uri)) {
+                                                await url_launcher.launchUrl(uri, mode: url_launcher.LaunchMode.externalApplication);
+                                              }
+                                            },
+                                            style: TextStyle(
+                                              color: isMe
+                                                  ? (context.isDarkMode ? Colors.white : AppColors.primary)
+                                                  : (context.isDarkMode ? Colors.white : AppColors.slate800),
+                                              fontSize: 14,
+                                            ),
+                                            linkStyle: TextStyle(
+                                              color: context.isDarkMode
+                                                  ? const Color(0xFF93C5FD)
+                                                  : const Color(0xFF1D4ED8),
+                                              decoration: TextDecoration.underline,
+                                              decorationColor: context.isDarkMode
+                                                  ? const Color(0xFF93C5FD)
+                                                  : const Color(0xFF1D4ED8),
                                             ),
                                           ),
-                                        );
-                                      },
-                                    );
-                                  },
-                                  child: ClipRRect(
-                                    borderRadius: BorderRadius.circular(8),
-                                    child: Image.network(
-                                      message.fileUrl!,
-                                      width: 200,
-                                      fit: BoxFit.cover,
-                                      loadingBuilder: (_, child, progress) => progress == null
-                                          ? child
-                                          : SizedBox(
-                                              width: 200,
-                                              height: 120,
-                                              child: Center(
-                                                child: CircularProgressIndicator(
-                                                  strokeWidth: 2,
-                                                  value: progress.expectedTotalBytes != null
-                                                      ? progress.cumulativeBytesLoaded / progress.expectedTotalBytes!
-                                                      : null,
-                                                ),
-                                              ),
-                                            ),
-                                      errorBuilder: (_, __, ___) => Container(
-                                        width: 200,
-                                        height: 80,
-                                        decoration: BoxDecoration(
-                                          color: Colors.grey.shade200,
-                                          borderRadius: BorderRadius.circular(8),
-                                        ),
-                                        child: const Center(child: Icon(Icons.image_not_supported, size: 32, color: AppColors.slate400)),
+                                  ),
+                                  // Show timestamp in text row only if there is no attachment
+                                  if (message.fileUrl == null || isDeleted) ...[
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      timeStr,
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        color: isMe
+                                            ? (context.isDarkMode ? Colors.white60 : AppColors.primary.withValues(alpha: 0.6))
+                                            : (context.isDarkMode ? Colors.white54 : AppColors.slate400),
                                       ),
                                     ),
-                                  ),
-                                )
-                              else if (['mp4', 'mov', 'avi', 'mkv'].contains(message.fileType?.toLowerCase()))
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 4),
-                                  child: VideoMessageWidget(
-                                    videoUrl: message.fileUrl!,
-                                    fileName: message.fileName ?? 'video',
-                                    onDownload: () => _downloadFile(message.fileUrl!, message.fileName ?? 'video'),
-                                  ),
-                                )
-                              else
-                                GestureDetector(
-                                  onTap: () => _downloadFile(
-                                      message.fileUrl!, message.fileName ?? 'file'),
-                                  child: Container(
-                                    margin: const EdgeInsets.only(top: 4),
-                                    padding: const EdgeInsets.all(8),
-                                    decoration: BoxDecoration(
-                                      color: Colors.white,
-                                      borderRadius: BorderRadius.circular(6),
-                                      border: Border.all(color: Colors.grey.shade300),
-                                    ),
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Icon(_getFileIcon(message.fileType),
-                                            size: 16, color: AppColors.slate500),
-                                        const SizedBox(width: 6),
-                                        Flexible(
-                                          child: Text(
-                                            message.fileName ?? 'File',
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: const TextStyle(fontSize: 12),
-                                          ),
-                                        ),
-                                        const SizedBox(width: 6),
-                                        Icon(LucideIcons.download,
-                                            size: 14, color: AppColors.slate500),
-                                      ],
-                                    ),
-                                  ),
+                                    if (isMe && !isDeleted) ...[
+                                      const SizedBox(width: 4),
+                                      Builder(
+                                        builder: (context) {
+                                          final readBy = ReadReceiptsTracker.getReadBy(message.id);
+                                          final isRead = readBy.any((id) => id != message.senderId.trim().toLowerCase());
+                                          return Icon(
+                                            isRead ? LucideIcons.checkCheck : LucideIcons.check,
+                                            size: 13,
+                                            color: isRead
+                                                ? (context.isDarkMode ? const Color(0xFF60A5FA) : const Color(0xFF2563EB))
+                                                : (context.isDarkMode ? Colors.white60 : AppColors.primary.withValues(alpha: 0.6)),
+                                          );
+                                        },
+                                      ),
+                                    ],
+                                  ],
+                                ],
+                              ),
+                            if (message.fileUrl != null && !isDeleted)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 4),
+                                child: ChatAttachmentRenderer(
+                                  message: message,
+                                  isMe: isMe,
                                 ),
+                              ),
                           ],
                         ),
                       ),
