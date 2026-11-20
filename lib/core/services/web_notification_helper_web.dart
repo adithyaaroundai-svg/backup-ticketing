@@ -1,4 +1,5 @@
 import 'dart:html' as html;
+import 'dart:js' as js;
 import 'package:flutter/foundation.dart';
 
 void requestWebNotificationPermission() {
@@ -48,6 +49,9 @@ void showWebNotification(String title, String body) {
         tag: 'crm_notif_${DateTime.now().millisecondsSinceEpoch}',
       );
       notification.onClick.listen((_) {
+        try {
+          js.context.callMethod('focus');
+        } catch (_) {}
         notification.close();
       });
       debugPrint('showWebNotification: Notification created successfully.');

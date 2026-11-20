@@ -120,6 +120,9 @@ flutter:
     - assets/tally_manual.json
     - assets/company_logo.png
     - assets/sounds/reminder.wav
+    - assets/sounds/chime.wav
+    - assets/sounds/pop.wav
+    - assets/sounds/bell.wav
     - .env
 
   fonts:

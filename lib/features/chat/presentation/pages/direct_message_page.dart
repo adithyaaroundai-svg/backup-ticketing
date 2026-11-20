@@ -314,9 +314,7 @@ class _DirectMessagePageState extends ConsumerState<DirectMessagePage> {
     // Sync latest messages, mark conversation as read and set currently open conversation
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
-        ref.read(dmStreamProvider(widget.partnerId).notifier).softRefresh();
-      }
-      if (mounted && (ModalRoute.of(context)?.isCurrent ?? false)) {
+        ref.read(dmStreamProvider(widget.partnerId).notifier).softRefresh(force: true);
         ref.read(currentOpenConversationProvider.notifier).state = widget.partnerId;
         _markConversationAsRead();
       }
@@ -329,9 +327,7 @@ class _DirectMessagePageState extends ConsumerState<DirectMessagePage> {
     if (oldWidget.partnerId != widget.partnerId) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
-          ref.read(dmStreamProvider(widget.partnerId).notifier).softRefresh();
-        }
-        if (mounted && (ModalRoute.of(context)?.isCurrent ?? false)) {
+          ref.read(dmStreamProvider(widget.partnerId).notifier).softRefresh(force: true);
           ref.read(currentOpenConversationProvider.notifier).state = widget.partnerId;
           _markConversationAsRead();
         }
@@ -786,7 +782,7 @@ class _DirectMessagePageState extends ConsumerState<DirectMessagePage> {
         messagesAsync.value!.isNotEmpty) {
       _initialReadMarked = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && (ModalRoute.of(context)?.isCurrent ?? false)) {
+        if (mounted) {
           _markConversationAsRead();
         }
       });
@@ -850,7 +846,7 @@ class _DirectMessagePageState extends ConsumerState<DirectMessagePage> {
           final newest = next.value.last;
           if (newest.senderId.trim().toLowerCase() != currentUser.id.trim().toLowerCase()) {
             WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (mounted && (ModalRoute.of(context)?.isCurrent ?? false)) {
+              if (mounted) {
                 _markConversationAsRead();
               }
             });

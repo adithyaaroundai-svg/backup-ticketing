@@ -15,12 +15,12 @@ class ChatRepository {
 
   ChatRepository(this._client);
 
-  /// Returns the canonical `'dm'` channel together with the legacy sorted
+  /// Returns the canonical `'dm'` channel together with `'direct'` and the legacy sorted
   /// composite channel ID used by older forwarded DM rows for a user pair.
   List<String> _dmChannelCandidates(String? currentUserId, String? chatPartnerId) {
-    if (currentUserId == null || chatPartnerId == null) return const ['dm'];
+    if (currentUserId == null || chatPartnerId == null) return const ['dm', 'direct'];
     final ids = [currentUserId, chatPartnerId]..sort();
-    return ['dm', 'dm_${ids[0]}_${ids[1]}'];
+    return ['dm', 'direct', 'dm_${ids[0]}_${ids[1]}'];
   }
 
   // ── Paginated fetch for chat messages ────────────────────────────────────────

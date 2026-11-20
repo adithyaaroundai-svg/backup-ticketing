@@ -3667,6 +3667,7 @@ class _ChannelsListState extends ConsumerState<_ChannelsList> {
                           currentPath: widget.currentPath,
                           isMobile: isMobile,
                           isLight: isLight,
+                          textColorPrimary: textColorPrimary,
                           textColor70: textColor70,
                           activeBgColor: activeBgColor,
                         );
@@ -3725,6 +3726,7 @@ class _SidebarDmTile extends ConsumerWidget {
   final String currentPath;
   final bool isMobile;
   final bool isLight;
+  final Color textColorPrimary;
   final Color textColor70;
   final Color activeBgColor;
 
@@ -3735,6 +3737,7 @@ class _SidebarDmTile extends ConsumerWidget {
     required this.currentPath,
     required this.isMobile,
     required this.isLight,
+    required this.textColorPrimary,
     required this.textColor70,
     required this.activeBgColor,
   }) : super(key: key);
@@ -3766,18 +3769,26 @@ class _SidebarDmTile extends ConsumerWidget {
       Colors.indigo.shade400,
     ];
     final avatarColor = avatarColors[index % avatarColors.length];
-    final isSelected = currentPath == '/chat/dm/$agentId';
+    final currentOpenPartner = ref.watch(currentOpenConversationProvider);
+    final isSelected = currentPath == '/chat/dm/$agentId' ||
+        (currentOpenPartner != null && currentOpenPartner.toLowerCase() == agentId.toLowerCase());
 
     return Material(
-      color: isSelected ? activeBgColor : Colors.transparent,
+      color: Colors.transparent,
       child: InkWell(
+        borderRadius: BorderRadius.circular(6),
         onTap: () {
           context.go('/chat/dm/${agent['id']}');
         },
         child: Container(
-          padding: const EdgeInsets.symmetric(
-            horizontal: 16,
-            vertical: 6,
+          margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            color: isSelected ? activeBgColor : Colors.transparent,
+            borderRadius: BorderRadius.circular(6),
+            border: isSelected && !(isMobile && isLight)
+                ? Border.all(color: Colors.white.withValues(alpha: 0.18), width: 1)
+                : null,
           ),
           child: Row(
             children: [
@@ -3872,12 +3883,12 @@ class _SidebarDmTile extends ConsumerWidget {
               Expanded(
                 child: Row(
                   children: [
-                    Flexible(
+                    Expanded(
                       child: Text(
                         name,
                         style: TextStyle(
                           color: (isSelected || unreadCount > 0)
-                              ? (isLight ? AppColors.slate900 : Colors.white)
+                              ? textColorPrimary
                               : textColor70,
                           fontSize: 13,
                           fontWeight: (isSelected || unreadCount > 0) ? FontWeight.w700 : FontWeight.w500,

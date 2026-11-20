@@ -2,10 +2,11 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:audioplayers/audioplayers.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'local_notification_service.dart';
 import '../../features/auth/presentation/providers/auth_provider.dart';
 import '../../features/chat/domain/entities/chat_message.dart';
+import '../../features/chat/presentation/providers/chat_provider.dart';
+import 'chat_sound_service.dart';
 import 'web_notification_helper.dart';
 
 class GlobalChatNotificationService {
@@ -51,7 +52,7 @@ class GlobalChatNotificationService {
     _currentUserId = null;
   }
 
-  static void _handleNewMessage(Map<String, dynamic> record, Ref ref) async {
+  static void _handleNewMessage(Map<String, dynamic> record, dynamic ref) async {
     final senderId = record['sender_id']?.toString();
     final receiverId = record['receiver_id']?.toString();
     final channel = record['channel']?.toString();
@@ -152,26 +153,45 @@ class GlobalChatNotificationService {
       }
     }
 
-    // Play sound using a short-lived instance to prevent overlapping 'play' calls 
-    // on a single instance which causes "Cannot add new events after calling close" on Web.
-    final player = AudioPlayer();
-    player
-        .play(AssetSource('sounds/reminder.wav'))
-        .timeout(const Duration(seconds: 2))
-        .then((_) {
-      // Dispose after a delay enough for the sound to finish
-      Future.delayed(const Duration(seconds: 3), () => player.dispose());
-    }).catchError((e) {
-      player.dispose();
-      if (e is TimeoutException) {
-        // Browser autoplay policy might block audio before interaction.
-        return;
-      }
-      debugPrint('Error playing notification sound: $e');
-    });
+    final isDm = receiverId != null || isDmChannel(channel);
+
+    // If it's a DM, don't notify if the user is currently viewing this DM
+    if (isDm && senderId != null) {
+      try {
+        final currentOpenConv = (ref as dynamic).read(currentOpenConversationProvider);
+        if (currentOpenConv != null &&
+            currentOpenConv.toString().trim().toLowerCase() == senderId.trim().toLowerCase()) {
+          return;
+        }
+      } catch (_) {}
+    }
+
+    if (isDm) {
+      // Soft Elegant Chime for Direct Messages
+      ChatSoundService.playDmPing();
+    } else {
+      // Channel / Group chat notification sound (unchanged)
+      final player = AudioPlayer();
+      player
+          .play(AssetSource('sounds/reminder.wav'))
+          .timeout(const Duration(seconds: 2))
+          .then((_) {
+        // Dispose after a delay enough for the sound to finish
+        Future.delayed(const Duration(seconds: 3), () => player.dispose());
+      }).catchError((e) {
+        player.dispose();
+        if (e is TimeoutException) {
+          // Browser autoplay policy might block audio before interaction.
+          return;
+        }
+        debugPrint('Error playing notification sound: $e');
+      });
+    }
 
     final msgPreview = content.startsWith('__CALL_') ? 'Started a call' : content;
-    final title = channelTitle.isNotEmpty ? '$channelTitle • $senderName' : 'New message from $senderName';
+    final title = isDm 
+        ? 'New message from $senderName' 
+        : (channelTitle.isNotEmpty ? '$channelTitle • $senderName' : 'New message from $senderName');
 
     // Show Push Notification
     if (kIsWeb) {

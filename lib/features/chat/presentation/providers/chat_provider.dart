@@ -673,7 +673,8 @@ class DmStream extends _$DmStream {
       return;
     }
     if (status == RealtimeSubscribeStatus.channelError ||
-        status == RealtimeSubscribeStatus.timedOut) {
+        status == RealtimeSubscribeStatus.timedOut ||
+        status == RealtimeSubscribeStatus.closed) {
       _scheduleResubscribe();
     }
   }
@@ -800,14 +801,16 @@ class DmStream extends _$DmStream {
     ref.invalidateSelf();
   }
 
-  Future<void> softRefresh() async {
-    await _catchUp(reconnect: true);
+  Future<void> softRefresh({bool force = true}) async {
+    await _catchUp(reconnect: true, force: force);
   }
 
-  Future<void> _catchUp({bool reconnect = false}) async {
-    if (!_alive || _catchingUp || !_acceptEvents) return;
+  Future<void> _catchUp({bool reconnect = false, bool force = false}) async {
+    if (!_alive) return;
+    if (!force && (_catchingUp || !_acceptEvents)) return;
     final myId = ref.read(authProvider)?.id;
     if (myId == null) return;
+    _acceptEvents = true; // Ensure events are accepted once user is authenticated
     final repository = ref.read(chatRepositoryProvider);
     _catchingUp = true;
     try {
@@ -817,7 +820,7 @@ class DmStream extends _$DmStream {
       final messages = await repository.getPaginatedMessages(
         currentUserId: myId,
         chatPartnerId: chatPartnerId,
-        limit: 30,
+        limit: 50,
       );
       if (!_alive) return;
       _mergeRemote(messages, myId);
@@ -3208,7 +3211,7 @@ class DmConversationEngine extends Notifier<Map<String, DmConversationState>> {
       if (hasMention) {
         ChatSoundService.playMentionPing();
       } else {
-        ChatSoundService.playPing();
+        ChatSoundService.playDmPing();
       }
     }
 
@@ -3251,6 +3254,13 @@ class DmConversationEngine extends Notifier<Map<String, DmConversationState>> {
     final nextMap = Map<String, DmConversationState>.from(currentMap);
     nextMap[partnerId] = updatedConv;
     _commit(nextMap);
+
+    // Bridge directly to active or cached DmStream so the DM view displays the message immediately
+    try {
+      if (_ref.exists(dmStreamProvider(partnerId))) {
+        _ref.read(dmStreamProvider(partnerId).notifier).injectOptimisticMessage(msg);
+      }
+    } catch (_) {}
 
     if (isOpen && isIncoming && isNew && !alreadyRead) {
       ReadReceiptsTracker.markMultipleAsRead([msg.id], currentUserId);
