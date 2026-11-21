@@ -866,6 +866,97 @@ class _CustomChannelChatPageState extends ConsumerState<CustomChannelChatPage> {
     launchZohoCliqHome();
   }
 
+  Future<void> _confirmAndDeleteChannel(
+    BuildContext pageContext,
+    BuildContext? dialogContext,
+    CustomChannel channel,
+  ) async {
+    final currentUserId = ref.read(authProvider)?.id ?? '';
+    if (currentUserId != channel.createdBy) {
+      ScaffoldMessenger.of(pageContext).showSnackBar(
+        const SnackBar(
+          content: Text('Only the creator of this channel can delete it.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    final confirm = await showDialog<bool>(
+      context: dialogContext ?? pageContext,
+      builder: (dlgCtx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        title: const Row(
+          children: [
+            Icon(LucideIcons.trash2, color: Colors.red, size: 22),
+            SizedBox(width: 8),
+            Text('Delete Channel'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Are you sure you want to permanently delete "#${channel.name}"?',
+              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+            ),
+            const SizedBox(height: 10),
+            const Text(
+              'This will permanently delete this channel, its membership, and all message history for every member. This action cannot be undone.',
+              style: TextStyle(color: AppColors.slate600, fontSize: 13, height: 1.4),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dlgCtx, false),
+            child: const Text('Cancel', style: TextStyle(color: AppColors.slate600)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(dlgCtx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+              elevation: 0,
+            ),
+            child: const Text('Delete Channel', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    try {
+      await ref.read(customChannelsProvider.notifier).deleteChannel(channel.id, currentUserId);
+      ref.invalidate(customChannelsProvider);
+
+      if (dialogContext != null && dialogContext.mounted && Navigator.canPop(dialogContext)) {
+        Navigator.pop(dialogContext); // Close details dialog if open
+      }
+
+      if (pageContext.mounted) {
+        pageContext.go('/chat'); // Navigate away to global chat
+        ScaffoldMessenger.of(pageContext).showSnackBar(
+          SnackBar(
+            content: Text('Channel "#${channel.name}" was deleted successfully.'),
+            backgroundColor: AppColors.success,
+          ),
+        );
+      }
+    } catch (e) {
+      if (pageContext.mounted) {
+        ScaffoldMessenger.of(pageContext).showSnackBar(
+          SnackBar(
+            content: Text('Failed to delete channel: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   void _showChannelDetailsDialog(CustomChannel channel, List<ChatMessage>? messages) {
     final agentsAsync = ref.read(agentsListProvider);
     final agents = agentsAsync.maybeWhen(
@@ -1184,11 +1275,41 @@ class _CustomChannelChatPageState extends ConsumerState<CustomChannelChatPage> {
                       ],
                     ),
                   ),
-                  // Leave Channel button (not shown to the channel creator)
+                  // Leave or Delete Channel button
                   Builder(builder: (ctx) {
                     final currentUserId = ref.read(authProvider)?.id ?? '';
-                    final isCreator = currentUserId == channel.createdBy;
-                    if (isCreator) return const SizedBox.shrink();
+                    final isCreator = currentUserId.isNotEmpty && currentUserId == channel.createdBy;
+                    if (isCreator) {
+                      return Column(
+                        children: [
+                          const SizedBox(height: 8),
+                          Container(
+                            color: Colors.white,
+                            width: double.infinity,
+                            child: ListTile(
+                              onTap: () => _confirmAndDeleteChannel(context, ctx, channel),
+                              leading: const Icon(LucideIcons.trash2, color: Colors.red),
+                              title: const Text(
+                                'Delete Channel',
+                                style: TextStyle(
+                                  color: Colors.red,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 15,
+                                ),
+                              ),
+                              subtitle: const Text(
+                                'Permanently delete this channel and its messages for everyone',
+                                style: TextStyle(
+                                  color: AppColors.slate500,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 24),
+                        ],
+                      );
+                    }
                     return Column(
                       children: [
                         const SizedBox(height: 8),
@@ -1513,6 +1634,25 @@ class _CustomChannelChatPageState extends ConsumerState<CustomChannelChatPage> {
                   ),
                 ),
               ),
+              if (currentUser?.id != null && channel != null && currentUser!.id == channel.createdBy) ...[
+                Tooltip(
+                  message: 'Delete Channel',
+                  child: InkWell(
+                    onTap: () => _confirmAndDeleteChannel(context, null, channel!),
+                    borderRadius: BorderRadius.circular(8),
+                    child: Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.red.shade50,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.red.shade200),
+                      ),
+                      child: Icon(LucideIcons.trash2, size: 18, color: Colors.red.shade700),
+                    ),
+                  ),
+                ),
+              ],
               const SizedBox(width: 8),
               if (channel!.name.toLowerCase().contains('software') || 
                   channel!.name.toLowerCase().contains('development') ||

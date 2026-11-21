@@ -3039,6 +3039,10 @@ class DmConversationEngine extends Notifier<Map<String, DmConversationState>> {
     if (changed) {
       _commit(nextMap);
     }
+
+    if (current == null) {
+      Future.microtask(() => reconcileRecent());
+    }
   }
 
   void markConversationAsRead(String partnerId) {
@@ -3191,10 +3195,23 @@ class DmConversationEngine extends Notifier<Map<String, DmConversationState>> {
       final shouldReplaceLast = last == null ||
           msg.id == last.id ||
           !msg.createdAt.isBefore(last.createdAt);
-      if (shouldReplaceLast && last != msg) {
+
+      final shouldBeUnread = isIncoming && !alreadyRead && !isOpen;
+      final needsUnreadAdd = shouldBeUnread && !existing.unreadMessageIds.contains(msg.id);
+      final needsUnreadClear = isOpen && (existing.unreadCount > 0 || existing.unreadMessageIds.isNotEmpty);
+
+      if ((shouldReplaceLast && last != msg) || needsUnreadAdd || needsUnreadClear || existing.isOpen != isOpen) {
+        final unreadIds = Set<String>.from(existing.unreadMessageIds);
+        if (isOpen) {
+          unreadIds.clear();
+        } else if (shouldBeUnread) {
+          unreadIds.add(msg.id);
+        }
         final nextMap = Map<String, DmConversationState>.from(currentMap);
         nextMap[partnerId] = existing.copyWith(
-          lastMessage: msg,
+          lastMessage: shouldReplaceLast ? msg : existing.lastMessage,
+          unreadCount: unreadIds.length,
+          unreadMessageIds: unreadIds,
           isOpen: isOpen,
         );
         _commit(nextMap);

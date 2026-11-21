@@ -123,11 +123,8 @@ class _MainLayoutState extends ConsumerState<MainLayout> with WidgetsBindingObse
     }
   }
 
-  @override
-  void didUpdateWidget(MainLayout oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.currentPath != widget.currentPath &&
-        !widget.currentPath.startsWith('/chat/dm/')) {
+  void _syncOpenConversation() {
+    if (!widget.currentPath.startsWith('/chat/dm/')) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         final c = _container;
         if (c == null || _isDisposed) return;
@@ -139,10 +136,19 @@ class _MainLayoutState extends ConsumerState<MainLayout> with WidgetsBindingObse
   }
 
   @override
+  void didUpdateWidget(MainLayout oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.currentPath != widget.currentPath) {
+      _syncOpenConversation();
+    }
+  }
+
+  @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     // Cache the container so async callbacks never look up an ancestor after deactivation
     _container = ProviderScope.containerOf(context);
+    _syncOpenConversation();
   }
 
   @override
@@ -2998,11 +3004,97 @@ class _ChannelsListState extends ConsumerState<_ChannelsList> {
                 final unread = ref.watch(customChannelUnreadCountProvider(channel.id));
                 final isActive = currentPath.startsWith('/c/${channel.id}');
                 final displayUnread = isActive ? 0 : unread;
+                final isCreator = currentUser?.id != null && currentUser!.id == channel.createdBy;
 
                 return Material(
                   color: Colors.transparent,
                   child: InkWell(
                     onTap: () => context.go('/c/${channel.id}'),
+                    onSecondaryTapUp: isCreator
+                        ? (details) {
+                            showMenu(
+                              context: context,
+                              position: RelativeRect.fromLTRB(
+                                details.globalPosition.dx,
+                                details.globalPosition.dy,
+                                details.globalPosition.dx + 1,
+                                details.globalPosition.dy + 1,
+                              ),
+                              color: const Color(0xFF1E293B),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                side: BorderSide(color: Colors.white.withValues(alpha: 0.12)),
+                              ),
+                              items: [
+                                PopupMenuItem(
+                                  onTap: () {
+                                    WidgetsBinding.instance.addPostFrameCallback((_) async {
+                                      final confirm = await showDialog<bool>(
+                                        context: context,
+                                        builder: (dlgCtx) => AlertDialog(
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                          title: const Row(
+                                            children: [
+                                              Icon(LucideIcons.trash2, color: Colors.red, size: 22),
+                                              SizedBox(width: 8),
+                                              Text('Delete Channel'),
+                                            ],
+                                          ),
+                                          content: Text(
+                                            'Are you sure you want to permanently delete "#${channel.name}"? This action cannot be undone.',
+                                          ),
+                                          actions: [
+                                            TextButton(
+                                              onPressed: () => Navigator.pop(dlgCtx, false),
+                                              child: const Text('Cancel'),
+                                            ),
+                                            TextButton(
+                                              onPressed: () => Navigator.pop(dlgCtx, true),
+                                              child: const Text('Delete', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+                                            ),
+                                          ],
+                                        ),
+                                      );
+                                      if (confirm == true) {
+                                        try {
+                                          final currentId = currentUser?.id ?? '';
+                                          if (currentId.isEmpty) return;
+                                          await ref.read(customChannelsProvider.notifier).deleteChannel(channel.id, currentId);
+                                          ref.invalidate(customChannelsProvider);
+                                          if (!context.mounted) return;
+                                          if (currentPath.startsWith('/c/${channel.id}')) {
+                                            context.go('/chat');
+                                          }
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            SnackBar(
+                                              content: Text('Channel "#${channel.name}" was deleted successfully.'),
+                                              backgroundColor: AppColors.success,
+                                            ),
+                                          );
+                                        } catch (e) {
+                                          if (!context.mounted) return;
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            SnackBar(
+                                              content: Text('Failed to delete channel: $e'),
+                                              backgroundColor: Colors.red,
+                                            ),
+                                          );
+                                        }
+                                      }
+                                    });
+                                  },
+                                  child: const Row(
+                                    children: [
+                                      Icon(LucideIcons.trash2, size: 16, color: Colors.redAccent),
+                                      SizedBox(width: 10),
+                                      Text('Delete Channel', style: TextStyle(color: Colors.redAccent, fontSize: 13, fontWeight: FontWeight.w600)),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            );
+                          }
+                        : null,
                     child: Container(
                       margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -3769,9 +3861,11 @@ class _SidebarDmTile extends ConsumerWidget {
       Colors.indigo.shade400,
     ];
     final avatarColor = avatarColors[index % avatarColors.length];
-    final currentOpenPartner = ref.watch(currentOpenConversationProvider);
-    final isSelected = currentPath == '/chat/dm/$agentId' ||
-        (currentOpenPartner != null && currentOpenPartner.toLowerCase() == agentId.toLowerCase());
+    final normCurrentPath = currentPath.toLowerCase();
+    final normAgentId = agentId.toLowerCase();
+    final isSelected = normCurrentPath == '/chat/dm/$normAgentId' ||
+        normCurrentPath.startsWith('/chat/dm/$normAgentId?') ||
+        normCurrentPath.startsWith('/chat/dm/$normAgentId/');
 
     return Material(
       color: Colors.transparent,

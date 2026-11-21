@@ -81,6 +81,48 @@ class CustomChannelRepository {
         .eq('channel_id', channelId)
         .eq('user_id', userId);
   }
+
+  /// Deletes a custom channel and its messages/members (only allowed if currentUserId is the creator)
+  Future<void> deleteChannel(String channelId, String currentUserId) async {
+    // 1. Fetch channel to ensure existence and verify ownership
+    final channelData = await _client
+        .from('custom_channels')
+        .select('id, name, created_by')
+        .eq('id', channelId)
+        .maybeSingle();
+
+    if (channelData == null) {
+      throw Exception('Channel not found or already deleted.');
+    }
+
+    final creatorId = channelData['created_by']?.toString();
+    if (creatorId != currentUserId) {
+      throw Exception('Only the creator of this channel can delete it.');
+    }
+
+    // 2. Clean up channel members
+    try {
+      await _client
+          .from('channel_members')
+          .delete()
+          .eq('channel_id', channelId);
+    } catch (_) {}
+
+    // 3. Clean up messages sent in this channel
+    try {
+      await _client
+          .from('chat_messages')
+          .delete()
+          .eq('channel', channelId);
+    } catch (_) {}
+
+    // 4. Delete the custom channel record
+    await _client
+        .from('custom_channels')
+        .delete()
+        .eq('id', channelId)
+        .eq('created_by', currentUserId);
+  }
 }
 
 final customChannelRepositoryProvider = Provider<CustomChannelRepository>((ref) {

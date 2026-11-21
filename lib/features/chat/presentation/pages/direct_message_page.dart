@@ -405,28 +405,29 @@ class _DirectMessagePageState extends ConsumerState<DirectMessagePage> {
     }
   }
 
+  ProviderContainer? _container;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _container = ProviderScope.containerOf(context);
+  }
+
   @override
   void dispose() {
     _dragDropPasteSub?.cancel();
-    try {
-      final currentPartner = widget.partnerId.trim().toLowerCase();
-      final currentOpen = (ref.read(currentOpenConversationProvider) ?? '')
-          .trim()
-          .toLowerCase();
-      if (currentOpen == currentPartner) {
-        final container = ProviderScope.containerOf(context, listen: false);
-        Future(() {
-          try {
-            final stillOpen = (container.read(currentOpenConversationProvider) ?? '')
-                .trim()
-                .toLowerCase();
-            if (stillOpen == currentPartner) {
-              container.read(currentOpenConversationProvider.notifier).state = null;
-            }
-          } catch (_) {}
-        });
-      }
-    } catch (_) {}
+    final c = _container;
+    if (c != null) {
+      try {
+        final currentPartner = widget.partnerId.trim().toLowerCase();
+        final currentOpen = (c.read(currentOpenConversationProvider) ?? '')
+            .trim()
+            .toLowerCase();
+        if (currentOpen == currentPartner) {
+          c.read(currentOpenConversationProvider.notifier).state = null;
+        }
+      } catch (_) {}
+    }
 
     _textCtrl.dispose();
     _messageFocusNode.dispose();

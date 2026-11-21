@@ -52,6 +52,25 @@ class CustomChannelsNotifier extends AsyncNotifier<List<CustomChannel>> {
       return null;
     }
   }
+
+  Future<bool> deleteChannel(String channelId, String currentUserId) async {
+    try {
+      final repository = ref.read(customChannelRepositoryProvider);
+      await repository.deleteChannel(channelId, currentUserId);
+
+      // Update local state
+      if (state.hasValue) {
+        state = AsyncValue.data(
+          state.value!.where((c) => c.id != channelId).toList(),
+        );
+      }
+      return true;
+    } catch (e, st) {
+      print('Error deleting channel: $e');
+      print('Stack trace: $st');
+      rethrow;
+    }
+  }
 }
 
 final customChannelsProvider = AsyncNotifierProvider<CustomChannelsNotifier, List<CustomChannel>>(() {
